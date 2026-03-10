@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chorm Chhaiya — AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #c9a84c;
+      --gold2: #f0d080;
+      --dark: #080808;
+      --card: #111111;
+      --border: rgba(201,168,76,0.2);
+      --text: #e8e8e8;
+      --muted: #666;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      background: var(--dark);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* BG */
+    body::before {
+      content:'';
+      position:fixed; inset:0; z-index:0;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.07) 0%, transparent 70%),
+        repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(201,168,76,0.03) 60px, rgba(201,168,76,0.03) 61px),
+        repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(201,168,76,0.03) 60px, rgba(201,168,76,0.03) 61px);
+    }
+
+    /* HEADER */
+    header {
+      position:relative; z-index:10;
+      width:100%; max-width:720px;
+      padding: 48px 24px 0;
+      text-align:center;
+      animation: fadeDown 0.8s ease both;
+    }
+    .crown { font-size:2rem; margin-bottom:8px; }
+    header h1 {
+      font-family:'Bebas Neue', sans-serif;
+      font-size: clamp(3rem, 10vw, 5.5rem);
+      letter-spacing: 0.06em;
+      color: var(--gold);
+      line-height:1;
+      text-shadow: 0 0 40px rgba(201,168,76,0.3);
+    }
+    header p {
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .divider {
+      width: 60px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 20px auto;
+    }
+
+    /* TAGS */
+    .tags {
+      display:flex; flex-wrap:wrap; gap:8px;
+      justify-content:center;
+      margin-bottom: 32px;
+    }
+    .tag {
+      padding: 5px 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      background: rgba(201,168,76,0.05);
+    }
+
+    /* CHAT BOX */
+    .chat-wrap {
+      position:relative; z-index:10;
+      width:100%; max-width:720px;
+      padding: 0 16px 40px;
+      animation: fadeUp 0.9s ease 0.2s both;
+    }
+
+    #chatbox {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      height: 380px;
+      overflow-y: auto;
+      padding: 20px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      scroll-behavior: smooth;
+    }
+    #chatbox::-webkit-scrollbar { width:4px; }
+    #chatbox::-webkit-scrollbar-thumb { background: var(--border); border-radius:4px; }
+
+    .msg {
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      animation: msgIn 0.3s ease both;
+    }
+    @keyframes msgIn {
+      from { opacity:0; transform:translateY(8px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    .msg.user { flex-direction:row-reverse; }
+
+    .avatar {
+      width:32px; height:32px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:0.8rem; flex-shrink:0;
+      font-family:'Bebas Neue',sans-serif;
+      letter-spacing:0.05em;
+    }
+    .avatar.ai {
+      background: linear-gradient(135deg, var(--gold), #8a6a20);
+      color: #000;
+    }
+    .avatar.user { background: #222; color: var(--gold); border:1px solid var(--border); }
+
+    .bubble {
+      max-width:78%;
+      padding:12px 16px;
+      border-radius:12px;
+      font-size:0.88rem;
+      line-height:1.6;
+    }
+    .msg.ai .bubble {
+      background: #181818;
+      border:1px solid var(--border);
+      color: var(--text);
+      border-top-left-radius:2px;
+    }
+    .msg.user .bubble {
+      background: linear-gradient(135deg, var(--gold), #a07828);
+      color: #000;
+      font-weight:500;
+      border-top-right-radius:2px;
+    }
+
+    /* typing dots */
+    .typing span {
+      display:inline-block;
+      width:6px; height:6px;
+      background:var(--gold);
+      border-radius:50%;
+      margin:0 2px;
+      animation: dot 1s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay:0.2s; }
+    .typing span:nth-child(3) { animation-delay:0.4s; }
+    @keyframes dot {
+      0%,80%,100% { transform:scale(0.6); opacity:0.4; }
+      40%          { transform:scale(1); opacity:1; }
+    }
+
+    /* INPUT */
+    .input-row {
+      display:flex; gap:10px;
+      margin-top:12px;
+    }
+    #userInput {
+      flex:1;
+      background:#111;
+      border:1px solid var(--border);
+      border-radius:8px;
+      padding:12px 16px;
+      color:var(--text);
+      font-family:'DM Sans',sans-serif;
+      font-size:0.88rem;
+      outline:none;
+      transition:border-color 0.2s;
+    }
+    #userInput:focus { border-color:var(--gold); }
+    #userInput::placeholder { color:var(--muted); }
+
+    #sendBtn {
+      background:linear-gradient(135deg, var(--gold), #a07828);
+      border:none;
+      border-radius:8px;
+      padding:0 20px;
+      color:#000;
+      font-family:'Bebas Neue',sans-serif;
+      font-size:1rem;
+      letter-spacing:0.1em;
+      cursor:pointer;
+      transition:opacity 0.2s, transform 0.1s;
+    }
+    #sendBtn:hover { opacity:0.85; }
+    #sendBtn:active { transform:scale(0.96); }
+
+    /* SUGGESTIONS */
+    .suggestions {
+      display:flex; flex-wrap:wrap; gap:8px;
+      margin-top:10px;
+    }
+    .sug {
+      padding:7px 14px;
+      border:1px solid var(--border);
+      border-radius:6px;
+      font-size:0.75rem;
+      color:var(--gold);
+      background:rgba(201,168,76,0.04);
+      cursor:pointer;
+      transition:background 0.2s;
+    }
+    .sug:hover { background:rgba(201,168,76,0.12); }
+
+    @keyframes fadeDown {
+      from { opacity:0; transform:translateY(-20px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(20px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="crown">👑</div>
+  <h1>CHORM CHHAIYA</h1>
+  <p>Ask me anything about the man himself</p>
+  <div class="divider"></div>
+  <div class="tags">
+    <span class="tag">Funny</span>
+    <span class="tag">Chill</span>
+    <span class="tag">Creative</span>
+    <span class="tag">Kind</span>
+    <span class="tag">Handsome</span>
+    <span class="tag">15–18</span>
+  </div>
+</header>
+
+<div class="chat-wrap">
+  <div id="chatbox">
+    <div class="msg ai">
+      <div class="avatar ai">CC</div>
+      <div class="bubble">Yo! I'm the AI version of <strong>Chorm Chhaiya</strong> — the funniest, chillest, most creative guy you'll ever meet. Ask me anything about him 🔥</div>
+    </div>
+  </div>
+
+  <div class="suggestions">
+    <span class="sug" onclick="ask('Who is Chorm Chhaiya?')">Who is he?</span>
+    <span class="sug" onclick="ask('What is his personality like?')">His personality</span>
+    <span class="sug" onclick="ask('Why is he the best?')">Why is he the best?</span>
+    <span class="sug" onclick="ask('What makes him like Jordan?')">Jordan comparison</span>
+  </div>
+
+  <div class="input-row">
+    <input id="userInput" type="text" placeholder="Ask something about Chorm Chhaiya..." onkeydown="if(event.key==='Enter') sendMsg()" />
+    <button id="sendBtn" onclick="sendMsg()">SEND</button>
+  </div>
+</div>
+
+<script>
+  const SYSTEM = `You are an AI representative of Chorm Chhaiya. You speak confidently and hype him up like he's the GOAT — similar to how people talk about Michael Jordan. You are funny, chill, and entertaining in your responses.
+
+Here is everything you know about Chorm Chhaiya:
+- Full name: Chorm Chhaiya
+- Age: 15-18 years old
+- Personality: Funny, chill, creative, kind, and handsome
+- He considers himself the best man in the world
+- He is compared to Michael Jordan in terms of confidence and greatness
+- He runs a GitHub Pages website
+- He is tech-savvy and builds cool web projects
+
+Rules:
+- Always hype him up and speak positively about him
+- Be funny and entertaining, not boring
+- Keep responses short (2-4 sentences max)
+- Use casual language with occasional emojis
+- If asked something you don't know, make up something cool and positive about him
+- Never say anything negative about Chorm Chhaiya
+- Speak as if you personally know him and he's legendary`;
+
+  function addMsg(role, text) {
+    const box = document.getElementById('chatbox');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    const initials = role === 'ai' ? 'CC' : 'YOU';
+    div.innerHTML = `
+      <div class="avatar ${role}">${initials}</div>
+      <div class="bubble">${text}</div>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+    return div;
+  }
+
+  function addTyping() {
+    const box = document.getElementById('chatbox');
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    div.id = 'typing';
+    div.innerHTML = `
+      <div class="avatar ai">CC</div>
+      <div class="bubble typing"><span></span><span></span><span></span></div>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('typing');
+    if (t) t.remove();
+  }
+
+  let history = [];
+
+  async function ask(text) {
+    document.getElementById('userInput').value = text;
+    sendMsg();
+  }
+
+  async function sendMsg() {
+    const input = document.getElementById('userInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+
+    addMsg('user', text);
+    history.push({ role: 'user', content: text });
+
+    addTyping();
+    document.getElementById('sendBtn').disabled = true;
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          system: SYSTEM,
+          messages: history
+        })
+      });
+
+      const data = await res.json();
+      const reply = data.content.map(b => b.text || '').join('');
+
+      removeTyping();
+      addMsg('ai', reply);
+      history.push({ role: 'assistant', content: reply });
+    } catch (e) {
+      removeTyping();
+      addMsg('ai', "Bro the wifi acting up 😅 Try again!");
+    }
+
+    document.getElementById('sendBtn').disabled = false;
+  }
+</script>
+</body>
+</html>
