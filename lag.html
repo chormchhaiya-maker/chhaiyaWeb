@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lag</title>
+</head>
+<body>
+
+  <a href="#" onclick="causeLag(); return false;">Click me</a>
+
+  <script>
+    function causeLag() {
+
+      // Method 1: Heavy CPU loop
+      const end = Date.now() + 3000; // lag for 3 seconds
+      while (Date.now() < end) {
+        Math.sqrt(Math.random() * 99999999);
+      }
+
+    }
+  </script>
+
+</body>
+</html>
