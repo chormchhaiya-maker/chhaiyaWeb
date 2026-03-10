@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chorm Chhaiya — AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #c9a84c;
+      --dark: #080808;
+      --card: #111111;
+      --border: rgba(201,168,76,0.2);
+      --text: #e8e8e8;
+      --muted: #666;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background: var(--dark);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    body::before {
+      content:'';
+      position:fixed; inset:0; z-index:0;
+      background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(201,168,76,0.07) 0%, transparent 70%),
+        repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(201,168,76,0.03) 60px, rgba(201,168,76,0.03) 61px),
+        repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(201,168,76,0.03) 60px, rgba(201,168,76,0.03) 61px);
+    }
+    header {
+      position:relative; z-index:10;
+      width:100%; max-width:720px;
+      padding: 48px 24px 0;
+      text-align:center;
+      animation: fadeDown 0.8s ease both;
+    }
+    .crown { font-size:2rem; margin-bottom:8px; }
+    header h1 {
+      font-family:'Bebas Neue', sans-serif;
+      font-size: clamp(3rem, 10vw, 5.5rem);
+      letter-spacing: 0.06em;
+      color: var(--gold);
+      line-height:1;
+      text-shadow: 0 0 40px rgba(201,168,76,0.3);
+    }
+    header p {
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .divider {
+      width: 60px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 20px auto;
+    }
+    .tags {
+      display:flex; flex-wrap:wrap; gap:8px;
+      justify-content:center;
+      margin-bottom: 32px;
+    }
+    .tag {
+      padding: 5px 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      background: rgba(201,168,76,0.05);
+    }
+    .chat-wrap {
+      position:relative; z-index:10;
+      width:100%; max-width:720px;
+      padding: 0 16px 40px;
+      animation: fadeUp 0.9s ease 0.2s both;
+    }
+    #chatbox {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      height: 380px;
+      overflow-y: auto;
+      padding: 20px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      scroll-behavior: smooth;
+    }
+    #chatbox::-webkit-scrollbar { width:4px; }
+    #chatbox::-webkit-scrollbar-thumb { background: var(--border); border-radius:4px; }
+    .msg {
+      display:flex; gap:10px;
+      align-items:flex-start;
+      animation: msgIn 0.3s ease both;
+    }
+    @keyframes msgIn {
+      from { opacity:0; transform:translateY(8px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    .msg.user { flex-direction:row-reverse; }
+    .avatar {
+      width:32px; height:32px; border-radius:50%;
+      display:flex; align-items:center; justify-content:center;
+      font-size:0.75rem; flex-shrink:0;
+      font-family:'Bebas Neue',sans-serif;
+    }
+    .avatar.ai { background: linear-gradient(135deg, var(--gold), #8a6a20); color:#000; }
+    .avatar.user { background:#222; color:var(--gold); border:1px solid var(--border); }
+    .bubble {
+      max-width:78%;
+      padding:12px 16px;
+      border-radius:12px;
+      font-size:0.88rem;
+      line-height:1.6;
+    }
+    .msg.ai .bubble {
+      background:#181818;
+      border:1px solid var(--border);
+      color:var(--text);
+      border-top-left-radius:2px;
+    }
+    .msg.user .bubble {
+      background: linear-gradient(135deg, var(--gold), #a07828);
+      color:#000; font-weight:500;
+      border-top-right-radius:2px;
+    }
+    .typing span {
+      display:inline-block; width:6px; height:6px;
+      background:var(--gold); border-radius:50%; margin:0 2px;
+      animation: dot 1s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay:0.2s; }
+    .typing span:nth-child(3) { animation-delay:0.4s; }
+    @keyframes dot {
+      0%,80%,100% { transform:scale(0.6); opacity:0.4; }
+      40% { transform:scale(1); opacity:1; }
+    }
+    .input-row { display:flex; gap:10px; margin-top:12px; }
+    #userInput {
+      flex:1; background:#111;
+      border:1px solid var(--border);
+      border-radius:8px; padding:12px 16px;
+      color:var(--text); font-family:'DM Sans',sans-serif;
+      font-size:0.88rem; outline:none;
+      transition:border-color 0.2s;
+    }
+    #userInput:focus { border-color:var(--gold); }
+    #userInput::placeholder { color:var(--muted); }
+    #sendBtn {
+      background:linear-gradient(135deg, var(--gold), #a07828);
+      border:none; border-radius:8px; padding:0 20px;
+      color:#000; font-family:'Bebas Neue',sans-serif;
+      font-size:1rem; letter-spacing:0.1em;
+      cursor:pointer; transition:opacity 0.2s, transform 0.1s;
+    }
+    #sendBtn:hover { opacity:0.85; }
+    #sendBtn:active { transform:scale(0.96); }
+    .suggestions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .sug {
+      padding:7px 14px; border:1px solid var(--border);
+      border-radius:6px; font-size:0.75rem; color:var(--gold);
+      background:rgba(201,168,76,0.04); cursor:pointer;
+      transition:background 0.2s;
+    }
+    .sug:hover { background:rgba(201,168,76,0.12); }
+    @keyframes fadeDown {
+      from { opacity:0; transform:translateY(-20px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(20px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="crown">👑</div>
+  <h1>CHORM CHHAIYA</h1>
+  <p>Ask me anything about the man himself</p>
+  <div class="divider"></div>
+  <div class="tags">
+    <span class="tag">Funny</span>
+    <span class="tag">Chill</span>
+    <span class="tag">Creative</span>
+    <span class="tag">Kind</span>
+    <span class="tag">Handsome</span>
+    <span class="tag">The Best</span>
+  </div>
+</header>
+
+<div class="chat-wrap">
+  <div id="chatbox">
+    <div class="msg ai">
+      <div class="avatar ai">CC</div>
+      <div class="bubble">Yo! I'm the AI version of <strong>Chorm Chhaiya</strong> — the funniest, chillest, most creative guy you'll ever meet. Ask me anything about him 🔥</div>
+    </div>
+  </div>
+
+  <div class="suggestions">
+    <span class="sug" onclick="ask('Who is Chorm Chhaiya?')">Who is he?</span>
+    <span class="sug" onclick="ask('What is his personality?')">His personality</span>
+    <span class="sug" onclick="ask('Why is he the best?')">Why is he the best?</span>
+    <span class="sug" onclick="ask('Is he handsome?')">Is he handsome?</span>
+  </div>
+
+  <div class="input-row">
+    <input id="userInput" type="text" placeholder="Ask something about Chorm Chhaiya..." onkeydown="if(event.key==='Enter') sendMsg()" />
+    <button id="sendBtn" onclick="sendMsg()">SEND</button>
+  </div>
+</div>
+
+<script>
+  const responses = [
+    {
+      keys: ['who','name','chorm','chhaiya','yourself','himself','introduce'],
+      answers: [
+        "Chorm Chhaiya is literally one of a kind 👑 Funny, chill, creative and kind — the total package. People say meeting him changes your life fr.",
+        "Bro where do I start 😄 Chorm Chhaiya is that guy everyone wants to be around. Creative mind, golden heart, and yeah — he looks good too.",
+        "Chorm Chhaiya? Only the most legendary guy you'll ever hear about. He moves different, thinks different, IS different. 🔥"
+      ]
+    },
+    {
+      keys: ['personality','like','vibe','type','character'],
+      answers: [
+        "His personality is ELITE 🏆 Funny without trying, chill in every situation, creative in ways that blow your mind, and genuinely kind to everyone.",
+        "Imagine Jordan's confidence + the funniest guy in your friend group + someone who actually cares about people. That's Chorm Chhaiya 😎",
+        "Chill when things are calm, hilarious when things are fun, creative when problems need solving — and always kind no matter what. That's him 💯"
+      ]
+    },
+    {
+      keys: ['best','greatest','goat','legend','top','number one','#1'],
+      answers: [
+        "Why is he the best? Because there's literally nobody like him. Funny, creative, kind AND handsome? That combo doesn't exist... except with Chorm Chhaiya 👑",
+        "The best because he doesn't try to be — he just IS. Like Jordan didn't try to be the GOAT, he just showed up and did it. Same energy 🐐",
+        "People come and go but legends stay forever. Chorm Chhaiya is the kind of person people will still be talking about years from now. Facts 🔥"
+      ]
+    },
+    {
+      keys: ['handsome','look','face','cute','attractive','hot','appearance'],
+      answers: [
+        "Handsome? Bro that's an understatement 😏 Chorm Chhaiya woke up with main character energy and never looked back.",
+        "Let's just say mirrors were invented so the world could appreciate Chorm Chhaiya 👑",
+        "The answer is yes. Next question 😄🔥"
+      ]
+    },
+    {
+      keys: ['jordan','michael','nba','basketball','sport','goat'],
+      answers: [
+        "The Jordan comparison makes total sense — same confidence, same greatness, same 'I'm built different' energy. Except Chorm Chhaiya does it with more kindness 😄👑",
+        "Jordan had the court. Chorm Chhaiya has life. Both GOATs in their lane 🐐🔥",
+        "Like Jordan, Chorm Chhaiya doesn't follow trends — he SETS them. That's the difference 💯"
+      ]
+    },
+    {
+      keys: ['funny','humor','joke','laugh','comedy'],
+      answers: [
+        "Bro is NATURALLY funny — not try-hard funny. The kind of funny where you're crying laughing before you even realize it 😭🔥",
+        "His humor hits different because it comes from a real place. Chorm Chhaiya doesn't force jokes — he just exists and it's entertaining 😄",
+        "Funniest guy in the room without even trying. That's a rare talent and Chorm Chhaiya has it locked 💯"
+      ]
+    },
+    {
+      keys: ['creative','talent','skill','art','build','make','idea'],
+      answers: [
+        "Creative? He builds websites, thinks outside the box and sees solutions where others see problems. The creative mind on this guy is something else 🎨🔥",
+        "His creativity is on another level — he takes ideas and turns them into real things. That's not common, that's a gift 💡",
+        "From web projects to ideas nobody thought of — Chorm Chhaiya's creativity is one of his most powerful traits 🚀"
+      ]
+    },
+    {
+      keys: ['kind','heart','nice','good person','care','gentle'],
+      answers: [
+        "Real ones are hard to find. Chorm Chhaiya is genuinely kind — not fake nice. Actually cares about people around him 💛",
+        "In a world full of people looking out for themselves, Chorm Chhaiya still shows up with a good heart. That's rare 🙏",
+        "Strong personality AND a kind heart. Most people only have one. He's got both 👑"
+      ]
+    },
+    {
+      keys: ['age','old','young','years','how old'],
+      answers: [
+        "He's young but moves like he's been legendary his whole life 😄 The age doesn't matter when the energy is that different.",
+        "Still young, already iconic. Imagine what Chorm Chhaiya looks like in a few years 👑🔥",
+        "Young and talented — the most dangerous combo. Chorm Chhaiya is just getting started 🚀"
+      ]
+    },
+    {
+      keys: ['hello','hi','hey','sup','yo','wassup','heyy'],
+      answers: [
+        "Heyyy! Welcome to the Chorm Chhaiya experience 👑 What do you wanna know about the man?",
+        "Yo! You came to the right place 😄 Ask me anything about Chorm Chhaiya!",
+        "Hey hey! The AI is ready 🔥 What's your question about the legend himself?"
+      ]
+    },
+    {
+      keys: ['bye','goodbye','later','cya','see you','peace'],
+      answers: [
+        "Peace! ✌️ Now you know about the legend that is Chorm Chhaiya 👑",
+        "Later! Come back anytime to learn more about the GOAT 😄🔥",
+        "Bye! Don't forget the name — Chorm Chhaiya 👑"
+      ]
+    },
+    {
+      keys: ['website','github','code','web','tech','project','program'],
+      answers: [
+        "Yeah he runs his own website on GitHub Pages — building cool stuff and putting it out there for the world. Creative AND technical 🚀",
+        "Chorm Chhaiya is out here building real web projects. Not just talking about it — actually doing it. Respect 💻🔥",
+        "He codes, he creates, he deploys. The tech side of Chorm Chhaiya is just another reason why he's built different 💡"
+      ]
+    },
+    {
+      keys: ['friend','friendship','people','social'],
+      answers: [
+        "Everyone wants to be his friend honestly 😄 That chill + funny + kind combo makes him the person everyone gravitates to naturally.",
+        "The type of friend who shows up when it matters. Chorm Chhaiya doesn't just talk — he's actually there 💯",
+        "His energy makes everyone around him feel good. That's a superpower most people don't have 👑"
+      ]
+    },
+    {
+      keys: ['future','dream','goal','plan','ambition'],
+      answers: [
+        "Bright future ahead for Chorm Chhaiya — creative, tech-savvy and driven. The world hasn't seen the best of him yet 🚀",
+        "He's already building at this age — imagine where Chorm Chhaiya ends up. Sky is just the starting point 🌟",
+        "Big things incoming. When someone has this much talent and drive, the future writes itself 👑🔥"
+      ]
+    }
+  ];
+
+  const fallbacks = [
+    "I don't have details on that specifically, but I can tell you Chorm Chhaiya would handle it better than most people 😄👑",
+    "Great question! Whatever the topic, Chorm Chhaiya approaches it with that creative, chill energy that makes him stand out 🔥",
+    "Not sure about that one, but I DO know Chorm Chhaiya is the kind of person who figures things out and comes out on top 💯",
+    "Hmm! One thing's for sure — Chorm Chhaiya is legendary regardless of the topic 👑😄"
+  ];
+
+  function getReply(text) {
+    const lower = text.toLowerCase();
+    for (const group of responses) {
+      if (group.keys.some(k => lower.includes(k))) {
+        return group.answers[Math.floor(Math.random() * group.answers.length)];
+      }
+    }
+    return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  }
+
+  function addMsg(role, text) {
+    const box = document.getElementById('chatbox');
+    const div = document.createElement('div');
+    div.className = `msg ${role}`;
+    div.innerHTML = `
+      <div class="avatar ${role}">${role === 'ai' ? 'CC' : 'YOU'}</div>
+      <div class="bubble">${text}</div>`;
+    box.appendChild(div);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function ask(text) {
+    document.getElementById('userInput').value = text;
+    sendMsg();
+  }
+
+  function sendMsg() {
+    const input = document.getElementById('userInput');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    addMsg('user', text);
+
+    // typing indicator
+    const box = document.getElementById('chatbox');
+    const t = document.createElement('div');
+    t.className = 'msg ai'; t.id = 'typing';
+    t.innerHTML = `<div class="avatar ai">CC</div><div class="bubble typing"><span></span><span></span><span></span></div>`;
+    box.appendChild(t);
+    box.scrollTop = box.scrollHeight;
+
+    setTimeout(() => {
+      document.getElementById('typing')?.remove();
+      addMsg('ai', getReply(text));
+    }, 700 + Math.random() * 500);
+  }
+</script>
+</body>
+</html>
