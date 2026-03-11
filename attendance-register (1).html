@@ -73,6 +73,36 @@ body::before {
 
 .wrap { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
 
+/* Sync indicator */
+.sync-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 20px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.sync-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 6px #4ade80;
+  animation: pulse 2s infinite;
+}
+
+.sync-dot.offline { background: #f87171; box-shadow: 0 0 6px #f87171; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 /* Header */
 .header {
   display: flex;
@@ -82,8 +112,6 @@ body::before {
   flex-wrap: wrap;
   gap: 16px;
 }
-
-.header-left {}
 
 .stamp {
   display: inline-flex;
@@ -117,11 +145,7 @@ h1 em { color: var(--accent); font-style: normal; }
   margin-top: 8px;
 }
 
-.stats-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
+.stats-row { display: flex; gap: 12px; flex-wrap: wrap; }
 
 .stat-box {
   background: var(--surface);
@@ -222,10 +246,7 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus {
 
 select { cursor: pointer; }
 
-.gender-group {
-  display: flex;
-  gap: 10px;
-}
+.gender-group { display: flex; gap: 10px; }
 
 .gender-btn {
   flex: 1;
@@ -242,17 +263,8 @@ select { cursor: pointer; }
   text-align: center;
 }
 
-.gender-btn.active-male {
-  border-color: var(--blue);
-  background: var(--blue-light);
-  color: var(--blue);
-}
-
-.gender-btn.active-female {
-  border-color: #be185d;
-  background: #fce7f3;
-  color: #be185d;
-}
+.gender-btn.active-male { border-color: var(--blue); background: var(--blue-light); color: var(--blue); }
+.gender-btn.active-female { border-color: #be185d; background: #fce7f3; color: #be185d; }
 
 .add-btn {
   width: 100%;
@@ -272,6 +284,7 @@ select { cursor: pointer; }
 
 .add-btn:hover { background: var(--accent); transform: translateY(-1px); }
 .add-btn:active { transform: translateY(0); }
+.add-btn:disabled { background: #aaa; cursor: not-allowed; transform: none; }
 
 /* Table */
 .table-card {
@@ -328,11 +341,7 @@ select { cursor: pointer; }
 
 .table-wrap { overflow-x: auto; }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13.5px;
-}
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 
 thead th {
   background: var(--surface2);
@@ -347,34 +356,15 @@ thead th {
   white-space: nowrap;
 }
 
-tbody tr {
-  border-bottom: 1px solid var(--border);
-  transition: background 0.15s;
-}
-
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: var(--surface2); }
 
-td {
-  padding: 13px 16px;
-  vertical-align: middle;
-  white-space: nowrap;
-}
+td { padding: 13px 16px; vertical-align: middle; white-space: nowrap; }
 
-.num-cell {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--ink3);
-  font-weight: 600;
-}
-
+.num-cell { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink3); font-weight: 600; }
 .name-cell { font-weight: 600; color: var(--ink); }
-
-.dob-cell {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px;
-  color: var(--ink2);
-}
+.dob-cell { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--ink2); }
 
 .gender-badge {
   display: inline-flex;
@@ -389,14 +379,9 @@ td {
 .gender-m { background: var(--blue-light); color: var(--blue); }
 .gender-f { background: #fce7f3; color: #be185d; }
 
-/* Attendance checkbox */
 .attend-cell { text-align: center; }
 
-.check-wrap {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+.check-wrap { display: inline-flex; align-items: center; justify-content: center; }
 
 .attend-check {
   width: 26px; height: 26px;
@@ -412,17 +397,8 @@ td {
   user-select: none;
 }
 
-.attend-check.present {
-  background: var(--green-light);
-  border-color: var(--green);
-  color: var(--green);
-}
-
-.attend-check.absent {
-  background: var(--red-light);
-  border-color: var(--red);
-  color: var(--red);
-}
+.attend-check.present { background: var(--green-light); border-color: var(--green); color: var(--green); }
+.attend-check.absent { background: var(--red-light); border-color: var(--red); color: var(--red); }
 
 .status-badge {
   display: inline-block;
@@ -451,13 +427,7 @@ td {
 
 .del-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
 
-.empty-row td {
-  text-align: center;
-  padding: 48px;
-  color: var(--ink3);
-  font-size: 14px;
-}
-
+.empty-row td { text-align: center; padding: 48px; color: var(--ink3); font-size: 14px; }
 .empty-icon { font-size: 32px; display: block; margin-bottom: 8px; }
 
 /* Toast */
@@ -479,7 +449,6 @@ td {
 
 .toast.show { transform: translateY(0); opacity: 1; }
 
-/* Animations */
 @keyframes rowIn {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -489,10 +458,15 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
 </style>
 </head>
 <body>
-<!-- Floating bubbles -->
 <div id="bubbles"></div>
 
 <div class="wrap">
+
+  <!-- Sync Status Bar -->
+  <div class="sync-bar">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncText">Connecting to Firebase...</span>
+  </div>
 
   <!-- Header -->
   <div class="header">
@@ -546,7 +520,7 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
         </select>
       </div>
     </div>
-    <button class="add-btn" onclick="addStudent()">+ Add Student to Register</button>
+    <button class="add-btn" id="addBtn" onclick="addStudent()">+ Add Student to Register</button>
   </div>
 
   <!-- Table -->
@@ -569,7 +543,9 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
             <th></th>
           </tr>
         </thead>
-        <tbody id="tableBody"></tbody>
+        <tbody id="tableBody">
+          <tr class="empty-row"><td colspan="8"><span class="empty-icon">⏳</span>Loading...</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -578,24 +554,57 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
 
 <div class="toast" id="toast"></div>
 
-<script>
-  let students = JSON.parse(localStorage.getItem('attendanceStudents') || '[]');
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+  import {
+    getFirestore,
+    collection,
+    addDoc,
+    deleteDoc,
+    updateDoc,
+    doc,
+    onSnapshot,
+    query,
+    orderBy
+  } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+
+  // ✅ Your Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyBLpeuXBAFeG7fVJyc3IMV6cHgi-PeglOY",
+    authDomain: "attendance-tpn10ict.firebaseapp.com",
+    projectId: "attendance-tpn10ict",
+    storageBucket: "attendance-tpn10ict.firebasestorage.app",
+    messagingSenderId: "329982092302",
+    appId: "1:329982092302:web:7a9954a9f1492196c1485f",
+    measurementId: "G-Z3E4BH2V9H"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  let students = [];
   let selectedGender = '';
 
-  // --- 24h attendance auto-reset ---
-  const RESET_KEY = 'attendanceLastReset';
-  const now = new Date();
-  const lastReset = localStorage.getItem(RESET_KEY);
-  const todayStr = now.toDateString();
-
-  if (lastReset !== todayStr) {
-    // Reset attendance for all students but keep their info
-    students = students.map(s => ({ ...s, attendance: '', checked: false }));
-    localStorage.setItem(RESET_KEY, todayStr);
-    localStorage.setItem('attendanceStudents', JSON.stringify(students));
+  // Update sync status
+  function setSyncStatus(online) {
+    const dot = document.getElementById('syncDot');
+    const text = document.getElementById('syncText');
+    if (online) {
+      dot.classList.remove('offline');
+      text.textContent = '🔴 Live — Everyone sees this in real-time';
+    } else {
+      dot.classList.add('offline');
+      text.textContent = 'Offline — Reconnecting...';
+    }
   }
 
-  // Countdown timer to next reset
+  // Date display
+  const now = new Date();
+  document.getElementById('dateDisplay').textContent =
+    now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  // Countdown timer
   function updateCountdown() {
     const n = new Date();
     const midnight = new Date(n);
@@ -610,15 +619,12 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
   setInterval(updateCountdown, 1000);
   updateCountdown();
 
-  // Date display
-  document.getElementById('dateDisplay').textContent =
-    now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-  function selectGender(g) {
+  // Gender select
+  window.selectGender = function(g) {
     selectedGender = g;
     document.getElementById('btnMale').className = 'gender-btn' + (g === 'Male' ? ' active-male' : '');
     document.getElementById('btnFemale').className = 'gender-btn' + (g === 'Female' ? ' active-female' : '');
-  }
+  };
 
   function calcAge(dob) {
     if (!dob) return '—';
@@ -633,10 +639,6 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
     return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
   }
 
-  function save() {
-    localStorage.setItem('attendanceStudents', JSON.stringify(students));
-  }
-
   function showToast(msg) {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -644,7 +646,12 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
     setTimeout(() => t.classList.remove('show'), 2400);
   }
 
-  function addStudent() {
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ADD student to Firestore
+  window.addStudent = async function() {
     const name = document.getElementById('inputName').value.trim();
     const dob = document.getElementById('inputDob').value;
     const attend = document.getElementById('inputAttend').value;
@@ -652,58 +659,67 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
     if (!name) { showToast('⚠️ Please enter a name'); return; }
     if (!selectedGender) { showToast('⚠️ Please select gender'); return; }
 
-    students.push({
-      id: Date.now(),
-      name,
-      dob,
-      gender: selectedGender,
-      attendance: attend,
-      checked: attend === 'Present'
-    });
+    const btn = document.getElementById('addBtn');
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
 
-    save();
-    renderTable();
-    updateStats();
+    try {
+      await addDoc(collection(db, 'students'), {
+        name,
+        dob,
+        gender: selectedGender,
+        attendance: attend,
+        checked: attend === 'Present',
+        timestamp: Date.now()
+      });
 
-    // Reset
-    document.getElementById('inputName').value = '';
-    document.getElementById('inputDob').value = '';
-    document.getElementById('inputAttend').value = '';
-    selectGender('');
-    selectedGender = '';
+      // Reset form
+      document.getElementById('inputName').value = '';
+      document.getElementById('inputDob').value = '';
+      document.getElementById('inputAttend').value = '';
+      window.selectGender('');
+      selectedGender = '';
+      showToast('✅ ' + name + ' added!');
+    } catch (e) {
+      showToast('❌ Error: ' + e.message);
+    }
 
-    showToast('✅ ' + name + ' added!');
-  }
+    btn.disabled = false;
+    btn.textContent = '+ Add Student to Register';
+  };
 
-  function toggleCheck(id) {
+  // TOGGLE attendance in Firestore
+  window.toggleCheck = async function(id) {
     const s = students.find(x => x.id === id);
     if (!s) return;
+    let newChecked, newAttendance;
     if (!s.checked && s.attendance !== 'Present') {
-      s.checked = true;
-      s.attendance = 'Present';
+      newChecked = true; newAttendance = 'Present';
     } else if (s.checked) {
-      s.checked = false;
-      s.attendance = 'Absent';
+      newChecked = false; newAttendance = 'Absent';
     } else {
-      s.checked = true;
-      s.attendance = 'Present';
+      newChecked = true; newAttendance = 'Present';
     }
-    save();
-    renderTable();
-    updateStats();
-  }
+    try {
+      await updateDoc(doc(db, 'students', id), { checked: newChecked, attendance: newAttendance });
+    } catch (e) {
+      showToast('❌ Update failed');
+    }
+  };
 
-  function deleteStudent(id) {
+  // DELETE student from Firestore
+  window.deleteStudent = async function(id) {
     const s = students.find(x => x.id === id);
     if (!s) return;
     if (confirm('Remove ' + s.name + ' from the register?')) {
-      students = students.filter(x => x.id !== id);
-      save();
-      renderTable();
-      updateStats();
-      showToast('🗑️ Removed ' + s.name);
+      try {
+        await deleteDoc(doc(db, 'students', id));
+        showToast('🗑️ Removed ' + s.name);
+      } catch (e) {
+        showToast('❌ Delete failed');
+      }
     }
-  }
+  };
 
   function updateStats() {
     const total = students.length;
@@ -714,7 +730,7 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
     document.getElementById('statAbsent').textContent = absent;
   }
 
-  function renderTable() {
+  window.renderTable = function() {
     const q = document.getElementById('searchBox').value.toLowerCase();
     const filtered = students.filter(s => s.name.toLowerCase().includes(q));
     const tbody = document.getElementById('tableBody');
@@ -728,7 +744,7 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
     }
 
     tbody.innerHTML = filtered.map((s, i) => {
-      const checkClass = s.checked ? 'attend-check present' : 
+      const checkClass = s.checked ? 'attend-check present' :
                          s.attendance === 'Absent' ? 'attend-check absent' : 'attend-check';
       const checkIcon = s.checked ? '✓' : s.attendance === 'Absent' ? '✗' : '';
       const statusClass = s.attendance === 'Present' ? 'status-present' :
@@ -745,28 +761,35 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
         <td><span class="gender-badge ${genderClass}">${genderIcon} ${s.gender}</span></td>
         <td class="attend-cell">
           <div class="check-wrap">
-            <div class="${checkClass}" onclick="toggleCheck(${s.id})" title="Click to toggle attendance">${checkIcon}</div>
+            <div class="${checkClass}" onclick="toggleCheck('${s.id}')" title="Click to toggle">${checkIcon}</div>
           </div>
         </td>
         <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-        <td><button class="del-btn" onclick="deleteStudent(${s.id})" title="Remove">✕</button></td>
+        <td><button class="del-btn" onclick="deleteStudent('${s.id}')" title="Remove">✕</button></td>
       </tr>`;
     }).join('');
-  }
+  };
 
-  function escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  document.getElementById('inputName').addEventListener('keydown', e => {
-    if (e.key === 'Enter') addStudent();
+  // 🔴 REAL-TIME LISTENER — updates for everyone instantly!
+  const q = query(collection(db, 'students'), orderBy('timestamp', 'asc'));
+  onSnapshot(q, (snapshot) => {
+    students = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTable();
+    updateStats();
+    setSyncStatus(true);
+  }, (error) => {
+    setSyncStatus(false);
+    console.error(error);
   });
 
-  renderTable();
-  updateStats();
+  // Keyboard shortcut
+  document.getElementById('inputName').addEventListener('keydown', e => {
+    if (e.key === 'Enter') window.addStudent();
+  });
 </script>
+
 <script>
-  // Generate floating bubbles
+  // Floating bubbles
   const container = document.getElementById('bubbles');
   for (let i = 0; i < 18; i++) {
     const b = document.createElement('div');
