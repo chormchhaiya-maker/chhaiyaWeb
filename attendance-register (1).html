@@ -782,6 +782,47 @@ tr.new-row { animation: rowIn 0.3s ease forwards; }
     console.error(error);
   });
 
+  // 🔄 AUTO RESET attendance at midnight (keeps student names)
+  async function resetAttendanceIfNeeded() {
+    const todayStr = new Date().toDateString();
+    const lastReset = localStorage.getItem('firebaseLastReset');
+    if (lastReset === todayStr) return; // already reset today
+
+    // Reset all students' attendance in Firestore
+    try {
+      const snapshot = await import("https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js").then(m =>
+        m.getDocs(collection(db, 'students'))
+      );
+      const { getDocs, writeBatch } = await import("https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js");
+      const snap = await getDocs(collection(db, 'students'));
+      const batch = writeBatch(db);
+      snap.forEach(docSnap => {
+        batch.update(doc(db, 'students', docSnap.id), { attendance: '', checked: false });
+      });
+      await batch.commit();
+      localStorage.setItem('firebaseLastReset', todayStr);
+      showToast('🔄 Attendance reset for new day!');
+    } catch(e) {
+      console.error('Reset failed:', e);
+    }
+  }
+
+  // Run reset check on load
+  resetAttendanceIfNeeded();
+
+  // Schedule reset at midnight
+  function scheduleNextReset() {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 5, 0); // 5 seconds after midnight
+    const msUntilMidnight = midnight - now;
+    setTimeout(() => {
+      resetAttendanceIfNeeded();
+      scheduleNextReset(); // schedule next day
+    }, msUntilMidnight);
+  }
+  scheduleNextReset();
+
   // Keyboard shortcut
   document.getElementById('inputName').addEventListener('keydown', e => {
     if (e.key === 'Enter') window.addStudent();
