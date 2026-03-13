@@ -292,11 +292,30 @@ document.getElementById('btnFemale').onclick = () => {
   document.getElementById('btnMale').className = 'gender-btn';
 };
 
-// ---- Add student ----
+// ---- Add student (1 per device, resets daily) ----
+const TODAY_KEY = 'registered_' + new Date().toDateString();
+
+function checkAlreadyRegistered() {
+  return !isAdmin && localStorage.getItem(TODAY_KEY) === 'yes';
+}
+
+function updateFormForRegistered() {
+  if (checkAlreadyRegistered()) {
+    document.getElementById('addBtn').disabled = true;
+    document.getElementById('addBtn').textContent = '✅ Already registered today!';
+    document.getElementById('inputName').disabled = true;
+    document.getElementById('inputDob').disabled = true;
+    document.getElementById('btnMale').disabled = true;
+    document.getElementById('btnFemale').disabled = true;
+  }
+}
+updateFormForRegistered();
+
 document.getElementById('addBtn').onclick = async () => {
   const name = document.getElementById('inputName').value.trim();
   const dob = document.getElementById('inputDob').value;
   const attend = isAdmin ? document.getElementById('inputAttend').value : '';
+  if (!isAdmin && checkAlreadyRegistered()) { showToast('⚠️ You already registered today!'); return; }
   if (!name) { showToast('⚠️ Please enter your name'); return; }
   if (!selectedGender) { showToast('⚠️ Please select gender'); return; }
   const btn = document.getElementById('addBtn');
@@ -309,10 +328,16 @@ document.getElementById('addBtn').onclick = async () => {
     selectedGender = '';
     document.getElementById('btnMale').className = 'gender-btn';
     document.getElementById('btnFemale').className = 'gender-btn';
+    if (!isAdmin) {
+      localStorage.setItem(TODAY_KEY, 'yes');
+      updateFormForRegistered();
+    }
     showToast('✅ '+name+' registered!');
   } catch(e) { showToast('❌ Error: '+e.message); }
-  btn.disabled = false;
-  btn.textContent = isAdmin ? '+ Add Student to Register' : '+ Register to List';
+  if (!checkAlreadyRegistered()) {
+    btn.disabled = false;
+    btn.textContent = isAdmin ? '+ Add Student to Register' : '+ Register to List';
+  }
 };
 
 // ---- Search ----
@@ -343,7 +368,13 @@ function setAdminMode(admin) {
   document.getElementById('adminBadge').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('attendField').style.display = admin ? 'flex' : 'none';
   document.getElementById('formTitle').textContent = admin ? 'Add New Student' : 'Register Yourself';
+  document.getElementById('inputName').disabled = false;
+  document.getElementById('inputDob').disabled = false;
+  document.getElementById('btnMale').disabled = false;
+  document.getElementById('btnFemale').disabled = false;
+  document.getElementById('addBtn').disabled = false;
   document.getElementById('addBtn').textContent = admin ? '+ Add Student to Register' : '+ Register to List';
+  if (!admin) updateFormForRegistered();
   renderTable();
 }
 
