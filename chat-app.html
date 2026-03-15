@@ -178,6 +178,13 @@
   <div class="login-card">
     <div class="login-logo">// FriendChat-VIP ONLY</div>
     <div class="login-sub">Create By chhaiyaDeveloper</div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;margin-bottom:1.5rem;border-radius:10px;overflow:hidden;border:1px solid var(--border2);">
+      <button id="tab-login" onclick="switchTab('login')" style="flex:1;padding:0.6rem;background:var(--accent);color:white;border:none;font-family:var(--font);font-size:0.88rem;font-weight:600;cursor:pointer;">ចូល</button>
+      <button id="tab-signup" onclick="switchTab('signup')" style="flex:1;padding:0.6rem;background:var(--surface2);color:var(--muted);border:none;font-family:var(--font);font-size:0.88rem;font-weight:600;cursor:pointer;">ចុះឈ្មោះ</button>
+    </div>
+
     <div class="field-group">
       <div class="field-label">ឈ្មោះ</div>
       <input type="text" id="nick-input" placeholder="ដាកឈ្មោះហែងមក" maxlength="20" autocomplete="off" />
@@ -186,9 +193,14 @@
       <div class="field-label">លេខកូដ</div>
       <input type="password" id="pass-input" placeholder="ដាក់លេខកូដចូលមក" autocomplete="off" />
     </div>
-    <div id="login-error">ខុសហើយអាងាប់. អាញជេអត់ខុសមែន.</div>
+    <div class="field-group" id="confirm-group" style="display:none;">
+      <div class="field-label">បញ្ជាក់លេខកូដ</div>
+      <input type="password" id="confirm-input" placeholder="ដាក់លេខកូដម្តងទៀត" autocomplete="off" />
+    </div>
+    <div id="login-error" style="color:#f87171;font-size:0.82rem;margin-top:0.5rem;display:none;"></div>
+    <div id="login-success" style="color:#3ecf6e;font-size:0.82rem;margin-top:0.5rem;display:none;"></div>
     <button class="btn-join" id="join-btn">ចូលមក →</button>
-    <div class="login-hint">Share the password <span>only with friends</span>.<br>Anyone without it can't get in.</div>
+    <div class="login-hint" id="login-hint">មានគណនីហើយ? ចុច <span>ចូល</span> ខាងលើ.</div>
   </div>
 </div>
 
@@ -271,7 +283,36 @@ const FIREBASE_CONFIG = {
   appId:             "1:24969437141:web:e376b78cbcb7e3d0a6675c"
 };
 
-const ROOM_PASSWORD = 'kompongluong';
+// ── AUTH MODE ────────────────────────────────────────────
+let authMode = 'login'; // 'login' or 'signup'
+
+function switchTab(mode) {
+  authMode = mode;
+  const isSignup = mode === 'signup';
+  document.getElementById('tab-login').style.background = isSignup ? 'var(--surface2)' : 'var(--accent)';
+  document.getElementById('tab-login').style.color = isSignup ? 'var(--muted)' : 'white';
+  document.getElementById('tab-signup').style.background = isSignup ? 'var(--accent)' : 'var(--surface2)';
+  document.getElementById('tab-signup').style.color = isSignup ? 'white' : 'var(--muted)';
+  document.getElementById('confirm-group').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('join-btn').textContent = isSignup ? 'ចុះឈ្មោះ →' : 'ចូលមក →';
+  document.getElementById('login-hint').innerHTML = isSignup
+    ? 'មានគណនីហើយ? ចុច <span style="color:var(--accent2);font-weight:600;">ចូល</span> ខាងលើ.'
+    : 'អត់មានគណនីទេ? ចុច <span style="color:var(--accent2);font-weight:600;">ចុះឈ្មោះ</span> ខាងលើ.';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-success').style.display = 'none';
+}
+
+function showErr(msg) {
+  const e = document.getElementById('login-error');
+  e.textContent = msg; e.style.display = 'block';
+  document.getElementById('login-success').style.display = 'none';
+}
+
+function showSuccess(msg) {
+  const s = document.getElementById('login-success');
+  s.textContent = msg; s.style.display = 'block';
+  document.getElementById('login-error').style.display = 'none';
+}
 const isConfigured = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
 let db = null;
 if (isConfigured) {
@@ -288,11 +329,37 @@ const EMOJIS = ['👍','❤️','😂','😮','😢','🔥'];
 function joinChat() {
   const nick = document.getElementById('nick-input').value.trim();
   const pass = document.getElementById('pass-input').value;
-  const err = document.getElementById('login-error');
-  if (!nick) { err.textContent = 'Please enter a nickname.'; err.style.display = 'block'; return; }
-  if (pass !== ROOM_PASSWORD) { err.style.display = 'block'; return; }
+  if (!nick) { showErr('Please enter your username.'); return; }
+  if (!pass) { showErr('Please enter your password.'); return; }
+
+  if (authMode === 'signup') {
+    const confirm = document.getElementById('confirm-input').value;
+    if (pass !== confirm) { showErr('Passwords do not match!'); return; }
+    if (pass.length < 4) { showErr('Password must be at least 4 characters.'); return; }
+    if (!isConfigured) { showErr('Firebase not set up yet.'); return; }
+    // Check if username already taken
+    db.ref(`users/${nick}`).once('value', snap => {
+      if (snap.exists()) { showErr('Username already taken! Choose another.'); return; }
+      // Save new account
+      db.ref(`users/${nick}`).set({ password: pass, createdAt: firebase.database.ServerValue.TIMESTAMP });
+      showSuccess('Account created! Logging you in...');
+      setTimeout(() => enterApp(nick), 800);
+    });
+  } else {
+    // Login — check username + password
+    if (!isConfigured) { enterApp(nick); return; }
+    db.ref(`users/${nick}`).once('value', snap => {
+      if (!snap.exists()) { showErr('Username not found. Sign up first!'); return; }
+      if (snap.val().password !== pass) { showErr('ខុសហើយអាងាប់. Wrong password!'); return; }
+      enterApp(nick);
+    });
+  }
+}
+
+function enterApp(nick) {
   myNick = nick;
-  err.style.display = 'none';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('login-success').style.display = 'none';
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('sidebar-nick').textContent = myNick;
@@ -321,6 +388,7 @@ function leaveChat() {
   document.getElementById('app').style.display = 'none';
   document.getElementById('nick-input').value = '';
   document.getElementById('pass-input').value = '';
+  switchTab('login');
 }
 
 // ── ROOMS ─────────────────────────────────────────────────
