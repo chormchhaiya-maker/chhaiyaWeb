@@ -78,16 +78,13 @@
   .msg-bubble {
     display: inline-block;
     max-width: 70%;
-    min-width: 80px;
-    width: auto;
+    min-width: 120px;
     padding: 0.5rem 0.85rem;
     border-radius: 14px;
     border-bottom-left-radius: 4px;
     font-size: 0.9rem;
     line-height: 1.6;
-    white-space: normal;
-    word-break: break-word;
-    overflow-wrap: break-word;
+    white-space: nowrap;
     background: var(--bubble-them);
     color: var(--text);
     position: relative;
@@ -506,6 +503,7 @@ function renderMessage(id, m) {
   } else {
     bubble.className = 'msg-bubble';
     bubble.textContent = m.text;
+    if (m.text.length > 25) bubble.style.whiteSpace = 'normal';
   }
 
   bubble.style.position = 'relative';
