@@ -15,7 +15,8 @@
     --bubble-me: #2d2860; --bubble-them: #1e1e25;
     --green: #3ecf6e; --font: 'DM Sans', sans-serif; --mono: 'Space Mono', monospace;
   }
-  body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100dvh; display: flex; overflow: hidden; }
+  html, body { width: 100%; height: 100%; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100dvh; width: 100vw; display: flex; overflow: hidden; position: fixed; top: 0; left: 0; right: 0; bottom: 0; }
 
   /* LOGIN */
   #login-screen { width: 100%; display: flex; align-items: center; justify-content: center; }
@@ -34,7 +35,7 @@
   #login-error { color: #f87171; font-size: 0.82rem; margin-top: 0.5rem; display: none; }
 
   /* APP */
-  #app { display: none; width: 100%; }
+  #app { display: none; width: 100%; height: 100dvh; overflow: hidden; }
 
   /* SIDEBAR */
   #sidebar { width: 240px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100dvh; }
@@ -162,12 +163,13 @@
 
   #setup-banner { background: #1a1500; border: 1px solid #5a3e00; border-radius: 10px; padding: 0.75rem 1rem; margin: 0.75rem 1.25rem 0; font-size: 0.82rem; color: #f5c542; line-height: 1.6; display: none; }
 
-  @media (max-width: 600px) {
-    #sidebar { display: none !important; }
-    #chat-area { width: 100%; }
-    #app { width: 100%; }
-    .msg-bubble { max-width: 80%; }
-    .bubble-wrap { max-width: 85%; }
+  @media (max-width: 768px) {
+    #sidebar { display: none !important; width: 0 !important; }
+    #app { width: 100vw !important; }
+    #chat-area { width: 100vw !important; flex: 1; }
+    body { width: 100vw; overflow-x: hidden; }
+    .msg-bubble { max-width: 78%; }
+    .bubble-wrap { max-width: 88%; }
   }
 </style>
 </head>
