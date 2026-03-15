@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Chhaiya AI</title>
+<title>Smart-AI</title>
 <meta name="description" content="AI assistant by ChhaiyaDeveloper">
 <meta name="theme-color" content="#7c6fff">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -236,31 +236,56 @@ function sendSuggestion(text) { document.getElementById('userInput').value = tex
 
 // Check if user wants to generate an image
 function isImageRequest(text) {
-  const keywords = ['generate', 'draw', 'create', 'make', 'paint', 'sketch', 'image of', 'picture of', 'photo of', 'show me'];
   const lower = text.toLowerCase();
-  return keywords.some(k => lower.includes(k));
+  // Must NOT be a code request
+  const codeKeywords = ['code', 'script', 'program', 'function', 'html', 'css', 'javascript', 'python', 'java', 'app', 'website', 'algorithm'];
+  if (codeKeywords.some(k => lower.includes(k))) return false;
+  // Must contain image-specific keywords
+  const imageKeywords = ['draw', 'paint', 'sketch', 'image of', 'picture of', 'photo of', 'show me a photo', 'generate a photo', 'generate an image', 'generate a picture', 'generate a drawing', 'create an image', 'create a picture', 'make an image', 'make a picture'];
+  return imageKeywords.some(k => lower.includes(k));
 }
 
 // ── VOICE ────────────────────────────────────────────────
 let isSpeaking = false;
+let currentAudio = null;
 
 function detectLang(text) {
-  // Check if text contains Khmer characters
   const khmerRegex = /[\u1780-\u17FF]/;
-  return khmerRegex.test(text) ? 'km-KH' : 'en-US';
+  return khmerRegex.test(text) ? 'km' : 'en';
 }
 
 function speak(text) {
+  const clean = text.replace(/<[^>]*>/g, '').replace(/[*_#`]/g, '').trim();
+  if (!clean) return;
+  const lang = detectLang(clean);
+
+  // Stop any current audio
+  stopSpeaking();
+
+  if (lang === 'km') {
+    // Use Google Translate TTS for Khmer
+    const encoded = encodeURIComponent(clean.substring(0, 200));
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=km&client=tw-ob`;
+    currentAudio = new Audio(url);
+    currentAudio.play().catch(() => {
+      // Fallback to browser TTS
+      browserSpeak(clean, 'km-KH');
+    });
+    currentAudio.onended = () => { isSpeaking = false; };
+    isSpeaking = true;
+  } else {
+    browserSpeak(clean, 'en-US');
+  }
+}
+
+function browserSpeak(text, lang) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
-  const clean = text.replace(/<[^>]*>/g, '').replace(/[*_#`]/g, '');
-  const utterance = new SpeechSynthesisUtterance(clean);
-  const lang = detectLang(clean);
+  const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
-  utterance.rate = lang === 'km-KH' ? 0.9 : 0.95;
+  utterance.rate = 0.95;
   utterance.pitch = 1;
   utterance.volume = 1;
-  // Try to get a matching voice
   const voices = window.speechSynthesis.getVoices();
   const preferred = voices.find(v => v.lang === lang)
     || voices.find(v => v.lang.startsWith(lang.split('-')[0]))
@@ -270,6 +295,12 @@ function speak(text) {
   utterance.onstart = () => isSpeaking = true;
   utterance.onend = () => isSpeaking = false;
   window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeaking() {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  isSpeaking = false;
 }
 
 function stopSpeaking() {
@@ -299,10 +330,8 @@ function addMessage(role, content) {
       } else {
         speak(content);
         speakBtn.textContent = '⏹ Stop';
-        // Reset button text when done
-        setTimeout(() => { speakBtn.textContent = '🔊 Listen'; }, 100);
         const checkInterval = setInterval(() => {
-          if (!window.speechSynthesis.speaking) {
+          if (!isSpeaking) {
             speakBtn.textContent = '🔊 Listen';
             clearInterval(checkInterval);
           }
