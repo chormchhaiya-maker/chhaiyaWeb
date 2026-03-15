@@ -265,28 +265,24 @@ function addImageMessage(prompt) {
   div.className = 'msg ai';
 
   const encodedPrompt = encodeURIComponent(prompt);
-  // Use multiple reliable free image APIs
-  const apis = [
-    `https://image.pollinations.ai/prompt/${encodedPrompt}?nologo=true&seed=${Math.floor(Math.random()*99999)}`,
-    `https://lexica.art/api/v1/search?q=${encodedPrompt}`,
-  ];
-  const imgUrl = apis[0];
-  const lexicaUrl = `https://lexica.art/?q=${encodedPrompt}`;
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
   bubble.style.cssText = 'padding:10px;background:var(--surface2);border:1px solid var(--border);';
   bubble.innerHTML = `
-    <div style="font-size:0.85rem;color:var(--text2);margin-bottom:10px;">🎨 Generate image: <em>"${prompt}"</em></div>
+    <div style="font-size:0.85rem;color:var(--text2);margin-bottom:10px;">🎨 Generate: <em>"${prompt}"</em></div>
     <div style="display:flex;flex-direction:column;gap:8px;">
-      <a href="${imgUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;padding:8px 18px;border-radius:20px;font-size:0.85rem;text-decoration:none;text-align:center;">
-        🖼️ Generate with Pollinations
+      <a href="https://lexica.art/?q=${encodedPrompt}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;padding:8px 18px;border-radius:20px;font-size:0.85rem;text-decoration:none;text-align:center;">
+        🖼️ Search on Lexica
       </a>
-      <a href="${lexicaUrl}" target="_blank" style="display:inline-block;background:var(--surface3);color:var(--text2);border:1px solid var(--border);padding:8px 18px;border-radius:20px;font-size:0.85rem;text-decoration:none;text-align:center;">
-        🔍 Search on Lexica (backup)
+      <a href="https://www.bing.com/images/create?q=${encodedPrompt}" target="_blank" style="display:inline-block;background:var(--surface3);color:var(--text2);border:1px solid var(--border);padding:8px 18px;border-radius:20px;font-size:0.85rem;text-decoration:none;text-align:center;">
+        🎨 Generate with Bing AI
+      </a>
+      <a href="https://craiyon.com/?prompt=${encodedPrompt}" target="_blank" style="display:inline-block;background:var(--surface3);color:var(--text2);border:1px solid var(--border);padding:8px 18px;border-radius:20px;font-size:0.85rem;text-decoration:none;text-align:center;">
+        ✏️ Generate with Craiyon
       </a>
     </div>
-    <div style="font-size:0.72rem;color:var(--text3);margin-top:8px;">If one doesn't work, try the other!</div>`;
+    <div style="font-size:0.72rem;color:var(--text3);margin-top:8px;">All free! Bing AI makes the best quality images 🔥</div>`;
 
   div.innerHTML = `<div class="avatar">🤖</div>`;
   div.appendChild(bubble);
