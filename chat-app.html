@@ -163,8 +163,11 @@
   #setup-banner { background: #1a1500; border: 1px solid #5a3e00; border-radius: 10px; padding: 0.75rem 1rem; margin: 0.75rem 1.25rem 0; font-size: 0.82rem; color: #f5c542; line-height: 1.6; display: none; }
 
   @media (max-width: 600px) {
-    #sidebar { display: none; }
-    #sidebar.mob-show { display: flex; position: fixed; z-index: 50; height: 100dvh; }
+    #sidebar { display: none !important; }
+    #chat-area { width: 100%; }
+    #app { width: 100%; }
+    .msg-bubble { max-width: 80%; }
+    .bubble-wrap { max-width: 85%; }
   }
 </style>
 </head>
