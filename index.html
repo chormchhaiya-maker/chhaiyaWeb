@@ -270,24 +270,16 @@ function addImageMessage(prompt) {
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.style.cssText = 'padding:8px;background:var(--surface2);border:1px solid var(--border);';
+  bubble.style.cssText = 'padding:10px;background:var(--surface2);border:1px solid var(--border);';
   bubble.innerHTML = `
-    <div style="font-size:0.82rem;color:var(--text2);margin-bottom:8px;">🎨 Generating: <em>${prompt}</em></div>
-    <div id="img-loading-${Date.now()}" style="color:var(--text3);font-size:0.8rem;">⏳ Please wait 5-10 seconds...</div>
-    <img src="${imgUrl}" alt="${prompt}" 
-      style="max-width:260px;border-radius:12px;display:none;margin-top:6px;cursor:pointer;border:1px solid var(--border);"
-      onload="this.style.display='block';this.previousElementSibling.style.display='none';"
-      onerror="this.previousElementSibling.textContent='❌ Failed. Try a different description!'"/>`;
+    <div style="font-size:0.85rem;color:var(--text2);margin-bottom:10px;">🎨 Image ready for: <em>"${prompt}"</em></div>
+    <a href="${imgUrl}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;padding:8px 18px;border-radius:20px;font-size:0.85rem;text-decoration:none;font-family:Syne,sans-serif;">
+      🖼️ View Generated Image
+    </a>
+    <div style="font-size:0.72rem;color:var(--text3);margin-top:8px;">Opens in new tab • Takes 5-10 seconds to generate</div>`;
 
   div.innerHTML = `<div class="avatar">🤖</div>`;
   div.appendChild(bubble);
-
-  // Click to open full size
-  setTimeout(() => {
-    const img = div.querySelector('img');
-    if (img) img.onclick = () => window.open(imgUrl, '_blank');
-  }, 100);
-
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
