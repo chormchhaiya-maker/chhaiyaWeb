@@ -130,7 +130,7 @@ function addMessage(role, content) {
   const container = document.getElementById('messages');
   const div = document.createElement('div');
   div.className = `msg ${role}`;
-  div.innerHTML = `<div class="avatar">${role === 'user' ? '😊' : '🤖'}</div><div class="bubble">${content}</div>`;
+  div.innerHTML = `<div class="avatar">${role === 'user' ? 'You' : '🤖'}</div><div class="bubble">${content}</div>`;
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 }
