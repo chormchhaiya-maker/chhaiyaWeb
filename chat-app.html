@@ -287,8 +287,15 @@ const FIREBASE_CONFIG = {
   appId:             "1:24969437141:web:e376b78cbcb7e3d0a6675c"
 };
 
+const isConfigured = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+let db = null;
+if (isConfigured) {
+  try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.database(); }
+  catch(e) { console.error('Firebase init failed:', e); }
+}
+
 // ── AUTH MODE ────────────────────────────────────────────
-let authMode = 'login'; // 'login' or 'signup'
+let authMode = 'login';
 
 function switchTab(mode) {
   authMode = mode;
@@ -316,12 +323,6 @@ function showSuccess(msg) {
   const s = document.getElementById('login-success');
   s.textContent = msg; s.style.display = 'block';
   document.getElementById('login-error').style.display = 'none';
-}
-const isConfigured = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
-let db = null;
-if (isConfigured) {
-  try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.database(); }
-  catch(e) { console.error('Firebase init failed:', e); }
 }
 
 let myNick = '', currentRoom = 'general';
