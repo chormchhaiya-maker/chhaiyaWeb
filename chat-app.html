@@ -110,7 +110,9 @@
   .link-icon { font-size: 0.75rem; color: var(--muted); margin-bottom: 2px; }
 
   /* SEEN */
-  .seen-row { font-size: 0.68rem; color: var(--muted2); margin-top: 3px; display: flex; align-items: center; gap: 3px; }
+  .delete-btn { background: none; border: none; color: var(--muted2); font-size: 0.7rem; cursor: pointer; padding: 2px 5px; border-radius: 4px; opacity: 0; transition: opacity 0.1s, color 0.1s; }
+  .bubble-wrap:hover .delete-btn { opacity: 1; }
+  .delete-btn:hover { color: #f87171; }
   .msg-group.mine .seen-row { justify-content: flex-end; }
   .seen-tick { color: var(--green); }
   .sent-tick { color: var(--muted2); }
@@ -502,7 +504,14 @@ function sendLink() {
 }
 
 // ── REACTIONS ─────────────────────────────────────────────
-function addReaction(msgId, emoji) {
+function deleteMessage(msgId) {
+  if (!confirm('Delete this message?')) return;
+  if (!isConfigured) {
+    localMessages[currentRoom] = (localMessages[currentRoom] || []).filter(m => m.id != msgId);
+    renderLocalMessages(); return;
+  }
+  db.ref(`messages/${currentRoom}/${msgId}`).remove();
+}
   if (!isConfigured) {
     const m = (localMessages[currentRoom] || []).find(x => x.id == msgId);
     if (!m) return;
@@ -612,8 +621,18 @@ function renderMessage(id, m) {
     bubbleCol.appendChild(seenRow);
   }
 
-  if (isMine) { bwrap.appendChild(emojiBtn); bwrap.appendChild(bubbleCol); }
-  else { bwrap.appendChild(bubbleCol); bwrap.appendChild(emojiBtn); }
+  if (isMine) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'delete-btn';
+    delBtn.textContent = '🗑';
+    delBtn.title = 'Delete message';
+    delBtn.onclick = (e) => { e.stopPropagation(); deleteMessage(id); };
+    bwrap.appendChild(delBtn);
+    bwrap.appendChild(bubbleCol);
+  } else {
+    bwrap.appendChild(bubbleCol);
+    bwrap.appendChild(emojiBtn);
+  }
   group.appendChild(bwrap);
   container.appendChild(group);
 }
