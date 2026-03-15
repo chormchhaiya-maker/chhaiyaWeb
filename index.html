@@ -244,17 +244,26 @@ function isImageRequest(text) {
 // ── VOICE ────────────────────────────────────────────────
 let isSpeaking = false;
 
+function detectLang(text) {
+  // Check if text contains Khmer characters
+  const khmerRegex = /[\u1780-\u17FF]/;
+  return khmerRegex.test(text) ? 'km-KH' : 'en-US';
+}
+
 function speak(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const clean = text.replace(/<[^>]*>/g, '').replace(/[*_#`]/g, '');
   const utterance = new SpeechSynthesisUtterance(clean);
-  utterance.rate = 0.95;
+  const lang = detectLang(clean);
+  utterance.lang = lang;
+  utterance.rate = lang === 'km-KH' ? 0.9 : 0.95;
   utterance.pitch = 1;
   utterance.volume = 1;
-  // Try to get a good English voice
+  // Try to get a matching voice
   const voices = window.speechSynthesis.getVoices();
-  const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google'))
+  const preferred = voices.find(v => v.lang === lang)
+    || voices.find(v => v.lang.startsWith(lang.split('-')[0]))
     || voices.find(v => v.lang.startsWith('en'))
     || voices[0];
   if (preferred) utterance.voice = preferred;
