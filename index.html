@@ -185,9 +185,17 @@ textarea::placeholder { color: var(--text3); }
   <div class="input-area">
     <div class="input-wrap">
       <textarea id="userInput" placeholder="Ask me anything..." rows="1" oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
-      <label for="photo-upload" style="cursor:pointer;font-size:1.2rem;padding:4px;opacity:0.7;transition:opacity 0.2s;" title="Upload photo or take photo">📷</label>
-      <input type="file" id="photo-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+    </div>
+    <div style="display:flex;justify-content:center;gap:10px;margin-top:8px;">
+      <label for="photo-upload" style="display:flex;align-items:center;gap:6px;cursor:pointer;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);color:var(--text2);padding:6px 16px;border-radius:20px;font-size:0.82rem;transition:all 0.2s;">
+        📷 Camera
+      </label>
+      <label for="gallery-upload" style="display:flex;align-items:center;gap:6px;cursor:pointer;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);color:var(--text2);padding:6px 16px;border-radius:20px;font-size:0.82rem;transition:all 0.2s;">
+        🖼️ Gallery
+      </label>
+      <input type="file" id="photo-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
+      <input type="file" id="gallery-upload" accept="image/*" style="display:none" onchange="handlePhoto(this)"/>
     </div>
     <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
   </div>
