@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart-AI</title>
+<title>Chhaiya AI</title>
 <meta name="description" content="AI assistant by ChhaiyaDeveloper">
 <meta name="theme-color" content="#7c6fff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="CHHAIYA-AI">
+<meta name="apple-mobile-web-app-title" content="Chhaiya AI">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/96/bot.png">
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1389812823230326" crossorigin="anonymous"></script>
@@ -170,7 +170,7 @@ textarea::placeholder { color: var(--text3); }
     <div class="welcome" id="welcome">
       <div class="welcome-icon">🤖</div>
       <h2>Hello! I'm Chhaiya AI 🔥</h2>
-      <p>Welcome to my AI😎</p>
+      <p>Created by ChhaiyaDeveloper-AI 😎</p>
       <div class="suggestions">
         <div class="suggestion" onclick="sendSuggestion('What can you do?')">What can you do?</div>
         <div class="suggestion" onclick="sendSuggestion('Tell me a fun fact')">Tell me a fun fact</div>
@@ -185,6 +185,8 @@ textarea::placeholder { color: var(--text3); }
   <div class="input-area">
     <div class="input-wrap">
       <textarea id="userInput" placeholder="Ask me anything..." rows="1" oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+      <label for="photo-upload" style="cursor:pointer;font-size:1.2rem;padding:4px;opacity:0.7;transition:opacity 0.2s;" title="Upload photo or take photo">📷</label>
+      <input type="file" id="photo-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
     </div>
     <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
@@ -225,6 +227,38 @@ function drawMatrix() {
 initMatrix();
 setInterval(drawMatrix, 50);
 window.addEventListener('resize', initMatrix);
+
+// ── PHOTO ────────────────────────────────────────────────
+let pendingImage = null;
+
+function handlePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    pendingImage = e.target.result;
+    const preview = document.getElementById('img-preview');
+    if (preview) preview.remove();
+    const prev = document.createElement('div');
+    prev.id = 'img-preview';
+    prev.style.cssText = 'padding:8px 16px;display:flex;align-items:center;gap:10px;background:var(--surface2);border-top:1px solid var(--border);';
+    prev.innerHTML = `<img src="${pendingImage}" style="width:50px;height:50px;border-radius:8px;object-fit:cover;"/>
+      <span style="font-size:0.82rem;color:var(--text2);flex:1;">Photo ready — ask something about it!</span>
+      <button onclick="clearPhoto()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1rem;">✕</button>`;
+    document.querySelector('.input-area').insertBefore(prev, document.querySelector('.input-wrap'));
+    document.getElementById('userInput').placeholder = 'Ask something about this photo...';
+    document.getElementById('userInput').focus();
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function clearPhoto() {
+  pendingImage = null;
+  const preview = document.getElementById('img-preview');
+  if (preview) preview.remove();
+  document.getElementById('userInput').placeholder = 'Ask me anything...';
+}
 
 // ── CHAT ─────────────────────────────────────────────────
 let messages = [];
@@ -423,14 +457,32 @@ async function sendMessage() {
   if (isLoading) return;
   const input = document.getElementById('userInput');
   const text = input.value.trim();
-  if (!text) return;
-  addMessage('user', text.replace(/\n/g, '<br>'));
+  if (!text && !pendingImage) return;
+
+  // Show user message with image preview if any
+  if (pendingImage) {
+    const welcome = document.getElementById('welcome');
+    if (welcome) welcome.remove();
+    const container = document.getElementById('messages');
+    const div = document.createElement('div');
+    div.className = 'msg user';
+    div.innerHTML = `<div class="avatar">👤</div>
+      <div class="bubble" style="padding:8px;">
+        <img src="${pendingImage}" style="max-width:180px;border-radius:8px;display:block;margin-bottom:${text?'6px':'0'}"/>
+        ${text ? `<div>${text.replace(/\n/g,'<br>')}</div>` : ''}
+      </div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  } else {
+    addMessage('user', text.replace(/\n/g, '<br>'));
+  }
+
   input.value = ''; input.style.height = 'auto';
   isLoading = true;
   document.getElementById('sendBtn').disabled = true;
 
-  // Check if image generation request
-  if (isImageRequest(text)) {
+  // Check if image generation request (only if no photo uploaded)
+  if (!pendingImage && isImageRequest(text)) {
     const prompt = text
       .replace(/^(can you|can u|please|hey|i want|i need)\s*/i, '')
       .replace(/^(generate|draw|create|make|paint|sketch|show me|image of|picture of|photo of|a photo of|a picture of|a image of)\s*/i, '')
@@ -443,7 +495,21 @@ async function sendMessage() {
     return;
   }
 
-  messages.push({ role: 'user', content: text });
+  // Build message with image if present
+  if (pendingImage) {
+    const imageMsg = {
+      role: 'user',
+      content: [
+        { type: 'text', text: text || 'What do you see in this image? Describe it in detail.' },
+        { type: 'image_url', image_url: { url: pendingImage } }
+      ]
+    };
+    messages.push(imageMsg);
+    clearPhoto();
+  } else {
+    messages.push({ role: 'user', content: text });
+  }
+
   addTyping();
   try {
     const response = await fetch('/api/chat', {
