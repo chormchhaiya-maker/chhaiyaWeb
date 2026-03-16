@@ -555,11 +555,13 @@ async function sendMessage() {
       messages.push({ role: 'assistant', content: reply });
       addMessage('ai', formatMessage(reply));
     } else if (data.error) {
-      addMessage('ai', '❌ Error: ' + data.error.message);
+      addMessage('ai', '❌ API Error: ' + JSON.stringify(data.error));
+    } else {
+      addMessage('ai', '❌ Unknown error: ' + JSON.stringify(data));
     }
   } catch (e) {
     removeTyping();
-    addMessage('ai', '❌ Could not connect. Please try again!');
+    addMessage('ai', '❌ Fetch error: ' + e.message);
   }
   isLoading = false;
   document.getElementById('sendBtn').disabled = false;
