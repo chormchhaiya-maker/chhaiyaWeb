@@ -20,7 +20,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${XAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'grok-4',        // Change to 'grok-3' or 'grok-4-fast' if you want
+        model: 'grok-4',
         messages: messages,
         temperature: temperature,
         max_tokens: max_tokens,
