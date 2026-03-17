@@ -1,46 +1,41 @@
+// api/chat.js
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const XAI_API_KEY = process.env.XAI_API_KEY;
+
+  if (!XAI_API_KEY) {
+    return res.status(500).json({ error: 'API key not configured on Vercel' });
   }
 
   try {
-    const { messages } = req.body;
-
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Messages array is required' });
-    }
+    const { messages, temperature = 0.7, max_tokens = 1024 } = req.body;
 
     const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+        'Authorization': `Bearer ${XAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-4.20-beta-0309-non-reasoning",   // This is the most stable one right now
+        model: 'grok-4',        // Change to 'grok-3' or 'grok-4-fast' if you want
         messages: messages,
-        temperature: 0.85,
-        max_tokens: 1000,
+        temperature: temperature,
+        max_tokens: max_tokens,
       }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("xAI Error:", errorText);
-      return res.status(500).json({ 
-        error: "xAI API Error", 
-        details: errorText 
-      });
+      throw new Error(data.error?.message || 'Failed to get response from Grok');
     }
 
-    const data = await response.json();
-    return res.status(200).json(data);
-
-  } catch (err) {
-    console.error("Server Error:", err);
-    return res.status(500).json({ 
-      error: "Server Error", 
-      message: err.message 
-    });
+    res.status(200).json(data);
+  } catch (error) {
+    console.error('Proxy error:', error);
+    res.status(500).json({ error: error.message });
   }
 }
