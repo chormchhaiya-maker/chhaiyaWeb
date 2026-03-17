@@ -1,33 +1,58 @@
+// pages/api/image.js   ← or app/api/image/route.js (Next.js App Router)
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  try {
-    const { prompt } = req.body;
+  const { prompt } = req.body;
 
-    const response = await fetch(
-      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + process.env.HF_API_KEY
-        },
-        body: JSON.stringify({ inputs: prompt })
-      }
-    );
+  if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 5) {
+    return res.status(400).json({ error: 'Please provide a good prompt (at least 5 characters)' });
+  }
+
+  try {
+    const response = await fetch('https://api.x.ai/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "grok-imagine-image",   // Best quality & speed
+        prompt: prompt.trim(),
+        n: 1,
+        response_format: "url"
+      }),
+    });
 
     if (!response.ok) {
-      const err = await response.text();
-      return res.status(500).json({ error: err });
+      const errorData = await response.text();
+      console.error('xAI Error:', errorData);
+      return res.status(500).json({ 
+        error: 'xAI API Error', 
+        details: errorData.slice(0, 300) 
+      });
     }
 
-    const buffer = await response.arrayBuffer();
-    res.setHeader('Content-Type', 'image/png');
-    return res.send(Buffer.from(buffer));
+    const data = await response.json();
+    const imageUrl = data.data?.[0]?.url;
+
+    if (!imageUrl) {
+      return res.status(500).json({ error: 'No image URL received from Grok Imagine' });
+    }
+
+    // Return URL (fast & efficient)
+    return res.status(200).json({ 
+      url: imageUrl,
+      prompt: prompt 
+    });
 
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    console.error('Image generation failed:', err);
+    return res.status(500).json({ 
+      error: 'Server error while generating image',
+      message: err.message 
+    });
   }
 }
