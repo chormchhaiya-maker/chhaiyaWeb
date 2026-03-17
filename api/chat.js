@@ -1,6 +1,4 @@
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // just in case
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -8,41 +6,42 @@ export default async function handler(req, res) {
   try {
     const { messages } = req.body;
 
-    if (!messages) {
-      return res.status(400).json({ error: 'No messages provided' });
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'Messages array is required' });
     }
 
-    const xaiRes = await fetch('https://api.x.ai/v1/chat/completions', {
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-4.20-beta-0309-non-reasoning",   // ← Try this model (very stable)
+        model: "grok-4.20-beta-0309-non-reasoning",   // your original model (should work)
+        // model: "grok-4-1-fast-non-reasoning",      // ← Uncomment this line if you want faster & cheaper
         messages: messages,
-        temperature: 0.8,
-        max_tokens: 800,
+        temperature: 0.85,
+        max_tokens: 1000,
       }),
     });
 
-    const data = await xaiRes.json();
-
-    if (!xaiRes.ok) {
-      console.error("xAI returned error:", data);
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("xAI Error:", errorData);
       return res.status(500).json({ 
         error: "xAI API Error", 
-        details: data 
+        details: errorData 
       });
     }
 
+    const data = await response.json();
     return res.status(200).json(data);
 
   } catch (err) {
-    console.error("Full server error:", err);
+    console.error("Server Error:", err);
     return res.status(500).json({ 
       error: "Server Error", 
-      message: err.message 
+      message: err.message || "Unknown error" 
     });
   }
 }
