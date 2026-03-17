@@ -6,7 +6,6 @@ export default async function handler(req, res) {
   try {
     const { prompt } = req.body;
 
-    // Use Hugging Face free API for image generation
     const response = await fetch(
       'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
       {
