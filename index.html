@@ -204,9 +204,6 @@ body.light #matrix-canvas { opacity: 0.06; }
     <div class="settings-title">⚙️ Settings <button onclick="hideSettings()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
     <div class="settings-row"><span>🌙 Dark mode</span><label class="toggle-wrap"><input type="checkbox" id="dark-toggle" checked onchange="toggleDark(this)"/><span class="toggle-slider"></span></label></div>
     <div class="settings-row"><span>🔊 Auto speak replies</span><label class="toggle-wrap"><input type="checkbox" id="speak-toggle" onchange="toggleAutoSpeak(this)"/><span class="toggle-slider"></span></label></div>
-    <div class="settings-row" style="padding-top:8px;">
-      <button onclick="promptForApiKey()" style="width:100%;background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.3);color:#a093f8;border-radius:10px;padding:8px;cursor:pointer;font-family:Syne,sans-serif;font-size:0.85rem;">🔑 Change API Key</button>
-    </div>
     <div class="settings-row" style="border-bottom:none;padding-top:8px;">
       <button onclick="clearChat();hideSettings();" style="width:100%;background:rgba(255,100,100,0.1);border:1px solid rgba(255,100,100,0.3);color:#f87171;border-radius:10px;padding:8px;cursor:pointer;font-family:Syne,sans-serif;font-size:0.85rem;">🗑️ Clear all chat history</button>
     </div>
@@ -215,34 +212,8 @@ body.light #matrix-canvas { opacity: 0.06; }
 
 <script>
 // ===================== CONFIG =====================
-const GROQ_MODEL = 'llama3-70b-8192';
-
-function getApiKey() {
-  return localStorage.getItem('groq_api_key') || '';
-}
-
-function promptForApiKey() {
-  const existing = getApiKey();
-  const key = prompt('Enter your Groq API Key (get one free at console.groq.com):', existing || '');
-  if (key && key.trim().startsWith('gsk_')) {
-    localStorage.setItem('groq_api_key', key.trim());
-    alert('✅ API key saved!');
-  } else if (key !== null) {
-    alert('❌ Invalid key. It should start with gsk_');
-  }
-}
-
-// Show key setup banner if no key saved
-window.addEventListener('DOMContentLoaded', () => {
-  if (!getApiKey()) {
-    const banner = document.createElement('div');
-    banner.id = 'key-banner';
-    banner.style.cssText = 'background:rgba(255,107,157,0.15);border-bottom:1px solid rgba(255,107,157,0.3);padding:8px 24px;text-align:center;font-size:0.82rem;color:#ff6b9d;cursor:pointer;';
-    banner.innerHTML = '🔑 No API key set — <strong>click here to enter your Groq API key</strong> to enable chat';
-    banner.onclick = () => { promptForApiKey(); if (getApiKey()) banner.remove(); };
-    document.querySelector('.app').insertBefore(banner, document.querySelector('.messages'));
-  }
-});
+// API key is stored securely in Vercel Environment Variables (GROQ_API_KEY)
+// Calls go through /api/chat server route - key never exposed to browser
 const SYSTEM_PROMPT = `You are Chhaiya AI, a smart, friendly, and helpful AI assistant created by ChhaiyaDeveloper-AI. You help users with anything they need — coding, learning, creative writing, answering questions, and more. Be concise, clear, and engaging. Use emojis occasionally to be friendly.`;
 
 // ===================== MATRIX =====================
@@ -398,30 +369,17 @@ async function generateImage(prompt) {
   img.src = imageUrl;
 }
 
-// ===================== GROQ CHAT =====================
+// ===================== GROQ CHAT (via Vercel API route) =====================
 async function callGroq(msgs) {
-  const key = getApiKey();
-  if (!key) { promptForApiKey(); throw new Error("No API key. Please enter your Groq API key."); }
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const response = await fetch('/api/chat', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...msgs
-      ],
-      max_tokens: 1024,
-      temperature: 0.7
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: msgs })
   });
 
   if (!response.ok) {
     const err = await response.json();
-    throw new Error(err.error?.message || 'Groq API error');
+    throw new Error(err.error?.message || 'API error');
   }
 
   const data = await response.json();
