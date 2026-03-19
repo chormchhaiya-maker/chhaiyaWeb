@@ -10,7 +10,7 @@ export default async function handler(req, res) {
 
   try {
     const r = await fetch(
-      'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
+      'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
       {
         method: 'POST',
         headers: {
@@ -22,7 +22,8 @@ export default async function handler(req, res) {
       }
     );
 
-    if (r.status === 503) return res.status(503).json({ error: 'Model loading' });
+    if (r.status === 503) return res.status(503).json({ error: 'Model loading, please retry' });
+
     if (!r.ok) {
       const t = await r.text();
       return res.status(r.status).json({ error: t });
@@ -31,6 +32,7 @@ export default async function handler(req, res) {
     const buf = await r.arrayBuffer();
     const b64 = Buffer.from(buf).toString('base64');
     return res.status(200).json({ url: `data:image/png;base64,${b64}` });
+
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
