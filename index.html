@@ -134,7 +134,7 @@ body.light #matrix-canvas { opacity: 0.06; }
         <div class="suggestion" onclick="sendSuggestion('Tell me a fun fact')">Tell me a fun fact</div>
         <div class="suggestion" onclick="sendSuggestion('Help me study for an exam')">Help me study</div>
         <div class="suggestion" onclick="showYoutube()">▶️ YouTube Search</div>
-        <div class="suggestion" onclick="showTranslate()">🌐 Translate</div>
+        <div class="suggestion" onclick="showTranslate()">🌐 បកប្រែ</div>
         <div class="suggestion" onclick="showCodeRunner()">💻 Code Runner</div>
         <div class="suggestion" onclick="sendSuggestion('generate image of a beautiful sunset over Angkor Wat in cyberpunk style')">🎨 Generate image</div>
       </div>
@@ -264,18 +264,18 @@ if ('serviceWorker' in navigator) {
 <!-- Translate Modal -->
 <div class="settings-overlay" id="translate-overlay" onclick="hideModal('translate-overlay',event)">
   <div class="settings-box" onclick="event.stopPropagation()" style="width:380px;">
-    <div class="settings-title">🌐 Translate <button onclick="hideModal('translate-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
+    <div class="settings-title">🌐 បកប្រែ <button onclick="hideModal('translate-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
     <textarea id="translate-input" placeholder="Type text to translate..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:0.6rem 1rem;color:var(--text);font-family:Syne,sans-serif;font-size:0.9rem;outline:none;resize:none;height:80px;margin-bottom:8px;"></textarea>
     <select id="translate-lang" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:0.6rem 1rem;color:var(--text);font-family:Syne,sans-serif;font-size:0.9rem;outline:none;margin-bottom:10px;">
-      <option value="Khmer">🇰🇭 Khmer</option>
-      <option value="English">🇺🇸 English</option>
-      <option value="Chinese">🇨🇳 Chinese</option>
-      <option value="Japanese">🇯🇵 Japanese</option>
-      <option value="Korean">🇰🇷 Korean</option>
-      <option value="French">🇫🇷 French</option>
+      <option value="Khmer">🇰🇭 ខ្មែរ</option>
+      <option value="English">🇺🇸 អង់គ្លេស</option>
+      <option value="Chinese">🇨🇳 ចិន</option>
+      <option value="Japanese">🇯🇵 ជប៉ុន</option>
+      <option value="Korean">🇰🇷 កូរេ</option>
+      <option value="French">🇫🇷 បារាំង</option>
       <option value="Spanish">🇪🇸 Spanish</option>
-      <option value="Thai">🇹🇭 Thai</option>
-      <option value="Vietnamese">🇻🇳 Vietnamese</option>
+      <option value="Thai">🇹🇭 ចោរសៀម</option>
+      <option value="Vietnamese">🇻🇳 វៀតណាម</option>
     </select>
     <button onclick="doTranslate()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:10px;padding:0.6rem;font-family:Syne,sans-serif;font-size:0.9rem;font-weight:600;cursor:pointer;">Translate</button>
     <div id="translate-result" style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:10px;display:none;color:var(--text);font-size:0.9rem;line-height:1.6;"></div>
