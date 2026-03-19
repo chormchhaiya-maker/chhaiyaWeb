@@ -322,9 +322,20 @@ function copyCode(btn) {
 function isImageRequest(text) {
   const lower = text.toLowerCase().trim();
   if (!lower) return false;
-  const avoid = ['code', 'script', 'html', 'css', 'python', 'function', 'program', 'website', 'algorithm', 'explain', 'what is', 'how to', 'why', 'when', 'who'];
+  const avoid = ['code', 'script', 'html', 'css', 'python', 'function', 'program', 'website', 'algorithm'];
   if (avoid.some(k => lower.includes(k))) return false;
-  const triggers = ['generate image', 'generate a image', 'generate picture', 'generate photo', 'create image', 'make image', 'draw ', 'paint ', 'sketch ', 'image of', 'picture of', 'photo of', 'show me a picture', 'visualize'];
+  const triggers = [
+    'generate image', 'generate a image', 'generate an image',
+    'generate picture', 'generate a picture',
+    'generate photo', 'create image', 'create a image', 'create an image',
+    'make image', 'make a image', 'make an image',
+    'draw ', 'paint ', 'sketch ',
+    'image of', 'picture of', 'photo of',
+    'show me a picture', 'show me an image',
+    'visualize', 'create art', 'make art',
+    '/image', '/img', '/draw',
+    'imagine ', 'render '
+  ];
   return triggers.some(k => lower.includes(k));
 }
 
