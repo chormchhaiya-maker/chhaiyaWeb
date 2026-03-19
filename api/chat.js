@@ -1,10 +1,20 @@
 export default async function handler(req, res) {
+  // Handle CORS preflight
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { messages } = req.body;
+  // Debug log to see what's arriving
+  console.log('Body received:', JSON.stringify(req.body));
+
+  const { messages } = req.body || {};
 
   if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'messages array is required' });
+    console.error('Invalid messages:', messages);
+    return res.status(400).json({ error: `messages must be an array, got: ${typeof messages}` });
   }
 
   try {
@@ -29,10 +39,11 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
-    res.status(response.status).json(data);
+    console.log('Groq status:', response.status);
+    return res.status(response.status).json(data);
 
   } catch (error) {
     console.error('Groq API error:', error);
-    res.status(500).json({ error: { message: 'Internal server error' } });
+    return res.status(500).json({ error: { message: error.message } });
   }
 }
