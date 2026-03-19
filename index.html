@@ -9,6 +9,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Chhaiya AI">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/bot.png">
+<link rel="apple-touch-startup-image" href="https://img.icons8.com/fluency/512/bot.png">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -150,7 +153,14 @@ body.light #matrix-canvas { opacity: 0.06; }
         <button onclick="closeToolMenu();showYoutube()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='rgba(124,111,255,0.1)'" onmouseout="this.style.background='none'">▶️ YouTube Search</button>
         <button onclick="closeToolMenu();showTranslate()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='rgba(124,111,255,0.1)'" onmouseout="this.style.background='none'">🌐 Translate</button>
         <button onclick="closeToolMenu();showCodeRunner()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='rgba(124,111,255,0.1)'" onmouseout="this.style.background='none'">💻 Code Runner</button>
-        <button onclick="closeToolMenu();document.getElementById('userInput').value='generate image of ';document.getElementById('userInput').focus();autoResize(document.getElementById('userInput'));"  style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='rgba(124,111,255,0.1)'" onmouseout="this.style.background='none'">🎨 Generate Image</button>
+        <button onclick="closeToolMenu();document.getElementById('userInput').value='generate image of ';document.getElementById('userInput').focus();
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}autoResize(document.getElementById('userInput'));"  style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='rgba(124,111,255,0.1)'" onmouseout="this.style.background='none'">🎨 Generate Image</button>
       </div>
       <input type="file" id="camera-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
       <input type="file" id="gallery-upload" accept="image/*" style="display:none" onchange="handlePhoto(this)"/>
@@ -275,6 +285,13 @@ function handlePhoto(input) {
     document.querySelector('.input-area').insertBefore(prev, document.querySelector('.input-wrap'));
     document.getElementById('userInput').placeholder = 'Ask something about this photo...';
     document.getElementById('userInput').focus();
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 
 // Tool menu toggle
 let toolMenuOpen = false;
@@ -518,6 +535,13 @@ async function sendMessage() {
     await generateImage(cleanPrompt);
     document.getElementById('userInput').focus();
 
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
 // Tool menu toggle
 let toolMenuOpen = false;
 function toggleToolMenu() {
@@ -577,6 +601,13 @@ document.addEventListener('click', (e) => {
   isLoading = false;
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('userInput').focus();
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 
 // Tool menu toggle
 let toolMenuOpen = false;
@@ -720,6 +751,13 @@ function clearChat() {
 }
 
 document.getElementById('userInput').focus();
+
+// Register service worker for PWA
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
 
 // Tool menu toggle
 let toolMenuOpen = false;
