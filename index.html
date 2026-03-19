@@ -155,6 +155,55 @@ body.light #matrix-canvas { opacity: 0.06; }
         <button onclick="closeToolMenu();showCodeRunner()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;transition:background 0.15s;" onmouseover="this.style.background='rgba(124,111,255,0.1)'" onmouseout="this.style.background='none'">💻 Code Runner</button>
         <button onclick="closeToolMenu();document.getElementById('userInput').value='generate image of ';document.getElementById('userInput').focus();
 
+// ===================== PWA INSTALL =====================
+let deferredPrompt = null;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+// Show banner if not already installed
+window.addEventListener('DOMContentLoaded', () => {
+  if (isInStandaloneMode) return; // Already installed
+  if (isIOS) {
+    // Show iOS instructions banner after 2s
+    setTimeout(() => {
+      document.getElementById('install-banner').style.display = 'block';
+    }, 2000);
+  }
+});
+
+// Catch Android/Chrome install prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'block';
+});
+
+window.addEventListener('appinstalled', () => {
+  dismissInstall();
+});
+
+function installApp() {
+  if (isIOS) {
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  } else if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      deferredPrompt = null;
+      dismissInstall();
+    });
+  } else {
+    // Fallback - show iOS style instructions
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  }
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner').style.display = 'none';
+  sessionStorage.setItem('install-dismissed', '1');
+}
+
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -166,6 +215,39 @@ if ('serviceWorker' in navigator) {
       <input type="file" id="gallery-upload" accept="image/*" style="display:none" onchange="handlePhoto(this)"/>
     </div>
     <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+  </div>
+</div>
+
+<!-- Install Banner -->
+<div id="install-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;padding:12px 16px;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 -4px 20px rgba(124,111,255,0.4);">
+  <div style="display:flex;align-items:center;justify-content:space-between;max-width:800px;margin:0 auto;gap:10px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span style="font-size:24px;">📲</span>
+      <div>
+        <div style="font-size:0.88rem;font-weight:700;color:white;">Add to Home Screen</div>
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.8);">Install Chhaiya AI as an app</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="installApp()" style="background:white;color:var(--accent);border:none;border-radius:20px;padding:8px 18px;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:Syne,sans-serif;">Install</button>
+      <button onclick="dismissInstall()" style="background:rgba(255,255,255,0.2);color:white;border:none;border-radius:20px;padding:8px 12px;font-size:0.85rem;cursor:pointer;">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- iOS Install Modal -->
+<div id="ios-modal" style="display:none;position:fixed;inset:0;z-index:400;background:rgba(0,0,0,0.7);align-items:flex-end;justify-content:center;">
+  <div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:500px;margin:0 auto;">
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:40px;margin-bottom:8px;">📲</div>
+      <div style="font-size:1rem;font-weight:700;color:var(--text);margin-bottom:6px;">Add to Home Screen</div>
+      <div style="font-size:0.85rem;color:var(--text2);line-height:1.6;">
+        1. Tap the <strong style="color:var(--accent);">Share button</strong> <span style="font-size:1.1rem;">⬆️</span> at the bottom of Safari<br>
+        2. Scroll down and tap <strong style="color:var(--accent);">"Add to Home Screen"</strong><br>
+        3. Tap <strong style="color:var(--accent);">"Add"</strong>
+      </div>
+    </div>
+    <button onclick="document.getElementById('ios-modal').style.display='none'" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:12px;padding:12px;font-size:0.95rem;font-weight:700;cursor:pointer;font-family:Syne,sans-serif;">Got it!</button>
   </div>
 </div>
 
@@ -285,6 +367,55 @@ function handlePhoto(input) {
     document.querySelector('.input-area').insertBefore(prev, document.querySelector('.input-wrap'));
     document.getElementById('userInput').placeholder = 'Ask something about this photo...';
     document.getElementById('userInput').focus();
+
+// ===================== PWA INSTALL =====================
+let deferredPrompt = null;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+// Show banner if not already installed
+window.addEventListener('DOMContentLoaded', () => {
+  if (isInStandaloneMode) return; // Already installed
+  if (isIOS) {
+    // Show iOS instructions banner after 2s
+    setTimeout(() => {
+      document.getElementById('install-banner').style.display = 'block';
+    }, 2000);
+  }
+});
+
+// Catch Android/Chrome install prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'block';
+});
+
+window.addEventListener('appinstalled', () => {
+  dismissInstall();
+});
+
+function installApp() {
+  if (isIOS) {
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  } else if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      deferredPrompt = null;
+      dismissInstall();
+    });
+  } else {
+    // Fallback - show iOS style instructions
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  }
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner').style.display = 'none';
+  sessionStorage.setItem('install-dismissed', '1');
+}
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
@@ -558,6 +689,55 @@ async function sendMessage() {
     await generateImage(cleanPrompt);
     document.getElementById('userInput').focus();
 
+// ===================== PWA INSTALL =====================
+let deferredPrompt = null;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+// Show banner if not already installed
+window.addEventListener('DOMContentLoaded', () => {
+  if (isInStandaloneMode) return; // Already installed
+  if (isIOS) {
+    // Show iOS instructions banner after 2s
+    setTimeout(() => {
+      document.getElementById('install-banner').style.display = 'block';
+    }, 2000);
+  }
+});
+
+// Catch Android/Chrome install prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'block';
+});
+
+window.addEventListener('appinstalled', () => {
+  dismissInstall();
+});
+
+function installApp() {
+  if (isIOS) {
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  } else if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      deferredPrompt = null;
+      dismissInstall();
+    });
+  } else {
+    // Fallback - show iOS style instructions
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  }
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner').style.display = 'none';
+  sessionStorage.setItem('install-dismissed', '1');
+}
+
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -624,6 +804,55 @@ document.addEventListener('click', (e) => {
   isLoading = false;
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('userInput').focus();
+
+// ===================== PWA INSTALL =====================
+let deferredPrompt = null;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+// Show banner if not already installed
+window.addEventListener('DOMContentLoaded', () => {
+  if (isInStandaloneMode) return; // Already installed
+  if (isIOS) {
+    // Show iOS instructions banner after 2s
+    setTimeout(() => {
+      document.getElementById('install-banner').style.display = 'block';
+    }, 2000);
+  }
+});
+
+// Catch Android/Chrome install prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'block';
+});
+
+window.addEventListener('appinstalled', () => {
+  dismissInstall();
+});
+
+function installApp() {
+  if (isIOS) {
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  } else if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      deferredPrompt = null;
+      dismissInstall();
+    });
+  } else {
+    // Fallback - show iOS style instructions
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  }
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner').style.display = 'none';
+  sessionStorage.setItem('install-dismissed', '1');
+}
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
@@ -770,6 +999,55 @@ function clearChat() {
 }
 
 document.getElementById('userInput').focus();
+
+// ===================== PWA INSTALL =====================
+let deferredPrompt = null;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
+// Show banner if not already installed
+window.addEventListener('DOMContentLoaded', () => {
+  if (isInStandaloneMode) return; // Already installed
+  if (isIOS) {
+    // Show iOS instructions banner after 2s
+    setTimeout(() => {
+      document.getElementById('install-banner').style.display = 'block';
+    }, 2000);
+  }
+});
+
+// Catch Android/Chrome install prompt
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  document.getElementById('install-banner').style.display = 'block';
+});
+
+window.addEventListener('appinstalled', () => {
+  dismissInstall();
+});
+
+function installApp() {
+  if (isIOS) {
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  } else if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+      deferredPrompt = null;
+      dismissInstall();
+    });
+  } else {
+    // Fallback - show iOS style instructions
+    document.getElementById('install-banner').style.display = 'none';
+    document.getElementById('ios-modal').style.display = 'flex';
+  }
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner').style.display = 'none';
+  sessionStorage.setItem('install-dismissed', '1');
+}
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
