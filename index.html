@@ -356,10 +356,30 @@ function formatMessage(text) {
 
 function copyCode(btn) {
   const code = btn.closest('div').nextElementSibling.querySelector('code').textContent;
-  navigator.clipboard.writeText(code).then(() => {
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = 'Copy', 2000);
-  });
+  copyToClipboard(code, btn, 'Copy');
+}
+
+function copyToClipboard(text, btn, resetLabel) {
+  const success = () => {
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = resetLabel, 2000);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(success).catch(() => fallbackCopy(text, btn, resetLabel, success));
+  } else {
+    fallbackCopy(text, btn, resetLabel, success);
+  }
+}
+
+function fallbackCopy(text, btn, resetLabel, success) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); success(); } catch(e) { btn.textContent = '❌ Failed'; setTimeout(() => btn.textContent = resetLabel, 2000); }
+  document.body.removeChild(ta);
 }
 
 // ===================== IMAGE DETECTION =====================
@@ -658,10 +678,7 @@ function addMessage(role, htmlContent, rawText) {
 
 function copyRaw(btn) {
   const text = btn.getAttribute('data-text');
-  navigator.clipboard.writeText(text).then(() => {
-    btn.textContent = '✅ Copied!';
-    setTimeout(() => btn.textContent = '📋 Copy', 2000);
-  });
+  copyToClipboard(text, btn, '📋 Copy');
 }
 function shareRaw(btn) {
   const text = btn.getAttribute('data-text');
