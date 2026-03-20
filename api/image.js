@@ -9,30 +9,34 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   try {
-    const r = await fetch('https://api.x.ai/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'grok-2-image-1212',
-        prompt: prompt,
-        n: 1,
-        response_format: 'b64_json'
-      })
-    });
+    const accountId = process.env.CF_ACCOUNT_ID;
+    const apiToken = process.env.CF_API_TOKEN;
 
-    console.log('xAI status:', r.status);
+    const r = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: prompt,
+          num_steps: 8
+        })
+      }
+    );
+
+    console.log('CF status:', r.status, r.headers.get('content-type'));
 
     if (!r.ok) {
       const t = await r.text();
-      console.error('xAI error:', t);
+      console.error('CF error:', t);
       return res.status(r.status).json({ error: t });
     }
 
-    const data = await r.json();
-    const b64 = data.data[0].b64_json;
+    const buf = await r.arrayBuffer();
+    const b64 = Buffer.from(buf).toString('base64');
     return res.status(200).json({ url: `data:image/png;base64,${b64}` });
 
   } catch (e) {
