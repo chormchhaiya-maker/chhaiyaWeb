@@ -7,10 +7,16 @@ export default async function handler(req, res) {
 
   const messages = req.body?.messages;
   const systemPrompt = req.body?.systemPrompt || 'You are Chhaiya AI, a smart, friendly, and helpful AI assistant created by ChhaiyaDeveloper-AI. Be concise, clear, and engaging. Use emojis occasionally.';
+  const hasImage = req.body?.hasImage || false;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
+
+  // Use vision model if image is included, otherwise use fast text model
+  const model = hasImage
+    ? 'meta-llama/llama-4-scout-17b-16e-instruct'
+    : 'llama-3.3-70b-versatile';
 
   try {
     const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -20,7 +26,7 @@ export default async function handler(req, res) {
         'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           ...messages
@@ -29,9 +35,10 @@ export default async function handler(req, res) {
         temperature: 0.7
       })
     });
+
     const data = await r.json();
 
-    // Strip <think>...</think> reasoning tags from response
+    // Strip <think>...</think> reasoning tags
     if (data.choices && data.choices[0] && data.choices[0].message) {
       data.choices[0].message.content = data.choices[0].message.content
         .replace(/<think>[\s\S]*?<\/think>/gi, '')
