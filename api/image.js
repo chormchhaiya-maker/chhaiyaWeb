@@ -9,21 +9,31 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   try {
-    const seed = Math.floor(Math.random() * 99999);
-    const encoded = encodeURIComponent(prompt);
-    const url = `https://image.pollinations.ai/prompt/${encoded}?width=768&height=768&nologo=true&seed=${seed}`;
-
-    const r = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+    const r = await fetch('https://api.x.ai/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.XAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'grok-2-image-1212',
+        prompt: prompt,
+        n: 1,
+        response_format: 'b64_json'
+      })
     });
 
-    console.log('Pollinations status:', r.status, r.headers.get('content-type'));
+    console.log('xAI status:', r.status);
 
-    if (!r.ok) return res.status(r.status).json({ error: `Pollinations error ${r.status}` });
+    if (!r.ok) {
+      const t = await r.text();
+      console.error('xAI error:', t);
+      return res.status(r.status).json({ error: t });
+    }
 
-    const buf = await r.arrayBuffer();
-    const b64 = Buffer.from(buf).toString('base64');
-    return res.status(200).json({ url: `data:image/jpeg;base64,${b64}` });
+    const data = await r.json();
+    const b64 = data.data[0].b64_json;
+    return res.status(200).json({ url: `data:image/png;base64,${b64}` });
 
   } catch (e) {
     console.error('Error:', e);
