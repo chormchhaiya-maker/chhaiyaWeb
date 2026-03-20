@@ -5,12 +5,45 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { prompt } = req.body || {};
-  if (!prompt) return res.status(400).json({ error: 'prompt required' });
+  const { imageBase64, prompt, mode } = req.body || {};
+  if (!imageBase64 || !prompt) {
+    return res.status(400).json({ error: 'imageBase64 and prompt required' });
+  }
 
   try {
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+
+    let hfModel = 'timbrooks/instruct-pix2pix';
+    let body = {};
+
+    if (mode === 'remove-bg') {
+      // Remove background
+      hfModel = 'briaai/RMBG-1.4';
+      body = { inputs: base64Data };
+    } else {
+      // Style transfer, filters, outfit color, background change — all use pix2pix
+      const promptMap = {
+        'anime': `convert to anime art style, ${prompt}`,
+        'cartoon': `convert to cartoon style, ${prompt}`,
+        'painting': `convert to oil painting art style, ${prompt}`,
+        'sketch': `convert to pencil sketch style, ${prompt}`,
+        'vintage': `apply vintage retro filter, ${prompt}`,
+        'cyberpunk': `apply cyberpunk neon filter, ${prompt}`,
+      };
+      const finalPrompt = promptMap[mode] || prompt;
+      body = {
+        inputs: finalPrompt,
+        parameters: {
+          image: base64Data,
+          num_inference_steps: 20,
+          image_guidance_scale: 1.5,
+          guidance_scale: 7.5
+        }
+      };
+    }
+
     const r = await fetch(
-      'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
+      `https://router.huggingface.co/hf-inference/models/${hfModel}`,
       {
         method: 'POST',
         headers: {
@@ -18,12 +51,11 @@ export default async function handler(req, res) {
           'Content-Type': 'application/json',
           'x-wait-for-model': 'true'
         },
-        body: JSON.stringify({ inputs: prompt })
+        body: JSON.stringify(body)
       }
     );
 
-    if (r.status === 503) return res.status(503).json({ error: 'Model loading, please retry' });
-
+    if (r.status === 503) return res.status(503).json({ error: 'Model loading, retry in 20s' });
     if (!r.ok) {
       const t = await r.text();
       return res.status(r.status).json({ error: t });
