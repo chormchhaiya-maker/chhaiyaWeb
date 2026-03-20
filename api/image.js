@@ -9,31 +9,21 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   try {
-    // Use HF Inference API directly (not router) - free, no credits needed
-    const r = await fetch(
-      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.HF_API_KEY}`,
-          'Content-Type': 'application/json',
-          'x-wait-for-model': 'true'
-        },
-        body: JSON.stringify({ inputs: prompt })
-      }
-    );
+    const seed = Math.floor(Math.random() * 99999);
+    const encoded = encodeURIComponent(prompt);
+    const url = `https://image.pollinations.ai/prompt/${encoded}?width=768&height=768&nologo=true&seed=${seed}`;
 
-    console.log('Status:', r.status, 'Type:', r.headers.get('content-type'));
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
 
-    if (!r.ok) {
-      const t = await r.text();
-      console.error('Error:', t);
-      return res.status(r.status).json({ error: t });
-    }
+    console.log('Pollinations status:', r.status, r.headers.get('content-type'));
+
+    if (!r.ok) return res.status(r.status).json({ error: `Pollinations error ${r.status}` });
 
     const buf = await r.arrayBuffer();
     const b64 = Buffer.from(buf).toString('base64');
-    return res.status(200).json({ url: `data:image/png;base64,${b64}` });
+    return res.status(200).json({ url: `data:image/jpeg;base64,${b64}` });
 
   } catch (e) {
     console.error('Error:', e);
