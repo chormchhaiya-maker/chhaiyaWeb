@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <title>Chhaiya AI</title>
 <meta name="description" content="AI assistant by ChhaiyaDeveloper">
 <meta name="theme-color" content="#7c6fff">
@@ -32,7 +32,8 @@
 @keyframes scanline { 0%{transform:translateY(-100%)} 100%{transform:translateY(100vh)} }
 @keyframes glitch { 0%,90%,100%{transform:translate(0)} 92%{transform:translate(-2px,1px)} 94%{transform:translate(2px,-1px)} 96%{transform:translate(-1px,2px)} }
 @keyframes pulse { 0%,100%{box-shadow:0 0 8px #4ade80} 50%{box-shadow:0 0 16px #4ade80, 0 0 30px #4ade80} }
-body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif; min-height: 100vh; min-height: -webkit-fill-available; display: flex; flex-direction: column; overflow: hidden; }
+html { height: -webkit-fill-available; }
 #matrix-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.18; pointer-events: none; }
 .grid-overlay { position: fixed; inset: 0; z-index: 0; pointer-events: none; background-image: linear-gradient(rgba(124,111,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(124,111,255,0.04) 1px, transparent 1px); background-size: 40px 40px; }
 .scanline { position: fixed; top: 0; left: 0; width: 100%; height: 3px; background: linear-gradient(transparent, rgba(124,111,255,0.15), transparent); z-index: 1; pointer-events: none; animation: scanline 6s linear infinite; }
@@ -41,7 +42,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-seri
 .corner-decoration.tr { top: 12px; right: 12px; border-top: 1px solid rgba(255,107,157,0.4); border-right: 1px solid rgba(255,107,157,0.4); }
 .corner-decoration.bl { bottom: 12px; left: 12px; border-bottom: 1px solid rgba(124,111,255,0.4); border-left: 1px solid rgba(124,111,255,0.4); }
 .corner-decoration.br { bottom: 12px; right: 12px; border-bottom: 1px solid rgba(255,107,157,0.4); border-right: 1px solid rgba(255,107,157,0.4); }
-.app { display: flex; flex-direction: column; height: 100vh; position: relative; z-index: 2; }
+.app { display: flex; flex-direction: column; height: 100vh; height: -webkit-fill-available; position: relative; z-index: 2; padding-bottom: env(safe-area-inset-bottom); padding-top: env(safe-area-inset-top); }
 .header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border); background: rgba(10,10,15,0.85); backdrop-filter: blur(20px); flex-shrink: 0; }
 .logo { display: flex; align-items: center; gap: 12px; }
 .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; animation: gradShift 4s ease infinite, glitch 8s infinite; background-size: 200% 200%; }
@@ -71,7 +72,7 @@ body { background: var(--bg); color: var(--text); font-family: 'Syne', sans-seri
 .typing-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin: 0 2px; animation: blink 1.2s infinite; box-shadow: 0 0 6px var(--accent); }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-.input-area { padding: 16px 24px 24px; border-top: 1px solid var(--border); background: rgba(10,10,15,0.85); backdrop-filter: blur(20px); flex-shrink: 0; }
+.input-area { padding: 16px 24px 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: rgba(10,10,15,0.85); backdrop-filter: blur(20px); flex-shrink: 0; }
 .input-wrap { display: flex; align-items: flex-end; gap: 12px; background: rgba(28,28,38,0.9); border: 1px solid rgba(124,111,255,0.2); border-radius: 16px; padding: 12px 16px; transition: border-color 0.2s, box-shadow 0.2s; max-width: 800px; margin: 0 auto; backdrop-filter: blur(10px); }
 .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 20px rgba(124,111,255,0.2); }
 textarea { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: 'Syne', sans-serif; font-size: 14px; resize: none; max-height: 120px; min-height: 24px; line-height: 1.6; }
@@ -319,7 +320,7 @@ body.light #matrix-canvas { opacity: 0.06; }
   </div>
 </div>
 
-<script>
+<script type="module">
 // ===================== CONFIG =====================
 // API keys are in Vercel Environment Variables - calls go through /api/ routes
 const SYSTEM_PROMPT = `You are Chhaiya AI, a smart, friendly, and helpful AI assistant created by ChhaiyaDeveloper-AI. You help users with anything they need — coding, learning, creative writing, answering questions, and more. Be concise, clear, and engaging. Use emojis occasionally to be friendly.`;
@@ -664,6 +665,8 @@ async function generateImage(prompt) {
     if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
 
     incrementImgCount();
+    trackActivity("image");
+    trackVisit();
     bubble.innerHTML = `
       <div style="margin-bottom:8px;font-size:0.82rem;color:var(--text2);">🎨 <em>${prompt}</em></div>
       <img src="${data.url}" alt="${prompt}"
@@ -933,6 +936,65 @@ function dismissInstall() {
   sessionStorage.setItem('install-dismissed', '1');
 }
 
+// ===================== FIREBASE TRACKING =====================
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+let rtdb;
+try {
+  const fbApp = initializeApp({
+    apiKey: "AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",
+    authDomain: "chhaiya-ai.firebaseapp.com",
+    projectId: "chhaiya-ai",
+    databaseURL: "https://chhaiya-ai-default-rtdb.asia-southeast1.firebaseapp.com",
+    storageBucket: "chhaiya-ai.firebasestorage.app",
+    messagingSenderId: "175026548123",
+    appId: "1:175026548123:web:8392f79ae02bc212c3453e"
+  }, 'tracker');
+  rtdb = getDatabase(fbApp);
+} catch(e) { console.log('Firebase init:', e); }
+
+function getUserId() {
+  let id = localStorage.getItem('uid');
+  if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
+  return id;
+}
+
+async function trackVisit() {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    const p = getProfile ? getProfile() : {};
+    const imgData = JSON.parse(localStorage.getItem('img_usage') || '{}');
+    await set(ref(rtdb, 'users/' + uid), {
+      name: p.name || 'Anonymous',
+      lastSeen: Date.now(),
+      date: new Date().toDateString(),
+      images: imgData.count || 0,
+      chats: (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0
+    });
+  } catch(e) { console.log('Track error:', e); }
+}
+
+async function trackActivity(type) {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    if (type === 'image') {
+      const cur = (await get(ref(rtdb, 'users/' + uid + '/images'))).val() || 0;
+      await set(ref(rtdb, 'users/' + uid + '/images'), cur + 1);
+    } else {
+      const cur = (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0;
+      await set(ref(rtdb, 'users/' + uid + '/chats'), cur + 1);
+    }
+    await set(ref(rtdb, 'users/' + uid + '/lastSeen'), Date.now());
+    await set(ref(rtdb, 'users/' + uid + '/date'), new Date().toDateString());
+  } catch(e) { console.log('Activity error:', e); }
+}
+
+// Track visit on load
+window.addEventListener('DOMContentLoaded', () => { setTimeout(trackVisit, 2000); });
+
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -990,6 +1052,7 @@ document.addEventListener('click', (e) => {
   try {
     const reply = await callGroq(messages);
     messages.push({ role: 'assistant', content: reply });
+    trackActivity('chat');
 
     // Remove typing
     const t = document.getElementById('typing');
@@ -1163,6 +1226,65 @@ function dismissInstall() {
   document.getElementById('install-banner').style.display = 'none';
   sessionStorage.setItem('install-dismissed', '1');
 }
+
+// ===================== FIREBASE TRACKING =====================
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+let rtdb;
+try {
+  const fbApp = initializeApp({
+    apiKey: "AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",
+    authDomain: "chhaiya-ai.firebaseapp.com",
+    projectId: "chhaiya-ai",
+    databaseURL: "https://chhaiya-ai-default-rtdb.asia-southeast1.firebaseapp.com",
+    storageBucket: "chhaiya-ai.firebasestorage.app",
+    messagingSenderId: "175026548123",
+    appId: "1:175026548123:web:8392f79ae02bc212c3453e"
+  }, 'tracker');
+  rtdb = getDatabase(fbApp);
+} catch(e) { console.log('Firebase init:', e); }
+
+function getUserId() {
+  let id = localStorage.getItem('uid');
+  if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
+  return id;
+}
+
+async function trackVisit() {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    const p = getProfile ? getProfile() : {};
+    const imgData = JSON.parse(localStorage.getItem('img_usage') || '{}');
+    await set(ref(rtdb, 'users/' + uid), {
+      name: p.name || 'Anonymous',
+      lastSeen: Date.now(),
+      date: new Date().toDateString(),
+      images: imgData.count || 0,
+      chats: (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0
+    });
+  } catch(e) { console.log('Track error:', e); }
+}
+
+async function trackActivity(type) {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    if (type === 'image') {
+      const cur = (await get(ref(rtdb, 'users/' + uid + '/images'))).val() || 0;
+      await set(ref(rtdb, 'users/' + uid + '/images'), cur + 1);
+    } else {
+      const cur = (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0;
+      await set(ref(rtdb, 'users/' + uid + '/chats'), cur + 1);
+    }
+    await set(ref(rtdb, 'users/' + uid + '/lastSeen'), Date.now());
+    await set(ref(rtdb, 'users/' + uid + '/date'), new Date().toDateString());
+  } catch(e) { console.log('Activity error:', e); }
+}
+
+// Track visit on load
+window.addEventListener('DOMContentLoaded', () => { setTimeout(trackVisit, 2000); });
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
@@ -1465,6 +1587,65 @@ function dismissInstall() {
   document.getElementById('install-banner').style.display = 'none';
   sessionStorage.setItem('install-dismissed', '1');
 }
+
+// ===================== FIREBASE TRACKING =====================
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+let rtdb;
+try {
+  const fbApp = initializeApp({
+    apiKey: "AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",
+    authDomain: "chhaiya-ai.firebaseapp.com",
+    projectId: "chhaiya-ai",
+    databaseURL: "https://chhaiya-ai-default-rtdb.asia-southeast1.firebaseapp.com",
+    storageBucket: "chhaiya-ai.firebasestorage.app",
+    messagingSenderId: "175026548123",
+    appId: "1:175026548123:web:8392f79ae02bc212c3453e"
+  }, 'tracker');
+  rtdb = getDatabase(fbApp);
+} catch(e) { console.log('Firebase init:', e); }
+
+function getUserId() {
+  let id = localStorage.getItem('uid');
+  if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
+  return id;
+}
+
+async function trackVisit() {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    const p = getProfile ? getProfile() : {};
+    const imgData = JSON.parse(localStorage.getItem('img_usage') || '{}');
+    await set(ref(rtdb, 'users/' + uid), {
+      name: p.name || 'Anonymous',
+      lastSeen: Date.now(),
+      date: new Date().toDateString(),
+      images: imgData.count || 0,
+      chats: (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0
+    });
+  } catch(e) { console.log('Track error:', e); }
+}
+
+async function trackActivity(type) {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    if (type === 'image') {
+      const cur = (await get(ref(rtdb, 'users/' + uid + '/images'))).val() || 0;
+      await set(ref(rtdb, 'users/' + uid + '/images'), cur + 1);
+    } else {
+      const cur = (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0;
+      await set(ref(rtdb, 'users/' + uid + '/chats'), cur + 1);
+    }
+    await set(ref(rtdb, 'users/' + uid + '/lastSeen'), Date.now());
+    await set(ref(rtdb, 'users/' + uid + '/date'), new Date().toDateString());
+  } catch(e) { console.log('Activity error:', e); }
+}
+
+// Track visit on load
+window.addEventListener('DOMContentLoaded', () => { setTimeout(trackVisit, 2000); });
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
