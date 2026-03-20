@@ -320,7 +320,7 @@ body.light #matrix-canvas { opacity: 0.06; }
   </div>
 </div>
 
-<script type="module">
+<script>
 // ===================== CONFIG =====================
 // API keys are in Vercel Environment Variables - calls go through /api/ routes
 const SYSTEM_PROMPT = `You are Chhaiya AI, a smart, friendly, and helpful AI assistant created by ChhaiyaDeveloper-AI. You help users with anything they need — coding, learning, creative writing, answering questions, and more. Be concise, clear, and engaging. Use emojis occasionally to be friendly.`;
@@ -936,64 +936,17 @@ function dismissInstall() {
   sessionStorage.setItem('install-dismissed', '1');
 }
 
+
 // ===================== FIREBASE TRACKING =====================
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
-
-let rtdb;
-try {
-  const fbApp = initializeApp({
-    apiKey: "AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",
-    authDomain: "chhaiya-ai.firebaseapp.com",
-    projectId: "chhaiya-ai",
-    databaseURL: "https://chhaiya-ai-default-rtdb.asia-southeast1.firebaseapp.com",
-    storageBucket: "chhaiya-ai.firebasestorage.app",
-    messagingSenderId: "175026548123",
-    appId: "1:175026548123:web:8392f79ae02bc212c3453e"
-  }, 'tracker');
-  rtdb = getDatabase(fbApp);
-} catch(e) { console.log('Firebase init:', e); }
-
+// Handled by module script at bottom - stubs here
 function getUserId() {
   let id = localStorage.getItem('uid');
   if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
   return id;
 }
+function trackVisit() { if (window._trackVisit) window._trackVisit(); }
+function trackActivity(t) { if (window._trackActivity) window._trackActivity(t); }
 
-async function trackVisit() {
-  if (!rtdb) return;
-  try {
-    const uid = getUserId();
-    const p = getProfile ? getProfile() : {};
-    const imgData = JSON.parse(localStorage.getItem('img_usage') || '{}');
-    await set(ref(rtdb, 'users/' + uid), {
-      name: p.name || 'Anonymous',
-      lastSeen: Date.now(),
-      date: new Date().toDateString(),
-      images: imgData.count || 0,
-      chats: (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0
-    });
-  } catch(e) { console.log('Track error:', e); }
-}
-
-async function trackActivity(type) {
-  if (!rtdb) return;
-  try {
-    const uid = getUserId();
-    if (type === 'image') {
-      const cur = (await get(ref(rtdb, 'users/' + uid + '/images'))).val() || 0;
-      await set(ref(rtdb, 'users/' + uid + '/images'), cur + 1);
-    } else {
-      const cur = (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0;
-      await set(ref(rtdb, 'users/' + uid + '/chats'), cur + 1);
-    }
-    await set(ref(rtdb, 'users/' + uid + '/lastSeen'), Date.now());
-    await set(ref(rtdb, 'users/' + uid + '/date'), new Date().toDateString());
-  } catch(e) { console.log('Activity error:', e); }
-}
-
-// Track visit on load
-window.addEventListener('DOMContentLoaded', () => { setTimeout(trackVisit, 2000); });
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
@@ -1228,8 +1181,7 @@ function dismissInstall() {
 }
 
 // ===================== FIREBASE TRACKING =====================
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+// Firebase loaded separately below
 
 let rtdb;
 try {
@@ -1589,8 +1541,7 @@ function dismissInstall() {
 }
 
 // ===================== FIREBASE TRACKING =====================
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+// Firebase loaded separately below
 
 let rtdb;
 try {
@@ -1676,6 +1627,61 @@ document.addEventListener('click', (e) => {
 });
 
 
+</script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+
+let rtdb;
+try {
+  const fbApp = initializeApp({
+    apiKey: "AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",
+    authDomain: "chhaiya-ai.firebaseapp.com",
+    projectId: "chhaiya-ai",
+    databaseURL: "https://chhaiya-ai-default-rtdb.asia-southeast1.firebaseapp.com",
+    storageBucket: "chhaiya-ai.firebasestorage.app",
+    messagingSenderId: "175026548123",
+    appId: "1:175026548123:web:8392f79ae02bc212c3453e"
+  }, 'tracker');
+  rtdb = getDatabase(fbApp);
+} catch(e) { console.log('Firebase init:', e); }
+
+function getUserId() {
+  let id = localStorage.getItem('uid');
+  if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
+  return id;
+}
+
+window._trackVisit = async () => {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    const p = typeof getProfile === 'function' ? getProfile() : {};
+    const imgData = JSON.parse(localStorage.getItem('img_usage') || '{}');
+    const chatsSnap = await get(ref(rtdb, 'users/' + uid + '/chats'));
+    await set(ref(rtdb, 'users/' + uid), {
+      name: p.name || 'Anonymous',
+      lastSeen: Date.now(),
+      date: new Date().toDateString(),
+      images: imgData.count || 0,
+      chats: chatsSnap.val() || 0
+    });
+  } catch(e) { console.log('Track error:', e); }
+};
+
+window._trackActivity = async (type) => {
+  if (!rtdb) return;
+  try {
+    const uid = getUserId();
+    const cur = (await get(ref(rtdb, 'users/' + uid + '/' + type + 's'))).val() || 0;
+    await set(ref(rtdb, 'users/' + uid + '/' + type + 's'), cur + 1);
+    await set(ref(rtdb, 'users/' + uid + '/lastSeen'), Date.now());
+    await set(ref(rtdb, 'users/' + uid + '/date'), new Date().toDateString());
+  } catch(e) { console.log('Activity error:', e); }
+};
+
+// Track visit on load
+setTimeout(() => { if (window._trackVisit) window._trackVisit(); }, 2000);
 </script>
 </body>
 </html>
