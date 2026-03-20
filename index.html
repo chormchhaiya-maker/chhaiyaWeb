@@ -665,8 +665,8 @@ async function generateImage(prompt) {
     if (!res.ok) throw new Error(data.error || `Error ${res.status}`);
 
     incrementImgCount();
-    trackActivity("image");
-    trackVisit();
+    if(typeof trackActivity==='function') trackActivity('image');
+    if(typeof trackVisit==='function') trackVisit();
     bubble.innerHTML = `
       <div style="margin-bottom:8px;font-size:0.82rem;color:var(--text2);">🎨 <em>${prompt}</em></div>
       <img src="${data.url}" alt="${prompt}"
@@ -1005,7 +1005,7 @@ document.addEventListener('click', (e) => {
   try {
     const reply = await callGroq(messages);
     messages.push({ role: 'assistant', content: reply });
-    trackActivity('chat');
+    if(typeof trackActivity==='function') trackActivity('chat');
 
     // Remove typing
     const t = document.getElementById('typing');
@@ -1540,12 +1540,6 @@ try {
   rtdb = getDatabase(fbApp);
 } catch(e) { console.log('Firebase init:', e); }
 
-function getUserId() {
-  let id = localStorage.getItem('uid');
-  if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
-  return id;
-}
-
 window._trackVisit = async () => {
   if (!rtdb) return;
   try {
@@ -1575,7 +1569,7 @@ window._trackActivity = async (type) => {
 };
 
 // Track visit on load
-setTimeout(() => { if (window._trackVisit) window._trackVisit(); }, 2000);
+setTimeout(() => { if (window._trackVisit) window._if(typeof trackVisit==='function') trackVisit(); }, 2000);
 </script>
 </body>
 </html>
