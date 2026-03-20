@@ -1181,62 +1181,9 @@ function dismissInstall() {
 }
 
 // ===================== FIREBASE TRACKING =====================
-// Firebase loaded separately below
+// Loaded via module script at bottom
 
-let rtdb;
-try {
-  const fbApp = initializeApp({
-    apiKey: "AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",
-    authDomain: "chhaiya-ai.firebaseapp.com",
-    projectId: "chhaiya-ai",
-    databaseURL: "https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app",
-    storageBucket: "chhaiya-ai.firebasestorage.app",
-    messagingSenderId: "175026548123",
-    appId: "1:175026548123:web:8392f79ae02bc212c3453e"
-  }, 'tracker');
-  rtdb = getDatabase(fbApp);
-} catch(e) { console.log('Firebase init:', e); }
 
-function getUserId() {
-  let id = localStorage.getItem('uid');
-  if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
-  return id;
-}
-
-async function trackVisit() {
-  if (!rtdb) return;
-  try {
-    const uid = getUserId();
-    const p = getProfile ? getProfile() : {};
-    const imgData = JSON.parse(localStorage.getItem('img_usage') || '{}');
-    await set(ref(rtdb, 'users/' + uid), {
-      name: p.name || 'Anonymous',
-      lastSeen: Date.now(),
-      date: new Date().toDateString(),
-      images: imgData.count || 0,
-      chats: (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0
-    });
-  } catch(e) { console.log('Track error:', e); }
-}
-
-async function trackActivity(type) {
-  if (!rtdb) return;
-  try {
-    const uid = getUserId();
-    if (type === 'image') {
-      const cur = (await get(ref(rtdb, 'users/' + uid + '/images'))).val() || 0;
-      await set(ref(rtdb, 'users/' + uid + '/images'), cur + 1);
-    } else {
-      const cur = (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0;
-      await set(ref(rtdb, 'users/' + uid + '/chats'), cur + 1);
-    }
-    await set(ref(rtdb, 'users/' + uid + '/lastSeen'), Date.now());
-    await set(ref(rtdb, 'users/' + uid + '/date'), new Date().toDateString());
-  } catch(e) { console.log('Activity error:', e); }
-}
-
-// Track visit on load
-window.addEventListener('DOMContentLoaded', () => { setTimeout(trackVisit, 2000); });
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
@@ -1541,62 +1488,9 @@ function dismissInstall() {
 }
 
 // ===================== FIREBASE TRACKING =====================
-// Firebase loaded separately below
+// Loaded via module script at bottom
 
-let rtdb;
-try {
-  const fbApp = initializeApp({
-    apiKey: "AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",
-    authDomain: "chhaiya-ai.firebaseapp.com",
-    projectId: "chhaiya-ai",
-    databaseURL: "https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app",
-    storageBucket: "chhaiya-ai.firebasestorage.app",
-    messagingSenderId: "175026548123",
-    appId: "1:175026548123:web:8392f79ae02bc212c3453e"
-  }, 'tracker');
-  rtdb = getDatabase(fbApp);
-} catch(e) { console.log('Firebase init:', e); }
 
-function getUserId() {
-  let id = localStorage.getItem('uid');
-  if (!id) { id = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2); localStorage.setItem('uid', id); }
-  return id;
-}
-
-async function trackVisit() {
-  if (!rtdb) return;
-  try {
-    const uid = getUserId();
-    const p = getProfile ? getProfile() : {};
-    const imgData = JSON.parse(localStorage.getItem('img_usage') || '{}');
-    await set(ref(rtdb, 'users/' + uid), {
-      name: p.name || 'Anonymous',
-      lastSeen: Date.now(),
-      date: new Date().toDateString(),
-      images: imgData.count || 0,
-      chats: (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0
-    });
-  } catch(e) { console.log('Track error:', e); }
-}
-
-async function trackActivity(type) {
-  if (!rtdb) return;
-  try {
-    const uid = getUserId();
-    if (type === 'image') {
-      const cur = (await get(ref(rtdb, 'users/' + uid + '/images'))).val() || 0;
-      await set(ref(rtdb, 'users/' + uid + '/images'), cur + 1);
-    } else {
-      const cur = (await get(ref(rtdb, 'users/' + uid + '/chats'))).val() || 0;
-      await set(ref(rtdb, 'users/' + uid + '/chats'), cur + 1);
-    }
-    await set(ref(rtdb, 'users/' + uid + '/lastSeen'), Date.now());
-    await set(ref(rtdb, 'users/' + uid + '/date'), new Date().toDateString());
-  } catch(e) { console.log('Activity error:', e); }
-}
-
-// Track visit on load
-window.addEventListener('DOMContentLoaded', () => { setTimeout(trackVisit, 2000); });
 
 // Register service worker for PWA
 if ('serviceWorker' in navigator) {
