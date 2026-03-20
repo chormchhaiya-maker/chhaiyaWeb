@@ -456,14 +456,21 @@ function fallbackCopy(text, btn, resetLabel, success) {
 // ===================== IMAGE EDIT DETECTION =====================
 function isImageEditRequest(text) {
   const lower = text.toLowerCase().trim();
+  // Must have a photo AND be asking to edit/change it
   const triggers = [
     'change background', 'remove background', 'change color',
-    'make it', 'turn it', 'edit this', 'edit the',
     'change the background', 'replace background',
-    'change to', 'make background', 'background to',
-    'change my', 'remove the', 'add to the image',
-    'make the image', 'change image'
+    'make background', 'background to',
+    'remove the background', 'add to the image',
+    'change the outfit', 'change outfit', 'outfit to',
+    'change image', 'edit this image', 'edit the image',
+    'make it look', 'turn this into', 'convert this to',
+    'apply filter', 'make vintage', 'make anime',
+    'make cartoon', 'make sketch', 'make painting'
   ];
+  // Exclude pure generate requests
+  const notEdit = ['generate image', 'generate a', 'create image', 'draw a', 'draw an'];
+  if (notEdit.some(k => lower.includes(k))) return false;
   return triggers.some(k => lower.includes(k));
 }
 
@@ -688,8 +695,8 @@ async function sendMessage() {
   isLoading = true;
   document.getElementById('sendBtn').disabled = true;
 
-  // Image EDIT check — user has photo + edit instruction
-  if (pendingImage && text && isImageEditRequest(text)) {
+  // Image EDIT check — only if user HAS a photo AND is asking to edit it
+  if (pendingImage && text && isImageEditRequest(text) && !isImageRequest(text)) {
     const imgToEdit = pendingImage;
     clearPhoto();
     isLoading = false;
@@ -703,8 +710,10 @@ async function sendMessage() {
   if (!pendingImage && isImageRequest(text)) {
     let cleanPrompt = text
       .replace(/^(can you |please |hey |chhaiya |generate |draw |create |make |show me |image of |picture of |photo of |visualize )/gi, '')
+      .replace(/generate image\??/gi, '')
+      .replace(/\?/g, '')
       .trim();
-    if (!cleanPrompt) cleanPrompt = 'beautiful landscape';
+    if (!cleanPrompt || cleanPrompt.length < 3) cleanPrompt = 'a beautiful fantasy landscape, cinematic lighting';
     isLoading = false;
     document.getElementById('sendBtn').disabled = false;
     await generateImage(cleanPrompt);
