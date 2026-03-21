@@ -1,7 +1,7 @@
 {
-  "name": "Chhaiya AI",
-  "short_name": "Chhaiya AI",
-  "description": "AI assistant by ChhaiyaDeveloper",
+  "name": "CC-AI",
+  "short_name": "CC-AI",
+  "description": "AI assistant by CC-AI Developer",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0f",
