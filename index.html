@@ -50,7 +50,7 @@ html { height: -webkit-fill-available; }
 .logo-tag { font-size: 11px; color: var(--text3); font-family: 'DM Mono', monospace; margin-top: 1px; }
 .status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); font-family: 'DM Mono', monospace; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; }
-.messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; min-height: 0; }
+.messages { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 24px; padding-left: max(24px, calc((100vw - 800px) / 2)); padding-right: max(24px, calc((100vw - 800px) / 2)); display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; min-height: 0; }
 .messages::-webkit-scrollbar { width: 4px; }
 .messages::-webkit-scrollbar-thumb { background: rgba(124,111,255,0.3); border-radius: 2px; }
 .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; text-align: center; padding: 40px; animation: fadeUp 0.6s ease forwards; }
@@ -60,13 +60,13 @@ html { height: -webkit-fill-available; }
 .suggestions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 28px; }
 .suggestion { background: rgba(28,28,38,0.8); border: 1px solid rgba(124,111,255,0.2); border-radius: 20px; padding: 8px 16px; font-size: 13px; color: var(--text2); cursor: pointer; transition: all 0.2s; font-family: 'Syne', sans-serif; backdrop-filter: blur(10px); }
 .suggestion:hover { border-color: var(--accent); color: var(--accent); background: rgba(124,111,255,0.1); box-shadow: 0 0 15px rgba(124,111,255,0.2); }
-.msg { display: flex; gap: 12px; animation: fadeUp 0.3s ease forwards; max-width: 780px; width: 100%; box-sizing: border-box; }
+.msg { display: flex; gap: 12px; animation: fadeUp 0.3s ease forwards; max-width: 780px; width: 100%; box-sizing: border-box; align-self: flex-start; }
 .msg.user { flex-direction: row-reverse; align-self: flex-end; }
 .msg.ai { align-self: flex-start; }
 .avatar { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; margin-top: 2px; }
 .msg.user .avatar { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
 .msg.ai .avatar { background: var(--surface2); border: 1px solid rgba(124,111,255,0.3); box-shadow: 0 0 10px rgba(124,111,255,0.2); }
-.bubble { max-width: min(600px, calc(100vw - 100px)); padding: 12px 16px; border-radius: 16px; font-size: 14.5px; line-height: 1.7; font-weight: 400; word-break: break-word; overflow: hidden; }
+.bubble { max-width: min(580px, calc(100vw - 120px)); padding: 12px 16px; border-radius: 16px; font-size: 14.5px; line-height: 1.7; font-weight: 400; word-break: break-word; overflow: hidden; }
 .msg.user .bubble { background: linear-gradient(135deg, var(--accent), #6b5de0); color: #fff; border-bottom-right-radius: 4px; box-shadow: 0 0 20px rgba(124,111,255,0.3); }
 .msg.ai .bubble { background: rgba(28,28,38,0.9); border: 1px solid rgba(124,111,255,0.15); color: var(--text); border-bottom-left-radius: 4px; backdrop-filter: blur(10px); }
 .typing-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin: 0 2px; animation: blink 1.2s infinite; box-shadow: 0 0 6px var(--accent); }
