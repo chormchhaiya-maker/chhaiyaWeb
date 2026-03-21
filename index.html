@@ -140,6 +140,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   <div class="input-area">
     <div class="input-wrap" style="max-width:800px;margin:0 auto;">
       <textarea id="userInput" placeholder="Ask me anything..." rows="1" oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+      <button id="voiceBtn" onclick="toggleVoice()" style="width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;transition:all 0.2s;" title="Voice input">🎤</button>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
     </div>
     <div style="display:flex;justify-content:center;margin-top:8px;position:relative;">
@@ -151,6 +152,8 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
         <button onclick="closeToolMenu();showTranslate()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;">🌐 Translate</button>
         <button onclick="closeToolMenu();showCodeRunner()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;">💻 Code Runner</button>
         <button onclick="closeToolMenu();document.getElementById('userInput').value='generate image of ';document.getElementById('userInput').focus();autoResize(document.getElementById('userInput'));" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;">🎨 Generate Image</button>
+        <button onclick="closeToolMenu();showMusicGen()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;">🎵 Generate Music</button>
+        <button onclick="closeToolMenu();exportChat()" style="display:flex;align-items:center;gap:10px;background:none;border:none;padding:8px 12px;border-radius:10px;color:var(--text2);font-size:0.85rem;cursor:pointer;text-align:left;">💾 Save Chat</button>
       </div>
       <input type="file" id="camera-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
       <input type="file" id="gallery-upload" accept="image/*" style="display:none" onchange="handlePhoto(this)"/>
@@ -236,6 +239,27 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     </div>
     <div style="font-size:0.75rem;color:var(--text3);margin-bottom:6px;">Preview:</div>
     <iframe id="code-preview" style="width:100%;height:220px;border:1px solid rgba(124,111,255,0.3);border-radius:10px;background:white;" sandbox="allow-scripts allow-modals allow-forms allow-same-origin"></iframe>
+  </div>
+</div>
+
+<!-- Music Modal -->
+<div class="settings-overlay" id="music-overlay" onclick="hideModal('music-overlay',event)">
+  <div class="settings-box" onclick="event.stopPropagation()" style="width:380px;">
+    <div class="settings-title">🎵 AI Music Generator <button onclick="hideModal('music-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
+    <div style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Describe the music you want to generate:</div>
+    <input type="text" id="music-prompt" placeholder="e.g. relaxing lofi hip hop, epic orchestral..." style="width:100%;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:var(--text);font-family:Syne,sans-serif;font-size:0.9rem;outline:none;margin-bottom:8px;" onkeydown="if(event.key==='Enter')generateMusic()"/>
+    <select id="music-style" style="width:100%;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:var(--text);font-family:Syne,sans-serif;font-size:0.9rem;outline:none;margin-bottom:12px;">
+      <option value="">🎵 Any style</option>
+      <option value="lofi hip hop">🎧 Lofi Hip Hop</option>
+      <option value="epic orchestral">🎻 Epic Orchestral</option>
+      <option value="electronic EDM">🎛️ Electronic EDM</option>
+      <option value="acoustic guitar">🎸 Acoustic Guitar</option>
+      <option value="jazz piano">🎹 Jazz Piano</option>
+      <option value="ambient meditation">🧘 Ambient Meditation</option>
+      <option value="pop upbeat">🎤 Pop Upbeat</option>
+    </select>
+    <button onclick="generateMusic()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:10px;padding:10px;font-family:Syne,sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;">🎵 Generate Music</button>
+    <div id="music-result" style="margin-top:12px;display:none;"></div>
   </div>
 </div>
 
@@ -561,7 +585,138 @@ function dismissInstall(){document.getElementById('install-banner').style.displa
 // Service worker
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}))}
 
-// Firebase stubs
+// ===================== VOICE INPUT =====================
+let isRecording = false;
+let recognition = null;
+
+function toggleVoice() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Voice input not supported in this browser. Try Chrome!');
+    return;
+  }
+  if (isRecording) {
+    recognition.stop();
+    return;
+  }
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  const btn = document.getElementById('voiceBtn');
+  recognition.onstart = () => {
+    isRecording = true;
+    btn.textContent = '⏹️';
+    btn.style.background = 'rgba(255,107,157,0.3)';
+    btn.style.borderColor = 'var(--accent2)';
+    document.getElementById('userInput').placeholder = '🎤 Listening...';
+  };
+  recognition.onresult = (e) => {
+    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    document.getElementById('userInput').value = transcript;
+    autoResize(document.getElementById('userInput'));
+  };
+  recognition.onend = () => {
+    isRecording = false;
+    btn.textContent = '🎤';
+    btn.style.background = 'var(--surface2)';
+    btn.style.borderColor = 'rgba(124,111,255,0.3)';
+    document.getElementById('userInput').placeholder = 'Ask me anything...';
+    if (document.getElementById('userInput').value.trim()) sendMessage();
+  };
+  recognition.onerror = () => {
+    isRecording = false;
+    btn.textContent = '🎤';
+    btn.style.background = 'var(--surface2)';
+  };
+  recognition.start();
+}
+
+// ===================== MUSIC GENERATION =====================
+function showMusicGen() {
+  document.getElementById('music-overlay').classList.add('show');
+  setTimeout(() => document.getElementById('music-prompt').focus(), 100);
+}
+
+async function generateMusic() {
+  const prompt = document.getElementById('music-prompt').value.trim();
+  const style = document.getElementById('music-style').value;
+  if (!prompt && !style) { alert('Please describe the music you want!'); return; }
+  const fullPrompt = style ? `${prompt} ${style}`.trim() : prompt;
+  const resultDiv = document.getElementById('music-result');
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div style="color:var(--accent);font-size:0.85rem;">🎵 Generating music... (10-30 seconds)</div>';
+
+  try {
+    const res = await fetch('/api/music', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: fullPrompt })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Music generation failed');
+    resultDiv.innerHTML = `
+      <div style="font-size:0.82rem;color:var(--text2);margin-bottom:8px;">🎵 <em>${fullPrompt}</em></div>
+      <audio controls style="width:100%;border-radius:10px;margin-bottom:8px;">
+        <source src="${data.url}" type="audio/wav">
+      </audio>
+      <a href="${data.url}" download="chhaiya-music.wav" style="display:block;text-align:center;color:var(--accent);font-size:0.82rem;">⬇️ Download music</a>`;
+  } catch(e) {
+    resultDiv.innerHTML = `<div style="color:#f87171;font-size:0.82rem;">❌ ${e.message}</div>`;
+  }
+}
+
+// ===================== SAVE CHAT HISTORY =====================
+function saveChatToStorage() {
+  if (messages.length > 0) {
+    localStorage.setItem('chat_history', JSON.stringify(messages));
+    localStorage.setItem('chat_saved', new Date().toISOString());
+  }
+}
+
+function loadChatHistory() {
+  const saved = localStorage.getItem('chat_history');
+  const savedTime = localStorage.getItem('chat_saved');
+  if (!saved || !savedTime) return;
+  try {
+    const history = JSON.parse(saved);
+    if (history.length === 0) return;
+    messages = history;
+    removeWelcome();
+    const container = document.getElementById('messages');
+    // Show restore banner
+    const banner = document.createElement('div');
+    banner.style.cssText = 'text-align:center;padding:8px;font-size:0.78rem;color:var(--text3);border-bottom:1px solid var(--border);margin-bottom:8px;';
+    banner.innerHTML = `💾 Restored ${history.length} messages from ${new Date(savedTime).toLocaleDateString()} <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.78rem;">✕</button>`;
+    container.appendChild(banner);
+    // Render messages
+    history.forEach(msg => {
+      if (msg.role === 'user') {
+        const content = Array.isArray(msg.content) ? msg.content.find(c=>c.type==='text')?.text || '' : msg.content;
+        const div = document.createElement('div');
+        div.className = 'msg user';
+        div.innerHTML = `<div class="avatar">👤</div><div class="bubble">${content.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/
+/g,'<br>')}</div>`;
+        container.appendChild(div);
+      } else if (msg.role === 'assistant') {
+        addMessage('ai', formatMessage(msg.content), msg.content);
+      }
+    });
+    container.scrollTop = container.scrollHeight;
+  } catch(e) { console.log('Load history error:', e); }
+}
+
+function exportChat() {
+  if (messages.length === 0) { alert('No chat to save yet!'); return; }
+  saveChatToStorage();
+  alert('✅ Chat saved! It will be restored next time you open the app.');
+}
+
+// Auto-save every 30 seconds
+setInterval(saveChatToStorage, 30000);
+
+// ===================== FIREBASE STUBS =====================
 function getUserId(){let id=localStorage.getItem('uid');if(!id){id='u_'+Date.now()+'_'+Math.random().toString(36).slice(2);localStorage.setItem('uid',id)}return id}
 function trackVisit(){if(window._trackVisit)window._trackVisit()}
 function trackActivity(t){if(window._trackActivity)window._trackActivity(t)}
@@ -574,6 +729,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(!p.name)setTimeout(()=>showProfile(),1500);
   else{const w=document.getElementById('welcome');if(w){const h2=w.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${p.name}! I'm Chhaiya AI 🔥 `}}
   setTimeout(trackVisit,2000);
+  // Load saved chat history
+  loadChatHistory();
 });
 </script>
 
