@@ -122,6 +122,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
+      <a href="https://ko-fi.com/chhaiyaweb" target="_blank" style="display:flex;align-items:center;gap:5px;background:#FF5E5B;border:none;border-radius:8px;color:white;font-size:0.78rem;padding:5px 10px;cursor:pointer;text-decoration:none;font-family:'Inter',sans-serif;font-weight:600;">☕ Support</a>
       <button class="hdr-btn" onclick="showProfile()" title="Profile">👤</button>
       <button class="hdr-btn" onclick="clearChat()" title="Clear chat">🗑️</button>
       <button class="hdr-btn" onclick="showSettings()" title="Settings">⚙️</button>
@@ -771,5 +772,15 @@ window._trackVisit=async()=>{if(!rtdb)return;try{const uid=getUserId();const p=t
 window._trackActivity=async(type)=>{if(!rtdb)return;try{const uid=getUserId();const key=type==='image'?'images':'chats';const cur=(await get(ref(rtdb,'users/'+uid+'/'+key))).val()||0;await set(ref(rtdb,'users/'+uid+'/'+key),cur+1);await set(ref(rtdb,'users/'+uid+'/lastSeen'),Date.now());await set(ref(rtdb,'users/'+uid+'/date'),new Date().toDateString())}catch(e){console.log('Activity:',e)}};
 setTimeout(()=>{if(window._trackVisit)window._trackVisit()},3000);
 </script>
+<!-- Ko-fi floating button -->
+<div id="kofi-float" style="position:fixed;bottom:90px;right:20px;z-index:150;">
+  <a href="https://ko-fi.com/chhaiyaweb" target="_blank"
+     style="display:flex;align-items:center;gap:8px;background:#FF5E5B;color:white;text-decoration:none;padding:10px 16px;border-radius:24px;font-family:'Inter',sans-serif;font-size:0.85rem;font-weight:600;box-shadow:0 4px 15px rgba(255,94,91,0.4);transition:transform 0.2s;"
+     onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+    ☕ Buy me a coffee
+  </a>
+  <button onclick="document.getElementById('kofi-float').style.display='none'" 
+    style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#333;border:none;color:#aaa;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
+</div>
 </body>
 </html>
