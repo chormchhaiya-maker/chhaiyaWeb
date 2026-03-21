@@ -115,7 +115,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 <div class="app">
   <div class="header">
     <div class="logo">
-      <div class="logo-icon">🤖</div>
+      <div class="logo-icon"><img src="/icon.png" style="width:24px;height:24px;object-fit:contain;filter:brightness(10);"/></div>
       <div>
         <div class="logo-name">CC-AI <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="url(#vg)"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="vg" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7c6fff"/><stop offset="1" stop-color="#ff6b9d"/></linearGradient></defs></svg></div>
         <div class="logo-tag">Powered By mastercc-ai</div>
@@ -130,7 +130,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   </div>
   <div class="messages" id="messages">
     <div class="welcome" id="welcome">
-      <div class="welcome-icon">🤖</div>
+      <div class="welcome-icon"><img src="/icon.png" style="width:56px;height:56px;object-fit:contain;filter:drop-shadow(0 0 20px rgba(124,111,255,0.8));"/></div>
       <h2>Hello! I'm CC-AI 🔥 <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="url(#vg2)"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="vg2" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7c6fff"/><stop offset="1" stop-color="#ff6b9d"/></linearGradient></defs></svg></h2>
       <p>Created by CC-AI Developer 😎</p>
       <div class="suggestions">
@@ -525,7 +525,7 @@ async function sendMessage(){
   if(pendingImage){hasImage=true;userContent=[{type:'image_url',image_url:{url:pendingImage}},{type:'text',text:text||'Describe this image.'}];clearPhoto()}
   else{userContent=text}
   messages.push({role:'user',content:userContent});
-  const typingDiv=document.createElement('div');typingDiv.className='msg ai';typingDiv.id='typing';typingDiv.innerHTML='<div class="avatar">🤖</div><div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
+  const typingDiv=document.createElement('div');typingDiv.className='msg ai';typingDiv.id='typing';typingDiv.innerHTML='<div class="avatar"><img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/></div><div class="bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
   container.appendChild(typingDiv);container.scrollTop=container.scrollHeight;
   try{
     const reply=await callGroq(messages);messages.push({role:'assistant',content:reply});
@@ -542,7 +542,7 @@ function addMessage(role,html,raw){
   const div=document.createElement('div');div.className=`msg ${role}`;
   const bubble=document.createElement('div');bubble.className='bubble';bubble.innerHTML=html;
   if(role==='ai'&&raw){const actions=document.createElement('div');actions.className='msg-actions';const safe=raw.replace(/"/g,'&quot;');actions.innerHTML=`<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button>`;bubble.appendChild(actions)}
-  div.innerHTML=`<div class="avatar">${role==='user'?'👤':'🤖'}</div>`;div.appendChild(bubble);container.appendChild(div);container.scrollTop=container.scrollHeight;
+  div.innerHTML=`<div class="avatar">${role==='user'?'👤':'<img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/>'}</div>`;div.appendChild(bubble);container.appendChild(div);container.scrollTop=container.scrollHeight;
 }
 function copyRaw(btn){copyToClipboard(btn.getAttribute('data-text'),btn,'📋 Copy')}
 function shareRaw(btn){const t=btn.getAttribute('data-text');if(navigator.share){navigator.share({title:'CC-AI',text:t})}else{copyToClipboard(t,btn,'🔗 Share')}}
@@ -585,7 +585,7 @@ function clearChat(){
   messages=[];const container=document.getElementById('messages');container.innerHTML='';
   const p=getProfile();const name=p.name;
   const welcome=document.createElement('div');welcome.className='welcome';welcome.id='welcome';
-  welcome.innerHTML=`<div class="welcome-icon">🤖</div><h2 style="display:flex;align-items:center;justify-content:center;gap:8px;">${name?`Hello ${name}! I'm CC-AI 🔥`:"Hello! I'm CC-AI 🔥"} <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="url(#vg2)"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="vg2" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7c6fff"/><stop offset="1" stop-color="#ff6b9d"/></linearGradient></defs></svg></h2><p>Created by CC-AI Developer 😎</p><div class="suggestions"><div class="suggestion" onclick="sendSuggestion('What can you do?')">What can you do?</div><div class="suggestion" onclick="sendSuggestion('Tell me a fun fact')">Tell me a fun fact</div><div class="suggestion" onclick="sendSuggestion('Help me study for an exam')">Help me study</div><div class="suggestion" onclick="showYoutube()">▶️ YouTube Search</div><div class="suggestion" onclick="showTranslate()">🌐 Translate</div><div class="suggestion" onclick="showCodeRunner()">💻 Code Runner</div><div class="suggestion" onclick="sendSuggestion('generate image of a beautiful sunset over Angkor Wat in cyberpunk style')">🎨 Generate image</div></div>`;
+  welcome.innerHTML=`<div class="welcome-icon"><img src="/icon.png" style="width:56px;height:56px;object-fit:contain;filter:drop-shadow(0 0 20px rgba(124,111,255,0.8));"/></div><h2 style="display:flex;align-items:center;justify-content:center;gap:8px;">${name?`Hello ${name}! I'm CC-AI 🔥`:"Hello! I'm CC-AI 🔥"} <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="url(#vg2)"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="vg2" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7c6fff"/><stop offset="1" stop-color="#ff6b9d"/></linearGradient></defs></svg></h2><p>Created by CC-AI Developer 😎</p><div class="suggestions"><div class="suggestion" onclick="sendSuggestion('What can you do?')">What can you do?</div><div class="suggestion" onclick="sendSuggestion('Tell me a fun fact')">Tell me a fun fact</div><div class="suggestion" onclick="sendSuggestion('Help me study for an exam')">Help me study</div><div class="suggestion" onclick="showYoutube()">▶️ YouTube Search</div><div class="suggestion" onclick="showTranslate()">🌐 Translate</div><div class="suggestion" onclick="showCodeRunner()">💻 Code Runner</div><div class="suggestion" onclick="sendSuggestion('generate image of a beautiful sunset over Angkor Wat in cyberpunk style')">🎨 Generate image</div></div>`;
   container.appendChild(welcome);
 }
 
