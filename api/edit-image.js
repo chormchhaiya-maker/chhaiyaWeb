@@ -10,59 +10,55 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'imageBase64 and prompt required' });
   }
 
+  // Style prompts for each mode
+  const stylePrompts = {
+    'anime': 'anime art style, japanese animation, vibrant colors, highly detailed, studio ghibli style',
+    'cartoon': 'cartoon style, colorful, fun illustration, pixar style',
+    'painting': 'oil painting, artistic masterpiece, brush strokes, renaissance style',
+    'sketch': 'pencil sketch, black and white, hand drawn, detailed line art',
+    'vintage': 'vintage retro photograph, film grain, warm sepia tones, 1970s style',
+    'cyberpunk': 'cyberpunk style, neon lights, futuristic city, blade runner aesthetic',
+    'remove-bg': 'subject on pure white background, professional photo, no background',
+  };
+
+  const finalPrompt = stylePrompts[mode] || prompt;
+
   try {
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const accountId = process.env.CF_ACCOUNT_ID;
+    const apiToken = process.env.CF_API_TOKEN;
 
-    // Build style prompt based on mode
-    const stylePrompts = {
-      'anime': 'anime style artwork, japanese animation, vibrant colors, detailed',
-      'cartoon': 'cartoon style, colorful, fun, illustrated',
-      'painting': 'oil painting, artistic, brush strokes, masterpiece',
-      'sketch': 'pencil sketch, black and white, hand drawn, detailed lines',
-      'vintage': 'vintage retro photo, film grain, warm tones, old photograph',
-      'cyberpunk': 'cyberpunk style, neon lights, futuristic, dark city',
-      'remove-bg': 'white background, subject only, clean background removed',
-    };
-
-    const finalPrompt = stylePrompts[mode] || prompt;
-
-    // Use FLUX with image-to-image via prompt + image input
     const r = await fetch(
-      'https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell',
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.HF_API_KEY}`,
-          'Content-Type': 'application/json',
-          'x-wait-for-model': 'true'
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          inputs: `${finalPrompt}, high quality, detailed`,
-          parameters: {
-            num_inference_steps: 4,
-            guidance_scale: 0
-          }
+          prompt: finalPrompt,
+          num_steps: 8
         })
       }
     );
 
-    console.log('Edit status:', r.status, r.headers.get('content-type'));
-
-    if (r.status === 503) {
-      return res.status(503).json({ error: 'Model loading, retry in 20s' });
-    }
+    console.log('CF edit status:', r.status, r.headers.get('content-type'));
 
     if (!r.ok) {
       const t = await r.text();
-      console.error('Edit error:', t);
+      console.error('CF edit error:', t);
       return res.status(r.status).json({ error: t });
     }
 
     const contentType = r.headers.get('content-type') || '';
-    if (!contentType.includes('image') && !contentType.includes('octet')) {
-      const t = await r.text();
-      console.error('Non-image response:', t);
-      return res.status(500).json({ error: 'Model returned non-image response' });
+
+    if (contentType.includes('application/json')) {
+      const data = await r.json();
+      const imgData = data?.result?.image || data?.image || data?.result;
+      if (imgData && typeof imgData === 'string') {
+        return res.status(200).json({ url: `data:image/png;base64,${imgData}` });
+      }
+      return res.status(500).json({ error: 'No image in response' });
     }
 
     const buf = await r.arrayBuffer();
@@ -70,7 +66,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: `data:image/png;base64,${b64}` });
 
   } catch (e) {
-    console.error('Edit handler error:', e);
+    console.error('Edit error:', e);
     return res.status(500).json({ error: e.message });
   }
 }
