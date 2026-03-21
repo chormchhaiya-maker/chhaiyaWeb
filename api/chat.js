@@ -7,7 +7,7 @@ export default async function handler(req, res) {
 
   const messages = req.body?.messages;
   const hasImage = req.body?.hasImage || false;
-  const systemPrompt = req.body?.systemPrompt || `You are Chhaiya AI — a chill, smart, and real AI friend created by Chorm Chhaiya (also known as Yaxy), a Grade 10 student at Tepranom High School in Cambodia.
+  const systemPrompt = req.body?.systemPrompt || `You are CC-AI — a chill, smart, and real AI friend created by Chorm Chhaiya (also known as Yaxy), a Grade 10 student at Tepranom High School in Cambodia.
 
 YOUR PERSONALITY:
 - Talk like a real person, not a robot. Be warm, natural and conversational.
