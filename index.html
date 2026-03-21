@@ -72,8 +72,8 @@ html { height: -webkit-fill-available; }
 .typing-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin: 0 2px; animation: blink 1.2s infinite; box-shadow: 0 0 6px var(--accent); }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
-.input-area { padding: 16px 24px 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: rgba(10,10,15,0.85); backdrop-filter: blur(20px); flex-shrink: 0; }
-.input-wrap { display: flex; align-items: flex-end; gap: 12px; background: rgba(28,28,38,0.9); border: 1px solid rgba(124,111,255,0.2); border-radius: 16px; padding: 12px 16px; transition: border-color 0.2s, box-shadow 0.2s; max-width: 800px; margin: 0 auto; backdrop-filter: blur(10px); }
+.input-area { padding: 16px 24px 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: rgba(10,10,15,0.85); backdrop-filter: blur(20px); flex-shrink: 0; width: 100%; }
+.input-wrap { display: flex; align-items: flex-end; gap: 12px; background: rgba(28,28,38,0.9); border: 1px solid rgba(124,111,255,0.2); border-radius: 16px; padding: 12px 16px; transition: border-color 0.2s, box-shadow 0.2s; width: 100%; max-width: 100%; margin: 0 auto; backdrop-filter: blur(10px); }
 .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 20px rgba(124,111,255,0.2); }
 textarea { flex: 1; background: none; border: none; outline: none; color: var(--text); font-family: 'Syne', sans-serif; font-size: 14px; resize: none; max-height: 120px; min-height: 24px; line-height: 1.6; }
 textarea::placeholder { color: var(--text3); }
