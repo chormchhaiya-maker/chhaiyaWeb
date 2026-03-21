@@ -9,31 +9,24 @@ export default async function handler(req, res) {
   if (!prompt) return res.status(400).json({ error: 'prompt required' });
 
   try {
-    // Use HuggingFace MusicGen via router
-    const r = await fetch(
-      'https://router.huggingface.co/hf-inference/models/facebook/musicgen-small',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.HF_API_KEY}`,
-          'Content-Type': 'application/json',
-          'x-wait-for-model': 'true'
-        },
-        body: JSON.stringify({ inputs: prompt })
-      }
-    );
+    // Use Pollinations audio API - completely free
+    const encoded = encodeURIComponent(prompt);
+    const url = `https://audio.pollinations.ai/${encoded}`;
+    
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
 
     console.log('Music status:', r.status, r.headers.get('content-type'));
 
     if (!r.ok) {
-      const t = await r.text();
-      console.error('Music error:', t);
-      return res.status(r.status).json({ error: t });
+      return res.status(r.status).json({ error: `Music generation failed: ${r.status}` });
     }
 
     const buf = await r.arrayBuffer();
     const b64 = Buffer.from(buf).toString('base64');
-    return res.status(200).json({ url: `data:audio/wav;base64,${b64}` });
+    const contentType = r.headers.get('content-type') || 'audio/mpeg';
+    return res.status(200).json({ url: `data:${contentType};base64,${b64}` });
 
   } catch (e) {
     console.error('Music error:', e);
