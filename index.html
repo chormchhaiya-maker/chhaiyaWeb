@@ -541,7 +541,7 @@ async function sendMessage(){
     const reply=await callGroq(messages);messages.push({role:'assistant',content:reply});
     const t=document.getElementById('typing');if(t)t.remove();
     addMessage('ai',formatMessage(reply),reply);
-    if(autoSpeak){fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:reply.slice(0,500)})}).then(r=>r.json()).then(d=>{if(d.audio){const a=new Audio(d.audio);a.play()}else speakTextRaw(reply)}).catch(()=>speakTextRaw(reply));}
+    if(autoSpeak){const cleanReply=cleanTextForSpeech(reply);if(isKhmerText(cleanReply)){speakTextRaw(cleanReply,'km-KH')}else{fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:cleanReply.slice(0,500)})}).then(r=>r.json()).then(d=>{if(d.audio){const a=new Audio(d.audio);a.play()}else speakTextRaw(cleanReply)}).catch(()=>speakTextRaw(cleanReply));}}
     if(typeof trackActivity==='function')trackActivity('chat');
   }catch(e){const t=document.getElementById('typing');if(t)t.remove();addMessage('ai',`❌ Error: ${e.message}`,'')}
   isLoading=false;document.getElementById('sendBtn').disabled=false;document.getElementById('userInput').focus();
@@ -556,15 +556,43 @@ function addMessage(role,html,raw){
 }
 function copyRaw(btn){copyToClipboard(btn.getAttribute('data-text'),btn,'📋 Copy')}
 function shareRaw(btn){const t=btn.getAttribute('data-text');if(navigator.share){navigator.share({title:'CC-AI',text:t})}else{copyToClipboard(t,btn,'🔗 Share')}}
-function speakRaw(btn){
+function cleanTextForSpeech(text) {
+  text = text.replace(/\p{Emoji}/gu, '');
+  text = text.replace(/\*\*(.*?)\*\*/g, '$1');
+  text = text.replace(/\*(.*?)\*/g, '$1');
+  text = text.replace(/`([^`]+)`/g, '$1');
+  text = text.replace(/#{1,6}\s/g, '');
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
+function isKhmerText(text) {
+  return /[\u1780-\u17FF]/.test(text);
+}
+
+function speakRaw(btn) {
   const text = btn.getAttribute('data-text');
   const orig = btn.textContent;
+  const cleanText = cleanTextForSpeech(text);
+  const isKhmer = isKhmerText(cleanText);
+  const p = typeof getProfile === 'function' ? getProfile() : {};
+  const useKhmer = isKhmer || p.lang === 'Khmer';
+
   btn.textContent = '⏳';
   btn.disabled = true;
+
+  if (useKhmer) {
+    speakTextRaw(cleanText, 'km-KH');
+    btn.textContent = '🔊 Playing...';
+    btn.disabled = false;
+    setTimeout(() => btn.textContent = orig, 3000);
+    return;
+  }
+
   fetch('/api/speak', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({text: text.slice(0,500)})
+    body: JSON.stringify({text: cleanText.slice(0,500)})
   })
   .then(r => r.json())
   .then(data => {
@@ -576,16 +604,31 @@ function speakRaw(btn){
       btn.textContent = '🔊 Playing...';
       audio.onended = () => btn.textContent = orig;
     } else {
-      speakTextRaw(text);
+      speakTextRaw(cleanText);
     }
   })
   .catch(() => {
     btn.textContent = orig;
     btn.disabled = false;
-    speakTextRaw(text);
+    speakTextRaw(cleanText);
   });
 }
-function speakTextRaw(text){window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);window.speechSynthesis.speak(u)}
+
+function speakTextRaw(text, lang) {
+  window.speechSynthesis.cancel();
+  const clean = cleanTextForSpeech(text);
+  const u = new SpeechSynthesisUtterance(clean);
+  if (lang) {
+    u.lang = lang;
+  } else {
+    const p = typeof getProfile === 'function' ? getProfile() : {};
+    const langMap = {'English':'en-US','Khmer':'km-KH','Chinese':'zh-CN','Japanese':'ja-JP','Korean':'ko-KR','French':'fr-FR','Spanish':'es-ES','Thai':'th-TH','Vietnamese':'vi-VN'};
+    u.lang = langMap[p.lang] || 'en-US';
+  }
+  u.rate = 0.9;
+  u.pitch = 1.0;
+  window.speechSynthesis.speak(u);
+}
 
 // Paste image
 document.addEventListener('paste',(e)=>{const items=e.clipboardData?.items;if(!items)return;for(const item of items){if(item.type.startsWith('image/')){e.preventDefault();const file=item.getAsFile();const reader=new FileReader();reader.onload=(ev)=>{pendingImage=ev.target.result;showPhotoPreview(pendingImage)};reader.readAsDataURL(file);break}}});
