@@ -174,6 +174,9 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 <div class="settings-overlay" id="profile-overlay" onclick="hideModal('profile-overlay',event)">
   <div class="settings-box" onclick="event.stopPropagation()" style="width:340px;">
     <div class="settings-title">👤 Your Profile <button onclick="hideModal('profile-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
+    <div id="profile-required-msg" style="display:none;background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:0.82rem;color:var(--text2);">
+      👋 Welcome! Please enter your name so CC-AI can remember you and personalize your experience!
+    </div>
     <div style="margin-bottom:12px;">
       <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:DM Mono,monospace;">YOUR NAME</div>
       <input type="text" id="profile-name" placeholder="Enter your name..." style="width:100%;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.9rem;outline:none;"/>
@@ -353,12 +356,38 @@ function getSystemPrompt(){
   const langStr=p.lang!=='English'?`Respond in ${p.lang} when the user writes in ${p.lang}.`:'';
   return `You are CC-AI — a brilliant, friendly AI created by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia 🇰🇭.\n\n🖥️ CODING: Write complete working code always. No placeholders. Include all imports. Use best practices. Wrap in markdown code blocks. Explain approach for complex problems first.\n\n🎨 IMAGE GENERATION: NEVER describe images or say you cannot generate them. The app handles it automatically. If user asks to generate an image just say "On it! 🎨" — nothing more.\n\n💬 CONVERSATION: Talk naturally like a smart friend. Warm, funny when appropriate, empathetic when needed. Never say Certainly or Absolutely. Keep replies concise unless detail needed.\n\n${nameStr}\n${langStr}\n${personalities[p.personality]||personalities.friendly}\n\n👤 CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`
 }
-function showProfile(){const p=getProfile();document.getElementById('profile-name').value=p.name;document.getElementById('profile-lang').value=p.lang;document.getElementById('profile-personality').value=p.personality;document.getElementById('profile-overlay').classList.add('show')}
+function showProfile(required=false){
+  const p=getProfile();
+  document.getElementById('profile-name').value=p.name;
+  document.getElementById('profile-lang').value=p.lang;
+  document.getElementById('profile-personality').value=p.personality;
+  document.getElementById('profile-overlay').classList.add('show');
+  // If required, hide close button and show message
+  const closeBtn=document.querySelector('#profile-overlay .settings-title button');
+  const titleEl=document.querySelector('#profile-overlay .settings-title');
+  if(required){
+    if(closeBtn)closeBtn.style.display='none';
+    document.getElementById('profile-required-msg').style.display='block';
+  } else {
+    if(closeBtn)closeBtn.style.display='';
+    document.getElementById('profile-required-msg').style.display='none';
+  }
+}
 function saveProfile(){
   const name=document.getElementById('profile-name').value.trim();
+  if(!name){
+    document.getElementById('profile-name').style.border='1px solid #f87171';
+    document.getElementById('profile-name').placeholder='⚠️ Name is required!';
+    document.getElementById('profile-name').focus();
+    return;
+  }
+  document.getElementById('profile-name').style.border='';
   localStorage.setItem('user_name',name);
   localStorage.setItem('user_lang',document.getElementById('profile-lang').value);
   localStorage.setItem('user_personality',document.getElementById('profile-personality').value);
+  // Show close button again
+  const closeBtn=document.querySelector('#profile-overlay .settings-title button');
+  if(closeBtn)closeBtn.style.display='';
   hideModal('profile-overlay');
   const welcome=document.getElementById('welcome');
   if(welcome&&name){const h2=welcome.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${name}! I'm CC-AI 🔥 `}
@@ -857,7 +886,7 @@ document.getElementById('userInput').focus();
 window.addEventListener('DOMContentLoaded',()=>{
   if(!isInStandaloneMode&&isIOS)setTimeout(()=>document.getElementById('install-banner').style.display='block',3000);
   const p=getProfile();
-  if(!p.name)setTimeout(()=>showProfile(),1500);
+  if(!p.name)setTimeout(()=>showProfile(true),1000);
   else{const w=document.getElementById('welcome');if(w){const h2=w.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${p.name}! I'm CC-AI 🔥 `}}
   setTimeout(trackVisit,2000);
   // Load saved chat history
