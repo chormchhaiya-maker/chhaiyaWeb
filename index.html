@@ -649,19 +649,31 @@ function speakTextRaw(text, lang) {
   const langMap = {'English':'en-US','Khmer':'km-KH','Chinese':'zh-CN','Japanese':'ja-JP','Korean':'ko-KR','French':'fr-FR','Spanish':'es-ES','Thai':'th-TH','Vietnamese':'vi-VN'};
   const targetLang = lang || langMap[p.lang] || 'en-US';
 
-  const u = new SpeechSynthesisUtterance(clean);
-  u.lang = targetLang;
-  u.rate = targetLang.startsWith('km') ? 0.7 : 0.9;
-  u.pitch = 1.0;
-  u.volume = 1.0;
+  function doSpeak(voices) {
+    const u = new SpeechSynthesisUtterance(clean);
+    u.lang = targetLang;
+    u.rate = targetLang.startsWith('km') ? 0.7 : 0.9;
+    u.pitch = 1.0;
+    u.volume = 1.0;
+    const langCode = targetLang.split('-')[0];
+    const match = voices.find(v => v.lang === targetLang)
+      || voices.find(v => v.lang.startsWith(langCode))
+      || voices.find(v => v.default);
+    if (match) u.voice = match;
+    window.speechSynthesis.speak(u);
+  }
 
-  // Try to find best matching voice
   const voices = window.speechSynthesis.getVoices();
-  const match = voices.find(v => v.lang.startsWith(targetLang.split('-')[0]))
-    || voices.find(v => v.lang.startsWith('en'));
-  if (match) u.voice = match;
-
-  window.speechSynthesis.speak(u);
+  if (voices.length > 0) {
+    doSpeak(voices);
+  } else {
+    // Wait for voices to load (needed on some browsers)
+    window.speechSynthesis.onvoiceschanged = () => {
+      doSpeak(window.speechSynthesis.getVoices());
+    };
+    // Trigger voice load
+    window.speechSynthesis.getVoices();
+  }
 }
 
 // Paste image
