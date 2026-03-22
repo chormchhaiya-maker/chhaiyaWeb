@@ -51,6 +51,7 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
   <div class="header">
     <h1>🛡️ CC-AI Admin</h1>
     <div style="display:flex;gap:8px;">
+      <button class="refresh" onclick="deleteAnonymous()" style="background:rgba(255,100,100,0.1);border:1px solid rgba(255,100,100,0.3);color:#f87171;">🗑️ Delete Anonymous</button>
       <button class="refresh" onclick="loadData()">🔄 Refresh</button>
       <button class="logout" onclick="logout()">Logout</button>
     </div>
@@ -71,9 +72,9 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, onValue, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getDatabase, ref, get, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
-const ADMIN_PASSWORD = 'chh@iy@0965044808ZA';
+const ADMIN_PASSWORD = 'chh@iy@';
 const DB_URL = 'https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 const app = initializeApp({
@@ -111,6 +112,25 @@ if (sessionStorage.getItem('admin_auth')) {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
 }
+
+window.deleteAnonymous = async () => {
+  if (!confirm('Delete all Anonymous users?')) return;
+  try {
+    const snap = await get(ref(db, 'users'));
+    const data = snap.val() || {};
+    let count = 0;
+    for (const [uid, u] of Object.entries(data)) {
+      if (!u.name || u.name === 'Anonymous') {
+        await remove(ref(db, 'users/' + uid));
+        count++;
+      }
+    }
+    alert(`✅ Deleted ${count} anonymous users!`);
+    loadData();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+};
 
 window.loadData = async () => {
   try {
