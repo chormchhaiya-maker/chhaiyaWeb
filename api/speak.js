@@ -5,13 +5,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { text, lang } = req.body || {};
+  const { text } = req.body || {};
   if (!text) return res.status(400).json({ error: 'text required' });
 
   try {
-    // Use ElevenLabs eleven_multilingual_v2 - supports Khmer and 28 languages
-    const voiceId = '21m00Tcm4TlvDq8ikWAM'; // Rachel
-
+    const voiceId = '21m00Tcm4TlvDq8ikWAM';
     const r = await fetch(
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
       {
@@ -24,22 +22,14 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           text: text.slice(0, 500),
           model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.8,
-            style: 0.3,
-            use_speaker_boost: true
-          }
+          voice_settings: { stability: 0.5, similarity_boost: 0.8 }
         })
       }
     );
 
-    console.log('ElevenLabs status:', r.status, 'lang:', lang);
-
     if (!r.ok) {
-      const t = await r.text();
-      console.error('ElevenLabs error:', t);
-      return res.status(r.status).json({ error: t });
+      // Return empty so frontend falls back to browser speech
+      return res.status(200).json({ audio: null, fallback: true });
     }
 
     const buf = await r.arrayBuffer();
@@ -47,7 +37,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ audio: `data:audio/mpeg;base64,${b64}` });
 
   } catch (e) {
-    console.error('Speak error:', e);
-    return res.status(500).json({ error: e.message });
+    return res.status(200).json({ audio: null, fallback: true });
   }
 }
