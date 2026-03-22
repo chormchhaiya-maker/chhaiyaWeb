@@ -388,6 +388,12 @@ function saveProfile(){
   // Show close button again
   const closeBtn=document.querySelector('#profile-overlay .settings-title button');
   if(closeBtn)closeBtn.style.display='';
+  // Enable chat input
+  document.getElementById('userInput').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('userInput').placeholder = 'Ask me anything...';
+  // Track visit with name
+  if(typeof trackVisit==='function') trackVisit();
   hideModal('profile-overlay');
   const welcome=document.getElementById('welcome');
   if(welcome&&name){const h2=welcome.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${name}! I'm CC-AI 🔥 `}
@@ -886,7 +892,14 @@ document.getElementById('userInput').focus();
 window.addEventListener('DOMContentLoaded',()=>{
   if(!isInStandaloneMode&&isIOS)setTimeout(()=>document.getElementById('install-banner').style.display='block',3000);
   const p=getProfile();
-  if(!p.name)setTimeout(()=>showProfile(true),1000);
+  // Block chat until name is set
+  if(!p.name){
+    setTimeout(()=>showProfile(true),500);
+    // Disable input until name set
+    document.getElementById('userInput').disabled = true;
+    document.getElementById('sendBtn').disabled = true;
+    document.getElementById('userInput').placeholder = '⚠️ Please enter your name first...';
+  }
   else{const w=document.getElementById('welcome');if(w){const h2=w.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${p.name}! I'm CC-AI 🔥 `}}
   setTimeout(trackVisit,2000);
   // Load saved chat history
