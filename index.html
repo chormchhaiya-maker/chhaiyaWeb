@@ -103,6 +103,18 @@ body.light #matrix-canvas{opacity:0.03} body.light .grid-overlay{opacity:0.3}
 .msg-action-btn{background:none;border:none;font-size:0.78rem;color:var(--text3);cursor:pointer;padding:2px 6px;border-radius:6px;transition:all 0.15s}
 .msg-action-btn:hover{color:var(--accent);background:rgba(124,111,255,0.1)}
 img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px rgba(124,111,255,0.4);cursor:pointer}
+.app-container{display:flex;height:100vh;height:-webkit-fill-available;overflow:hidden;position:relative;z-index:2;}
+.chat-side{display:flex;flex-direction:column;flex:1;min-width:0;transition:all 0.3s;overflow:hidden;}
+.preview-side{width:0;overflow:hidden;background:var(--surface);border-left:1px solid var(--border);transition:width 0.3s;display:flex;flex-direction:column;flex-shrink:0;}
+.preview-side.open{width:46%;}
+.preview-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface2);flex-shrink:0;}
+.preview-header span{font-size:0.82rem;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;}
+.preview-tabs{display:flex;gap:4px;}
+.preview-tab{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:0.75rem;padding:3px 10px;cursor:pointer;font-family:'Inter',sans-serif;transition:all 0.2s;}
+.preview-tab.active{background:var(--accent);color:var(--bg);}
+.preview-iframe{flex:1;border:none;background:white;width:100%;}
+.preview-code{flex:1;overflow:auto;padding:16px;font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--text);white-space:pre-wrap;background:var(--bg);margin:0;line-height:1.6;}
+@media(max-width:768px){.preview-side.open{position:fixed;top:0;right:0;width:100% !important;height:100%;z-index:200;}}
 </style>
 </head>
 <body>
@@ -113,7 +125,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 <div class="corner-decoration tr"></div>
 <div class="corner-decoration bl"></div>
 <div class="corner-decoration br"></div>
-<div class="app">
+<div class="app-container"><div class="chat-side"><div class="app">
   <div class="header">
     <div class="logo">
       <div class="logo-icon" style="border-radius:50%;overflow:hidden;background:white;display:flex;align-items:center;justify-content:center;"><img src="/icon.png" style="width:24px;height:24px;object-fit:contain;"/></div>
@@ -179,6 +191,23 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     </div>
     <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
   </div>
+</div>
+
+</div></div>
+<!-- Preview Panel -->
+<div class="preview-side" id="preview-side">
+  <div class="preview-header">
+    <span id="preview-title">📄 Code Preview</span>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <div class="preview-tabs">
+        <button class="preview-tab active" id="tab-preview" onclick="switchTab('preview')">Preview</button>
+        <button class="preview-tab" id="tab-code" onclick="switchTab('code')">Code</button>
+      </div>
+      <button onclick="closePreview()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.1rem;padding:2px 6px;">✕</button>
+    </div>
+  </div>
+  <iframe class="preview-iframe" id="preview-iframe" sandbox="allow-scripts allow-modals allow-forms allow-same-origin"></iframe>
+  <pre class="preview-code" id="preview-code" style="display:none;"></pre>
 </div>
 
 <!-- Profile Modal -->
@@ -442,7 +471,7 @@ function removeWelcome(){const w=document.getElementById('welcome');if(w)w.remov
 
 // Format
 function formatMessage(text){
-  text=text.replace(/```(\w+)?\n?([\s\S]*?)```/g,(m,lang,code)=>{const l=lang||'code';const e=code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');return`<div data-code-block style="margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid rgba(124,111,255,0.3);"><div style="background:#1a1a2e;padding:4px 12px;font-size:0.72rem;color:#7c6fff;font-family:DM Mono,monospace;display:flex;justify-content:space-between;align-items:center;"><span>${l}</span><button onclick="copyCode(this)" style="background:none;border:1px solid rgba(124,111,255,0.3);color:#a093f8;font-size:0.7rem;padding:2px 8px;border-radius:4px;cursor:pointer;">Copy</button></div><pre style="background:#0d0d1a;padding:12px;margin:0;overflow-x:auto;font-family:DM Mono,monospace;font-size:0.8rem;line-height:1.6;color:#e8e8ee;white-space:pre-wrap;"><code>${e}</code></pre></div>`});
+  text=text.replace(/```(\w+)?\n?([\s\S]*?)```/g,(m,lang,code)=>{const l=lang||'code';const e=code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');const isPreviewable=['html','css','javascript','js','jsx','tsx'].includes((l||'').toLowerCase());const previewBtn=isPreviewable?`<button onclick="openPreview(this.closest('[data-code-block]').querySelector('code').innerText,'${l}','${l} preview')" style="background:none;border:1px solid rgba(100,200,100,0.4);color:#6abe6a;font-size:0.7rem;padding:2px 8px;border-radius:4px;cursor:pointer;margin-left:4px;">▶ Preview</button>`:'';return`<div data-code-block style="margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);"><div style="background:#1a1a2e;padding:4px 12px;font-size:0.72rem;color:#aaa;font-family:DM Mono,monospace;display:flex;justify-content:space-between;align-items:center;"><span>${l}</span><div style='display:flex;gap:4px;'>${previewBtn}<button onclick="copyCode(this)" style="background:none;border:1px solid rgba(255,255,255,0.2);color:#aaa;font-size:0.7rem;padding:2px 8px;border-radius:4px;cursor:pointer;">Copy</button></div></div><pre style="background:#0d0d1a;padding:12px;margin:0;overflow-x:auto;font-family:DM Mono,monospace;font-size:0.8rem;line-height:1.6;color:#e8e8ee;white-space:pre-wrap;"><code>${e}</code></pre></div>`});
   text=text.replace(/`([^`]+)`/g,'<code style="background:#1a1a2e;padding:2px 6px;border-radius:4px;font-family:DM Mono,monospace;font-size:0.85rem;color:#a093f8;">$1</code>');
   text=text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
   text=text.replace(/\*(.*?)\*/g,'<em>$1</em>');
@@ -556,6 +585,12 @@ async function sendMessage(){
     const reply=await callGroq(messages);messages.push({role:'assistant',content:reply});
     const t=document.getElementById('typing');if(t)t.remove();
     addMessage('ai',formatMessage(reply),reply);
+    // Auto open preview if reply has HTML code
+    const htmlMatch = reply.match(/```html[\s\S]*?```/i);
+    if (htmlMatch) {
+      const code = htmlMatch[0].replace(/```html\n?/i,'').replace(/```$/,'').trim();
+      setTimeout(() => openPreview(code, 'html', 'HTML Preview'), 400);
+    }
     if(autoSpeak){const cleanReply=cleanTextForSpeech(reply);if(isKhmerText(cleanReply)){speakTextRaw(cleanReply,'km-KH')}else{fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:cleanReply.slice(0,500)})}).then(r=>r.json()).then(d=>{if(d.audio){const a=new Audio(d.audio);a.play()}else speakTextRaw(cleanReply)}).catch(()=>speakTextRaw(cleanReply));}}
     if(typeof trackActivity==='function')trackActivity('chat');
   }catch(e){const t=document.getElementById('typing');if(t)t.remove();addMessage('ai',`❌ Error: ${e.message}`,'')}
@@ -909,6 +944,57 @@ document.addEventListener('click', (e) => {
 setInterval(saveChatToStorage, 30000);
 
 // ===================== FIREBASE STUBS =====================
+// ===================== CODE PREVIEW PANEL =====================
+let currentPreviewCode = '';
+let currentPreviewLang = '';
+
+function openPreview(code, lang, title) {
+  currentPreviewCode = code;
+  currentPreviewLang = lang;
+  const side = document.getElementById('preview-side');
+  const titleEl = document.getElementById('preview-title');
+  side.classList.add('open');
+  if (titleEl) titleEl.textContent = '📄 ' + (title || lang + ' preview');
+  switchTab('preview');
+}
+
+function closePreview() {
+  document.getElementById('preview-side').classList.remove('open');
+}
+
+function switchTab(tab) {
+  const iframe = document.getElementById('preview-iframe');
+  const codeEl = document.getElementById('preview-code');
+  const tabP = document.getElementById('tab-preview');
+  const tabC = document.getElementById('tab-code');
+  if (tab === 'preview') {
+    iframe.style.display = 'block';
+    codeEl.style.display = 'none';
+    tabP.classList.add('active');
+    tabC.classList.remove('active');
+    // Render in iframe
+    const lang = currentPreviewLang.toLowerCase();
+    if (lang === 'html' || lang === 'css' || lang === 'javascript' || lang === 'js') {
+      let html = currentPreviewCode;
+      // If it's just JS/CSS wrap it in HTML
+      if (lang === 'javascript' || lang === 'js') {
+        html = `<!DOCTYPE html><html><body><script>${currentPreviewCode}<\/script></body></html>`;
+      } else if (lang === 'css') {
+        html = `<!DOCTYPE html><html><head><style>${currentPreviewCode}</style></head><body><p>CSS Preview</p></body></html>`;
+      }
+      iframe.srcdoc = html;
+    } else {
+      iframe.srcdoc = `<html><body style="background:#1a1a1a;color:#ccc;font-family:monospace;padding:20px;font-size:13px;"><pre>${currentPreviewCode.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre></body></html>`;
+    }
+  } else {
+    iframe.style.display = 'none';
+    codeEl.style.display = 'block';
+    codeEl.textContent = currentPreviewCode;
+    tabC.classList.add('active');
+    tabP.classList.remove('active');
+  }
+}
+
 // ===================== GROK WITH AD =====================
 function openGrokWithAd(prompt) {
   // Create ad overlay
