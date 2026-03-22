@@ -148,7 +148,18 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   <div class="input-area">
     <div class="input-wrap" style="max-width:800px;margin:0 auto;">
       <textarea id="userInput" placeholder="Ask me anything..." rows="1" oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
-      <button id="voiceBtn" onclick="toggleVoice()" style="width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;transition:all 0.2s;" title="Voice input">🎤</button>
+      <div style="position:relative;">
+        <button id="voiceBtn" onclick="toggleVoice()" style="width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid rgba(255,255,255,0.1);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;transition:all 0.2s;" title="Click to speak">🎤</button>
+        <select id="voiceLangSelect" style="position:absolute;bottom:42px;left:0;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:0.78rem;padding:4px;display:none;z-index:200;width:130px;" onchange="setVoiceLang(this.value)">
+          <option value="km-KH" selected>🇰🇭 Khmer</option>
+          <option value="en-US">🇺🇸 English</option>
+          <option value="zh-CN">🇨🇳 Chinese</option>
+          <option value="ja-JP">🇯🇵 Japanese</option>
+          <option value="ko-KR">🇰🇷 Korean</option>
+          <option value="th-TH">🇹🇭 Thai</option>
+          <option value="vi-VN">🇻🇳 Vietnamese</option>
+        </select>
+      </div>
       <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
     </div>
     <div style="display:flex;justify-content:center;margin-top:8px;position:relative;">
@@ -733,11 +744,15 @@ function toggleVoice() {
     recognition.stop();
     return;
   }
+
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.interimResults = true;
-  // Use user's profile language
+  recognition.maxAlternatives = 3;
+
+  // Auto detect language from profile OR let user pick
+  const p = getProfile();
   const langMap = {
     'English': 'en-US',
     'Khmer': 'km-KH',
@@ -749,8 +764,11 @@ function toggleVoice() {
     'Thai': 'th-TH',
     'Vietnamese': 'vi-VN'
   };
-  const p = getProfile();
-  recognition.lang = langMap[p.lang] || 'en-US';
+  // Use selected language from dropdown, fallback to profile lang, default to Khmer
+  const voiceLangSelect = document.getElementById('voiceLangSelect');
+  const selectedLang = voiceLangSelect ? voiceLangSelect.value : null;
+  recognition.lang = selectedLang || langMap[p.lang] || 'km-KH';
+  console.log('Voice lang:', recognition.lang);
 
   const btn = document.getElementById('voiceBtn');
   recognition.onstart = () => {
@@ -860,6 +878,28 @@ function exportChat() {
   saveChatToStorage();
   alert('✅ Chat saved! It will be restored next time you open the app.');
 }
+
+// Voice language selector
+let voiceLang = 'km-KH';
+function setVoiceLang(lang) {
+  voiceLang = lang;
+  document.getElementById('voiceLangSelect').style.display = 'none';
+  document.getElementById('voiceBtn').title = 'Speaking: ' + lang;
+}
+
+// Long press mic to show language picker
+let voicePressTimer;
+const voiceBtnEl = document.getElementById('voiceBtn');
+if (voiceBtnEl) {
+  voiceBtnEl.addEventListener('mousedown', () => { voicePressTimer = setTimeout(() => { document.getElementById('voiceLangSelect').style.display = 'block'; }, 600); });
+  voiceBtnEl.addEventListener('mouseup', () => clearTimeout(voicePressTimer));
+  voiceBtnEl.addEventListener('touchstart', (e) => { voicePressTimer = setTimeout(() => { e.preventDefault(); document.getElementById('voiceLangSelect').style.display = 'block'; }, 600); });
+  voiceBtnEl.addEventListener('touchend', () => clearTimeout(voicePressTimer));
+}
+document.addEventListener('click', (e) => {
+  const sel = document.getElementById('voiceLangSelect');
+  if (sel && !e.target.closest('#voiceBtn') && !e.target.closest('#voiceLangSelect')) sel.style.display = 'none';
+});
 
 // Auto-save every 30 seconds
 setInterval(saveChatToStorage, 30000);
