@@ -7,90 +7,154 @@ export default async function handler(req, res) {
 
   const messages = req.body?.messages;
   const hasImage = req.body?.hasImage || false;
-  const systemPrompt = req.body?.systemPrompt || `You are CC-AI — a brilliant, knowledgeable, and friendly AI assistant created by Chorm Chhaiya (Yaxy), a Grade 10 student at Tepranom High School, Cambodia 🇰🇭.
+  const systemPrompt = req.body?.systemPrompt || `You are CC-AI — a brilliant, honest, and knowledgeable AI assistant created by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia 🇰🇭.
 
-You are an EXPERT in ALL subjects:
+MOST IMPORTANT RULES:
+- You have access to web search — USE IT for any question about current events, news, history conflicts, wars, politics
+- ALWAYS search before answering questions about recent events (2024-2025)
+- Give TRUTHFUL, FACTUAL answers — never hide the truth
+- Reply in the SAME language the user writes in (Khmer → Khmer, English → English)
+- For Cambodia-Thailand war 2025: search and give full accurate details
+- For any historical conflict: give complete honest history
 
-━━━━━━━━━━━━━━━━━━━━━━━━
-📚 HISTORY & GEOGRAPHY
-━━━━━━━━━━━━━━━━━━━━━━━━
-- You know deep history of ALL countries especially Southeast Asia
-- Cambodia history: Khmer Empire, Angkor Wat, Pol Pot regime, Cambodia-Thailand conflicts, Preah Vihear temple dispute, Cambodia-Vietnam relations, modern Cambodia
-- Thailand history: conflicts with Cambodia over border disputes, Preah Vihear, ancient Siam kingdom
-- Vietnam history, Laos, Myanmar, all ASEAN countries
-- World history: World Wars, Cold War, ancient civilizations, colonialism
-- You always give detailed, accurate historical answers
+SUBJECTS YOU MASTER:
+- Cambodia & Southeast Asia history (Khmer Empire, Preah Vihear, Cambodia-Thailand conflicts, Pol Pot, Vietnam War)
+- World history, politics, current wars and conflicts
+- Science, Math, Physics, Chemistry, Biology
+- Coding (all languages - always write complete working code)
+- Economics, Business, Health, Culture, Sports, Music
 
-━━━━━━━━━━━━━━━━━━━━━━━━
-🔬 SCIENCE & MATH
-━━━━━━━━━━━━━━━━━━━━━━━━
-- Physics, Chemistry, Biology, Mathematics
-- Step by step problem solving
-- Explain complex concepts simply
-- All grade levels from primary to university
+CONVERSATION:
+- Talk naturally like a smart honest friend
+- Short answers for simple questions, detailed for complex ones
+- Never say "I cannot answer" — always try your best
+- NEVER say you cannot generate images — the app handles that automatically
 
-━━━━━━━━━━━━━━━━━━━━━━━━
-🖥️ CODING & TECHNOLOGY
-━━━━━━━━━━━━━━━━━━━━━━━━
-- Expert in all programming languages
-- Always write COMPLETE, WORKING code
-- No placeholders ever
-- Include all imports and setup
-- Explain what the code does
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-🌍 CURRENT EVENTS & NEWS
-━━━━━━━━━━━━━━━━━━━━━━━━
-- Knowledge up to early 2025
-- For events after 2025, honestly say you may not have the latest info
-- But still share what you know up to your knowledge cutoff
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-💬 LANGUAGE & CULTURE
-━━━━━━━━━━━━━━━━━━━━━━━━
-- Fluent in Khmer, English, and many languages
-- Understand Cambodian culture deeply
-- Respectful of all cultures
-- Can explain Khmer words and phrases
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-📖 OTHER SUBJECTS
-━━━━━━━━━━━━━━━━━━━━━━━━
-- Literature, Philosophy, Psychology
-- Economics, Business, Finance
-- Health, Medicine (general info)
-- Sports, Music, Art
-- Law and Politics
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-💬 CONVERSATION STYLE
-━━━━━━━━━━━━━━━━━━━━━━━━
-- Talk naturally like a smart, caring friend
-- Use the same language the user writes in (Khmer → reply in Khmer, English → reply in English)
-- Be warm, honest, and helpful
-- Give detailed answers for complex questions
-- Keep it short for simple questions
-- Never refuse to answer history or politics questions — give balanced, factual info
-- NEVER say "I don't know" without trying — always give your best knowledge
-
-━━━━━━━━━━━━━━━━━━━━━━━━
-👤 CREATOR INFO
-━━━━━━━━━━━━━━━━━━━━━━━━
-- Name: Chorm Chhaiya (also called Yaxy)
-- Grade 10, Tepranom High School, Cambodia
-- TikTok: https://www.tiktok.com/@unluckyguy0001
-- Tell people warmly when asked!
-
-IMAGE GENERATION: NEVER describe images or say you cannot generate them. The app handles it automatically. Just say "On it! 🎨"`;
+CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
+  // Detect if question needs web search
+  const lastMsg = messages[messages.length - 1];
+  const lastText = typeof lastMsg?.content === 'string' ? lastMsg.content.toLowerCase() : '';
+  const needsSearch = lastText.includes('2025') || lastText.includes('2024') ||
+    lastText.includes('war') || lastText.includes('ស្ង') || lastText.includes('ព្រះវិហារ') ||
+    lastText.includes('news') || lastText.includes('latest') || lastText.includes('recent') ||
+    lastText.includes('current') || lastText.includes('today') || lastText.includes('now') ||
+    lastText.includes('Cambodia') || lastText.includes('Thailand') || lastText.includes('ថៃ') ||
+    lastText.includes('កម្ពុជា') || lastText.includes('ការប្រយុទ្ធ') || lastText.includes('សង្គ្រាម');
+
   const models = hasImage
     ? ['meta-llama/llama-4-scout-17b-16e-instruct']
     : ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'gemma2-9b-it'];
 
+  // Try with web search first if needed
+  if (needsSearch && !hasImage) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages
+          ],
+          max_tokens: 4096,
+          temperature: 0.7,
+          tools: [{
+            type: 'function',
+            function: {
+              name: 'web_search',
+              description: 'Search the web for current information',
+              parameters: {
+                type: 'object',
+                properties: {
+                  query: { type: 'string', description: 'Search query' }
+                },
+                required: ['query']
+              }
+            }
+          }],
+          tool_choice: 'auto'
+        })
+      });
+
+      if (r.ok) {
+        const data = await r.json();
+        // If tool was called, do a follow-up search via Brave/DuckDuckGo
+        if (data.choices?.[0]?.message?.tool_calls?.length > 0) {
+          const toolCall = data.choices[0].message.tool_calls[0];
+          const query = JSON.parse(toolCall.function.arguments).query;
+
+          // Search using DuckDuckGo instant answer API
+          let searchResult = '';
+          try {
+            const searchRes = await fetch(
+              `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+              { headers: { 'User-Agent': 'CC-AI/1.0' } }
+            );
+            const searchData = await searchRes.json();
+            searchResult = searchData.AbstractText ||
+              searchData.Answer ||
+              (searchData.RelatedTopics?.[0]?.Text) ||
+              'No direct answer found, using training knowledge.';
+          } catch(e) {
+            searchResult = 'Search unavailable, using training knowledge.';
+          }
+
+          // Second call with search results
+          const r2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: 'llama-3.3-70b-versatile',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                ...messages,
+                data.choices[0].message,
+                {
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: `Search results for "${query}": ${searchResult}`
+                }
+              ],
+              max_tokens: 4096,
+              temperature: 0.7
+            })
+          });
+
+          if (r2.ok) {
+            const data2 = await r2.json();
+            if (data2.choices?.[0]?.message) {
+              data2.choices[0].message.content = data2.choices[0].message.content
+                .replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+            }
+            return res.status(200).json(data2);
+          }
+        }
+
+        // No tool call needed, return direct answer
+        if (data.choices?.[0]?.message) {
+          data.choices[0].message.content = data.choices[0].message.content
+            .replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        }
+        if (!data.error) return res.status(200).json(data);
+      }
+    } catch(e) {
+      console.log('Search attempt failed:', e.message);
+    }
+  }
+
+  // Fallback: normal chat without search
   let lastError = '';
   for (const model of models) {
     try {
@@ -112,23 +176,16 @@ IMAGE GENERATION: NEVER describe images or say you cannot generate them. The app
       });
 
       const data = await r.json();
-
-      if (data.error && data.error.message && data.error.message.includes('Rate limit')) {
-        lastError = data.error.message;
-        continue;
-      }
-
-      if (data.choices && data.choices[0] && data.choices[0].message) {
+      if (data.error?.message?.includes('Rate limit')) { lastError = data.error.message; continue; }
+      if (data.choices?.[0]?.message) {
         data.choices[0].message.content = data.choices[0].message.content
-          .replace(/<think>[\s\S]*?<\/think>/gi, '')
-          .trim();
+          .replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
       }
-
       return res.status(r.status).json(data);
     } catch (e) {
       lastError = e.message;
       continue;
     }
   }
-  return res.status(500).json({ error: `All models failed. Please try again! ⏳` });
+  return res.status(500).json({ error: `Failed. Please try again! ⏳` });
 }
