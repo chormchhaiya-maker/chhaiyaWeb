@@ -396,6 +396,7 @@ function saveProfile(){
   localStorage.setItem('user_name',name);
   localStorage.setItem('user_lang',document.getElementById('profile-lang').value);
   localStorage.setItem('user_personality',document.getElementById('profile-personality').value);
+  localStorage.setItem('profile_set','1'); // Mark profile as completed
   // Show close button again
   const closeBtn=document.querySelector('#profile-overlay .settings-title button');
   if(closeBtn)closeBtn.style.display='';
@@ -403,8 +404,11 @@ function saveProfile(){
   document.getElementById('userInput').disabled = false;
   document.getElementById('sendBtn').disabled = false;
   document.getElementById('userInput').placeholder = 'Ask me anything...';
-  // Track visit with name
-  if(typeof trackVisit==='function') trackVisit();
+  // Update name in welcome screen
+  const w=document.getElementById('welcome');
+  if(w){const h2=w.querySelector('h2');if(h2)h2.childNodes[0].textContent='Hello '+name+'! I\'m CC-AI 🔥 ';}
+  // Track visit with correct name - update existing record
+  setTimeout(()=>{if(typeof window._trackVisit==='function')window._trackVisit()},500);
   hideModal('profile-overlay');
   const welcome=document.getElementById('welcome');
   if(welcome&&name){const h2=welcome.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${name}! I'm CC-AI 🔥 `}
@@ -1004,7 +1008,15 @@ function closeAdPopup() {
 }
 
 // ===================== USER ID =====================
-function getUserId(){let id=localStorage.getItem('uid');if(!id){id='u_'+Date.now()+'_'+Math.random().toString(36).slice(2);localStorage.setItem('uid',id)}return id}
+function getUserId(){
+  let id=localStorage.getItem('uid');
+  if(!id){
+    // Create permanent device ID - never changes
+    id='dev_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
+    localStorage.setItem('uid',id);
+  }
+  return id;
+}
 function trackVisit(){if(window._trackVisit)window._trackVisit()}
 function trackActivity(t){if(window._trackActivity)window._trackActivity(t)}
 
@@ -1013,10 +1025,12 @@ document.getElementById('userInput').focus();
 window.addEventListener('DOMContentLoaded',()=>{
   if(!isInStandaloneMode&&isIOS)setTimeout(()=>document.getElementById('install-banner').style.display='block',3000);
   const p=getProfile();
-  // Block chat until name is set
-  if(!p.name){
+  // Block chat until name is set (only first time)
+  const profileSet = localStorage.getItem('profile_set');
+  if(!p.name || !profileSet){
+    localStorage.removeItem('profile_set');
+    localStorage.removeItem('user_name');
     setTimeout(()=>showProfile(true),500);
-    // Disable input until name set
     document.getElementById('userInput').disabled = true;
     document.getElementById('sendBtn').disabled = true;
     document.getElementById('userInput').placeholder = '⚠️ Please enter your name first...';
@@ -1033,7 +1047,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { getDatabase, ref, set, get } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 let rtdb;
 try{const fbApp=initializeApp({apiKey:"AIzaSyDjAW6cBL6oYa1aQ1W0h-rYg4K5IgjIyso",authDomain:"chhaiya-ai.firebaseapp.com",projectId:"chhaiya-ai",databaseURL:"https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app",storageBucket:"chhaiya-ai.firebasestorage.app",messagingSenderId:"175026548123",appId:"1:175026548123:web:8392f79ae02bc212c3453e"},'tracker');rtdb=getDatabase(fbApp)}catch(e){console.log('Firebase:',e)}
-window._trackVisit=async()=>{if(!rtdb)return;try{const uid=getUserId();const p=typeof getProfile==='function'?getProfile():{};const imgData=JSON.parse(localStorage.getItem('img_usage')||'{}');const chats=(await get(ref(rtdb,'users/'+uid+'/chats'))).val()||0;await set(ref(rtdb,'users/'+uid),{name:p.name||'Anonymous',lastSeen:Date.now(),date:new Date().toDateString(),images:imgData.count||0,chats})}catch(e){console.log('Track:',e)}};
+window._trackVisit=async()=>{if(!rtdb)return;try{const uid=getUserId();const p=typeof getProfile==='function'?getProfile():{};if(!p.name)return;// Don't track anonymous
+const imgData=JSON.parse(localStorage.getItem('img_usage')||'{}');const existing=(await get(ref(rtdb,'users/'+uid))).val()||{};const chats=existing.chats||0;await set(ref(rtdb,'users/'+uid),{name:p.name,lastSeen:Date.now(),date:new Date().toDateString(),images:imgData.count||0,chats,lang:p.lang||'English',firstVisit:existing.firstVisit||Date.now()})}catch(e){console.log('Track:',e)}};
 window._trackActivity=async(type)=>{if(!rtdb)return;try{const uid=getUserId();const key=type==='image'?'images':'chats';const cur=(await get(ref(rtdb,'users/'+uid+'/'+key))).val()||0;await set(ref(rtdb,'users/'+uid+'/'+key),cur+1);await set(ref(rtdb,'users/'+uid+'/lastSeen'),Date.now());await set(ref(rtdb,'users/'+uid+'/date'),new Date().toDateString())}catch(e){console.log('Activity:',e)}};
 setTimeout(()=>{if(window._trackVisit)window._trackVisit()},3000);
 </script>
