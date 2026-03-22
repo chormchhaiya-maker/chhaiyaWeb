@@ -582,10 +582,33 @@ function speakRaw(btn) {
   btn.disabled = true;
 
   if (useKhmer) {
-    btn.textContent = '🔊 Playing...';
-    btn.disabled = false;
-    speakTextRaw(cleanText, 'km');
-    setTimeout(() => btn.textContent = orig, 4000);
+    // Use ElevenLabs multilingual for Khmer - best quality
+    btn.textContent = '⏳';
+    fetch('/api/speak', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({text: cleanText.slice(0,500), lang: 'km'})
+    })
+    .then(r => r.json())
+    .then(data => {
+      btn.disabled = false;
+      if (data.audio) {
+        const audio = new Audio(data.audio);
+        audio.play();
+        btn.textContent = '🔊 Playing...';
+        audio.onended = () => btn.textContent = orig;
+      } else {
+        speakTextRaw(cleanText, 'km-KH');
+        btn.textContent = '🔊 Playing...';
+        setTimeout(() => btn.textContent = orig, 4000);
+      }
+    })
+    .catch(() => {
+      btn.disabled = false;
+      speakTextRaw(cleanText, 'km-KH');
+      btn.textContent = '🔊 Playing...';
+      setTimeout(() => btn.textContent = orig, 4000);
+    });
     return;
   }
 
@@ -620,22 +643,25 @@ function speakRaw(btn) {
 function speakTextRaw(text, lang) {
   window.speechSynthesis.cancel();
   const clean = cleanTextForSpeech(text);
-  const p = typeof getProfile === 'function' ? getProfile() : {};
-  const langMap = {'English':'en','Khmer':'km','Chinese':'zh-CN','Japanese':'ja','Korean':'ko','French':'fr','Spanish':'es','Thai':'th','Vietnamese':'vi'};
-  const ttsLang = lang ? lang.split('-')[0] : (langMap[p.lang] || 'en');
+  if (!clean) return;
 
-  // Use Google Translate TTS for better quality (especially Khmer)
-  const encoded = encodeURIComponent(clean.slice(0, 200));
-  const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encoded}&tl=${ttsLang}&client=tw-ob`;
-  const audio = new Audio(url);
-  audio.crossOrigin = 'anonymous';
-  audio.play().catch(() => {
-    // Fallback to browser speech
-    const u = new SpeechSynthesisUtterance(clean);
-    u.lang = ttsLang === 'km' ? 'km-KH' : ttsLang;
-    u.rate = 0.85;
-    window.speechSynthesis.speak(u);
-  });
+  const p = typeof getProfile === 'function' ? getProfile() : {};
+  const langMap = {'English':'en-US','Khmer':'km-KH','Chinese':'zh-CN','Japanese':'ja-JP','Korean':'ko-KR','French':'fr-FR','Spanish':'es-ES','Thai':'th-TH','Vietnamese':'vi-VN'};
+  const targetLang = lang || langMap[p.lang] || 'en-US';
+
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = targetLang;
+  u.rate = targetLang.startsWith('km') ? 0.7 : 0.9;
+  u.pitch = 1.0;
+  u.volume = 1.0;
+
+  // Try to find best matching voice
+  const voices = window.speechSynthesis.getVoices();
+  const match = voices.find(v => v.lang.startsWith(targetLang.split('-')[0]))
+    || voices.find(v => v.lang.startsWith('en'));
+  if (match) u.voice = match;
+
+  window.speechSynthesis.speak(u);
 }
 
 // Paste image
