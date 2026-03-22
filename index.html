@@ -551,7 +551,7 @@ function addMessage(role,html,raw){
   const container=document.getElementById('messages');
   const div=document.createElement('div');div.className=`msg ${role}`;
   const bubble=document.createElement('div');bubble.className='bubble';bubble.innerHTML=html;
-  if(role==='ai'&&raw){const actions=document.createElement('div');actions.className='msg-actions';const safe=raw.replace(/"/g,'&quot;');actions.innerHTML=`<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button>`;bubble.appendChild(actions)}
+  if(role==='ai'&&raw){const actions=document.createElement('div');actions.className='msg-actions';const safe=raw.replace(/"/g,'&quot;');actions.innerHTML=`<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button><button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;bubble.appendChild(actions)}
   div.innerHTML=`<div class="avatar" style="background:white;border-radius:50%;">${role==='user'?'👤':'<img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/>'}</div>`;div.appendChild(bubble);container.appendChild(div);container.scrollTop=container.scrollHeight;
 }
 function copyRaw(btn){copyToClipboard(btn.getAttribute('data-text'),btn,'📋 Copy')}
@@ -570,51 +570,38 @@ function isKhmerText(text) {
   return /[\u1780-\u17FF]/.test(text);
 }
 
+let currentAudio = null;
+let isSpeaking = false;
+
+function stopSpeaking() {
+  window.speechSynthesis.cancel();
+  if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; currentAudio = null; }
+  isSpeaking = false;
+  document.querySelectorAll('.msg-action-btn').forEach(b => {
+    if (b.textContent.includes('Stop') || b.textContent.includes('Playing')) {
+      b.textContent = '🔊 Listen';
+    }
+  });
+}
+
 function speakRaw(btn) {
+  // If already speaking, stop
+  if (isSpeaking) { stopSpeaking(); return; }
+
   const text = btn.getAttribute('data-text');
-  const orig = btn.textContent;
+  const orig = '🔊 Listen';
   const cleanText = cleanTextForSpeech(text);
+  if (!cleanText) return;
+
   const isKhmer = isKhmerText(cleanText);
   const p = typeof getProfile === 'function' ? getProfile() : {};
-  const useKhmer = isKhmer || p.lang === 'Khmer';
+  const langMap2 = {'English':'en','Khmer':'km','Chinese':'zh','Japanese':'ja','Korean':'ko','French':'fr','Spanish':'es','Thai':'th','Vietnamese':'vi'};
+  const spkLang = isKhmer ? 'km' : (langMap2[p.lang] || 'en');
 
-  btn.textContent = '⏳';
+  btn.textContent = '⏳ Loading...';
   btn.disabled = true;
+  isSpeaking = true;
 
-  if (useKhmer) {
-    // Use ElevenLabs multilingual for Khmer - best quality
-    btn.textContent = '⏳';
-    fetch('/api/speak', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({text: cleanText.slice(0,500), lang: 'km'})
-    })
-    .then(r => r.json())
-    .then(data => {
-      btn.disabled = false;
-      if (data.audio) {
-        const audio = new Audio(data.audio);
-        audio.play();
-        btn.textContent = '🔊 Playing...';
-        audio.onended = () => btn.textContent = orig;
-      } else {
-        speakTextRaw(cleanText, 'km-KH');
-        btn.textContent = '🔊 Playing...';
-        setTimeout(() => btn.textContent = orig, 4000);
-      }
-    })
-    .catch(() => {
-      btn.disabled = false;
-      speakTextRaw(cleanText, 'km-KH');
-      btn.textContent = '🔊 Playing...';
-      setTimeout(() => btn.textContent = orig, 4000);
-    });
-    return;
-  }
-
-  const p2 = typeof getProfile === 'function' ? getProfile() : {};
-  const langMap2 = {'English':'en','Khmer':'km','Chinese':'zh-CN','Japanese':'ja','Korean':'ko','French':'fr','Spanish':'es','Thai':'th','Vietnamese':'vi'};
-  const spkLang = langMap2[p2.lang] || 'en';
   fetch('/api/speak', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
@@ -622,21 +609,26 @@ function speakRaw(btn) {
   })
   .then(r => r.json())
   .then(data => {
-    btn.textContent = orig;
     btn.disabled = false;
-    if (data.audio) {
-      const audio = new Audio(data.audio);
-      audio.play();
-      btn.textContent = '🔊 Playing...';
-      audio.onended = () => btn.textContent = orig;
+    if (data.audio && !data.fallback) {
+      currentAudio = new Audio(data.audio);
+      currentAudio.play();
+      btn.textContent = '⏹ Stop';
+      currentAudio.onended = () => { btn.textContent = orig; isSpeaking = false; currentAudio = null; };
+      currentAudio.onerror = () => { btn.textContent = orig; isSpeaking = false; speakTextRaw(cleanText, spkLang === 'km' ? 'km-KH' : null); };
     } else {
-      speakTextRaw(cleanText);
+      speakTextRaw(cleanText, spkLang === 'km' ? 'km-KH' : null);
+      btn.textContent = '⏹ Stop';
+      // Estimate duration and reset button
+      const duration = Math.max(2000, cleanText.length * 80);
+      setTimeout(() => { btn.textContent = orig; isSpeaking = false; }, duration);
     }
   })
   .catch(() => {
-    btn.textContent = orig;
     btn.disabled = false;
-    speakTextRaw(cleanText);
+    isSpeaking = false;
+    btn.textContent = orig;
+    speakTextRaw(cleanText, spkLang === 'km' ? 'km-KH' : null);
   });
 }
 
