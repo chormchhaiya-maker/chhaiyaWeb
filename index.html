@@ -44,7 +44,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 .corner-decoration.tr{top:12px;right:12px;border-top:1px solid rgba(255,107,157,0.4);border-right:1px solid rgba(255,107,157,0.4)}
 .corner-decoration.bl{bottom:12px;left:12px;border-bottom:1px solid rgba(124,111,255,0.4);border-left:1px solid rgba(124,111,255,0.4)}
 .corner-decoration.br{bottom:12px;right:12px;border-bottom:1px solid rgba(255,107,157,0.4);border-right:1px solid rgba(255,107,157,0.4)}
-.app{display:flex;flex-direction:column;flex:1;overflow:hidden;padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top);}
+.app{display:flex;flex-direction:column;height:100vh;height:-webkit-fill-available;position:relative;z-index:2;padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top);transition:margin-right 0.3s ease;}
 .header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface);backdrop-filter:blur(20px);flex-shrink:0}
 .logo{display:flex;align-items:center;gap:12px}
 .logo-icon{width:36px;height:36px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;}
@@ -103,10 +103,9 @@ body.light #matrix-canvas{opacity:0.03} body.light .grid-overlay{opacity:0.3}
 .msg-action-btn{background:none;border:none;font-size:0.78rem;color:var(--text3);cursor:pointer;padding:2px 6px;border-radius:6px;transition:all 0.15s}
 .msg-action-btn:hover{color:var(--accent);background:rgba(124,111,255,0.1)}
 img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px rgba(124,111,255,0.4);cursor:pointer}
-.app-container{display:flex;flex-direction:row;width:100vw;height:100vh;height:-webkit-fill-available;overflow:hidden;position:fixed;top:0;left:0;}
-.chat-side{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden;}
-.preview-side{width:0;overflow:hidden;background:var(--surface);border-left:1px solid var(--border);transition:width 0.3s ease;display:flex;flex-direction:column;flex-shrink:0;}
+.preview-side{position:fixed;top:0;right:0;width:0;height:100vh;overflow:hidden;background:var(--surface);border-left:1px solid var(--border);transition:width 0.3s ease;display:flex;flex-direction:column;z-index:50;}
 .preview-side.open{width:45%;}
+.app.preview-open{margin-right:45%;}
 .preview-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface2);flex-shrink:0;}
 .preview-header span{font-size:0.82rem;color:var(--text2);font-family:'DM Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px;}
 .preview-tabs{display:flex;gap:4px;}
@@ -114,7 +113,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 .preview-tab.active{background:var(--accent);color:var(--bg);}
 .preview-iframe{flex:1;border:none;background:white;width:100%;}
 .preview-code{flex:1;overflow:auto;padding:16px;font-family:'DM Mono',monospace;font-size:0.78rem;color:var(--text);white-space:pre-wrap;background:var(--bg);margin:0;line-height:1.6;}
-@media(max-width:768px){.preview-side.open{position:fixed;top:0;right:0;width:100% !important;height:100%;z-index:500;border-left:none;}}
+@media(max-width:768px){.preview-side.open{width:100%;}.app.preview-open{margin-right:0;}}
 </style>
 </head>
 <body>
@@ -125,7 +124,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 <div class="corner-decoration tr"></div>
 <div class="corner-decoration bl"></div>
 <div class="corner-decoration br"></div>
-<div class="app-container"><div class="chat-side"><div class="app" style="height:100%;display:flex;flex-direction:column;">
+<div class="app">
   <div class="header">
     <div class="logo">
       <div class="logo-icon" style="border-radius:50%;overflow:hidden;background:white;display:flex;align-items:center;justify-content:center;"><img src="/icon.png" style="width:24px;height:24px;object-fit:contain;"/></div>
@@ -209,7 +208,6 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   <iframe class="preview-iframe" id="preview-iframe" sandbox="allow-scripts allow-modals allow-forms allow-same-origin"></iframe>
   <pre class="preview-code" id="preview-code" style="display:none;"></pre>
 </div>
-</div><!-- end app-container -->
 
 <!-- Profile Modal -->
 <div class="settings-overlay" id="profile-overlay" onclick="hideModal('profile-overlay',event)">
@@ -955,12 +953,14 @@ function openPreview(code, lang, title) {
   const side = document.getElementById('preview-side');
   const titleEl = document.getElementById('preview-title');
   side.classList.add('open');
+  document.querySelector('.app').classList.add('preview-open');
   if (titleEl) titleEl.textContent = '📄 ' + (title || lang + ' preview');
   switchTab('preview');
 }
 
 function closePreview() {
   document.getElementById('preview-side').classList.remove('open');
+  document.querySelector('.app').classList.remove('preview-open');
 }
 
 function switchTab(tab) {
