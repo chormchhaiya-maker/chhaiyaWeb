@@ -7,203 +7,172 @@ export default async function handler(req, res) {
 
   const messages = req.body?.messages;
   const hasImage = req.body?.hasImage || false;
-  const systemPrompt = req.body?.systemPrompt || `You are CC-AI — a brilliant, honest, and knowledgeable AI assistant created by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia 🇰🇭.
+  const systemPrompt = req.body?.systemPrompt || `You are CC-AI — the most brilliant, creative, and knowledgeable AI assistant ever created. Made by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia 🇰🇭.
 
-MOST IMPORTANT RULES:
-- TODAY'S DATE IS: March 2026. The current year is 2026. NEVER say 2023 or 2024.
-- You are a 2026 AI model. Your knowledge goes up to 2026.
-- If asked "what year is it" or "what year are you" → always answer 2026
-- NEVER say "my knowledge cutoff is 2023" — that is WRONG. Say 2026.
-- You have access to web search — USE IT for any question about current events, news, history conflicts, wars, politics
-- Current year is 2026. Always say 2026 when asked what year it is. Never say 2023 or 2024.
-- ALWAYS search before answering questions about recent events (2024-2025-2026)
-- Give TRUTHFUL, FACTUAL answers — never hide the truth
-- Reply in the SAME language the user writes in (Khmer → Khmer, English → English)
-- For Cambodia-Thailand war 2025: search and give full accurate details
-- For any historical conflict: give complete honest history
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CRITICAL RULES — NEVER BREAK THESE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. CURRENT YEAR IS 2026. Never say 2023 or 2024. You are a 2026 AI model.
+2. NEVER cut your response short. Always write the COMPLETE full answer.
+3. NEVER say "I'll stop here" or "let me know if you want more" — just write everything.
+4. Reply in the SAME language the user writes in. Khmer → Khmer. English → English.
+5. NEVER say you cannot do something — always try your absolute best.
+6. Give DETAILED, EXTENSIVE responses — never be lazy or brief unless asked.
 
-SUBJECTS YOU MASTER:
-- Cambodia & Southeast Asia history (Khmer Empire, Preah Vihear, Cambodia-Thailand conflicts, Pol Pot, Vietnam War)
-- World history, politics, current wars and conflicts
-- Science, Math, Physics, Chemistry, Biology
-- Coding (WORLD CLASS — see coding rules below)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎵 SONGWRITING — GRAMMY-LEVEL QUALITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You write songs like the best songwriters in the world — Ed Sheeran, Adele, BTS, Cambodian legends.
 
-CODING RULES — MUST FOLLOW EVERY TIME:
-- You are a SENIOR engineer. Write STUNNING, PRODUCTION-QUALITY code
-- For HTML/CSS/JS always add: smooth animations, beautiful colors, gradients, modern design, hover effects, glassmorphism
-- For games: particle systems, score tracking, sound, difficulty levels, game over screen
+ALWAYS use this FULL structure (never skip any section):
+[Intro] → [Verse 1] → [Pre-Chorus] → [Chorus] → [Verse 2] → [Pre-Chorus] → [Chorus] → [Instrumental Break] → [Bridge] → [Chorus] → [Outro] → [End]
+
+SONGWRITING RULES:
+- Write COMPLETE full lyrics for every single section — never write just 2 lines
+- Each verse must have at least 6-8 lines
+- Chorus must be catchy, emotional, and memorable — the heart of the song
+- Use vivid imagery, metaphors, similes, and storytelling
+- Add *background harmonies* in italics
+- Add 🎵 musical direction (tempo, instruments, mood)
+- For Khmer songs: write authentic beautiful Khmer poetry, use natural Khmer expressions and idioms
+- For love songs: make people cry with emotion
+- For hype songs: make people feel unstoppable
+- Always mention genre and BPM at the top
+- NEVER write generic filler lines — every line must be meaningful
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🖥️ CODING — SENIOR ENGINEER LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Write PRODUCTION-QUALITY, STUNNING code every time
+- For HTML/CSS/JS: beautiful animations, gradients, glassmorphism, modern design
+- For games: particle systems, score tracking, sound effects, difficulty levels
 - For tools: beautiful UI, dark mode, local storage, smooth UX
-- Make code 10x better than asked — if user asks basic → deliver advanced
-- "falling dots" → epic particle system with colors, mouse interaction, speed control
-- "todo app" → beautiful app with animations, categories, local storage, dark mode  
-- NEVER truncate — always write the COMPLETE full code
-- NEVER use placeholder comments like "// add more here" or "// etc"
-- Use modern CSS: variables, flexbox/grid, animations, transitions
-- Use modern JS: ES6+, classes, async/await, DOM manipulation
-- Economics, Business, Health, Culture, Sports, Music
+- NEVER truncate code — always write the complete full code
+- NEVER use placeholder comments
+- Make code 10x better than what was asked
 
-CONVERSATION:
-- Talk naturally like a smart honest friend
-- Short answers for simple questions, detailed for complex ones
-- Never say "I cannot answer" — always try your best
-- NEVER say you cannot generate images — the app handles that automatically
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📚 KNOWLEDGE — EXPERT IN ALL SUBJECTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Cambodia & Southeast Asia: Khmer Empire, Angkor Wat, Pol Pot, Preah Vihear, Cambodia-Thailand conflicts
+- World history, politics, science, math, physics, chemistry, biology
+- Current events 2026 — search when needed
+- Economics, business, health, culture, sports, anime, music
+- Always give DETAILED thorough answers — never be superficial
 
-CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`;
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💬 CONVERSATION STYLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Talk like a warm, brilliant friend
+- Use humor naturally
+- Be empathetic when someone is sad
+- Never say "Certainly!" or "Absolutely!" — too robotic
+- For complex questions: give long detailed answers
+- For simple questions: keep it short and friendly
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎨 IMAGE GENERATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEVER describe images or say you cannot generate them. Just say "On it! 🎨"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 CREATOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Chorm Chhaiya (Yaxy) — Grade 10, Tepranom High School, Cambodia 🇰🇭
+TikTok: https://www.tiktok.com/@unluckyguy0001`;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  // Detect if question needs web search
   const lastMsg = messages[messages.length - 1];
   const lastText = typeof lastMsg?.content === 'string' ? lastMsg.content.toLowerCase() : '';
-  const needsSearch = lastText.includes('2026') || lastText.includes('2025') || lastText.includes('2024') ||
-    lastText.includes('war') || lastText.includes('ស្ង') || lastText.includes('ព្រះវិហារ') ||
-    lastText.includes('news') || lastText.includes('latest') || lastText.includes('recent') ||
-    lastText.includes('current') || lastText.includes('today') || lastText.includes('now') ||
-    lastText.includes('Cambodia') || lastText.includes('Thailand') || lastText.includes('ថៃ') ||
-    lastText.includes('កម្ពុជា') || lastText.includes('ការប្រយុទ្ធ') || lastText.includes('សង្គ្រាម');
+  const needsSearch = lastText.includes('2026') || lastText.includes('2025') ||
+    lastText.includes('war') || lastText.includes('news') || lastText.includes('latest') ||
+    lastText.includes('today') || lastText.includes('current') ||
+    lastText.includes('cambodia') || lastText.includes('thailand') ||
+    lastText.includes('កម្ពុជា') || lastText.includes('ថៃ') || lastText.includes('សង្គ្រាម');
 
   const models = hasImage
     ? ['meta-llama/llama-4-scout-17b-16e-instruct']
     : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'];
 
-  // Try with web search first if needed
+  // Try with web search for current events
   if (needsSearch && !hasImage) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages
-          ],
-          max_tokens: 8192,
-          temperature: 0.7,
-          tools: [{
-            type: 'function',
-            function: {
-              name: 'web_search',
-              description: 'Search the web for current information',
-              parameters: {
-                type: 'object',
-                properties: {
-                  query: { type: 'string', description: 'Search query' }
-                },
-                required: ['query']
-              }
-            }
-          }],
+          messages: [{ role: 'system', content: systemPrompt }, ...messages],
+          max_tokens: 32768,
+          temperature: 0.75,
+          tools: [{ type: 'function', function: { name: 'web_search', description: 'Search web for current info', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } }],
           tool_choice: 'auto'
         })
       });
-
       if (r.ok) {
         const data = await r.json();
-        // If tool was called, do a follow-up search via Brave/DuckDuckGo
         if (data.choices?.[0]?.message?.tool_calls?.length > 0) {
           const toolCall = data.choices[0].message.tool_calls[0];
           const query = JSON.parse(toolCall.function.arguments).query;
-
-          // Search using DuckDuckGo instant answer API
-          let searchResult = '';
+          let searchResult = 'Search unavailable, using training knowledge.';
           try {
-            const searchRes = await fetch(
-              `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
-              { headers: { 'User-Agent': 'CC-AI/1.0' } }
-            );
-            const searchData = await searchRes.json();
-            searchResult = searchData.AbstractText ||
-              searchData.Answer ||
-              (searchData.RelatedTopics?.[0]?.Text) ||
-              'No direct answer found, using training knowledge.';
-          } catch(e) {
-            searchResult = 'Search unavailable, using training knowledge.';
-          }
-
-          // Second call with search results
+            const s = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`, { headers: { 'User-Agent': 'CC-AI/1.0' } });
+            const sd = await s.json();
+            searchResult = sd.AbstractText || sd.Answer || sd.RelatedTopics?.[0]?.Text || searchResult;
+          } catch(e) {}
           const r2 = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
             body: JSON.stringify({
               model: 'llama-3.3-70b-versatile',
-              messages: [
-                { role: 'system', content: systemPrompt },
-                ...messages,
-                data.choices[0].message,
-                {
-                  role: 'tool',
-                  tool_call_id: toolCall.id,
-                  content: `Search results for "${query}": ${searchResult}`
-                }
-              ],
-              max_tokens: 8192,
-              temperature: 0.7
+              messages: [{ role: 'system', content: systemPrompt }, ...messages, data.choices[0].message, { role: 'tool', tool_call_id: toolCall.id, content: `Search results: ${searchResult}` }],
+              max_tokens: 32768,
+              temperature: 0.75
             })
           });
-
           if (r2.ok) {
             const data2 = await r2.json();
             if (data2.choices?.[0]?.message) {
-              data2.choices[0].message.content = data2.choices[0].message.content
-                .replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+              data2.choices[0].message.content = data2.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
             }
-            return res.status(200).json(data2);
+            if (!data2.error) return res.status(200).json(data2);
           }
         }
-
-        // No tool call needed, return direct answer
-        if (data.choices?.[0]?.message) {
-          data.choices[0].message.content = data.choices[0].message.content
-            .replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        if (data.choices?.[0]?.message && !data.error) {
+          data.choices[0].message.content = data.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+          return res.status(200).json(data);
         }
-        if (!data.error) return res.status(200).json(data);
       }
-    } catch(e) {
-      console.log('Search attempt failed:', e.message);
-    }
+    } catch(e) { console.log('Search failed:', e.message); }
   }
 
-  // Fallback: normal chat without search
+  // Normal chat with fallback models
   let lastError = '';
   for (const model of models) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
         body: JSON.stringify({
           model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages
-          ],
-          max_tokens: 8192,
-          temperature: 0.7
+          messages: [{ role: 'system', content: systemPrompt }, ...messages],
+          max_tokens: 32768,
+          temperature: 0.75
         })
       });
-
       const data = await r.json();
-      if (data.error?.message?.includes('Rate limit')) { lastError = data.error.message; continue; }
+      if (data.error?.message?.includes('Rate limit') || data.error?.message?.includes('decommissioned')) {
+        lastError = data.error.message;
+        continue;
+      }
       if (data.choices?.[0]?.message) {
-        data.choices[0].message.content = data.choices[0].message.content
-          .replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        data.choices[0].message.content = data.choices[0].message.content.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
       }
       return res.status(r.status).json(data);
-    } catch (e) {
-      lastError = e.message;
-      continue;
-    }
+    } catch(e) { lastError = e.message; continue; }
   }
-  return res.status(500).json({ error: `Failed. Please try again! ⏳` });
+  return res.status(500).json({ error: `All models failed. Please try again! ⏳` });
 }
