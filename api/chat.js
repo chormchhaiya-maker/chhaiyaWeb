@@ -95,7 +95,7 @@ TikTok: https://www.tiktok.com/@unluckyguy0001`;
 
   const models = hasImage
     ? ['meta-llama/llama-4-scout-17b-16e-instruct']
-    : ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'mixtral-8x7b-32768'];
+    : ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant'];
 
   // Try with web search for current events
   if (needsSearch && !hasImage) {
@@ -164,7 +164,7 @@ TikTok: https://www.tiktok.com/@unluckyguy0001`;
         })
       });
       const data = await r.json();
-      if (data.error?.message?.includes('Rate limit') || data.error?.message?.includes('decommissioned') || data.error?.message?.includes('Request too large') || data.error?.message?.includes('TPM')) {
+      if (data.error?.message) {
         lastError = data.error.message;
         continue;
       }
@@ -174,5 +174,43 @@ TikTok: https://www.tiktok.com/@unluckyguy0001`;
       return res.status(r.status).json(data);
     } catch(e) { lastError = e.message; continue; }
   }
-  return res.status(500).json({ error: `All models failed. Please try again! ⏳` });
+  // All Groq models failed - try Cloudflare AI as final fallback
+  try {
+    const accountId = process.env.CF_ACCOUNT_ID;
+    const apiToken = process.env.CF_API_TOKEN;
+    const lastUserMsg = messages[messages.length - 1];
+    const userText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : 'Hello';
+
+    const cfRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages.slice(-6) // last 6 messages to save tokens
+          ],
+          max_tokens: 2048
+        })
+      }
+    );
+
+    if (cfRes.ok) {
+      const cfData = await cfRes.json();
+      const reply = cfData?.result?.response || cfData?.response;
+      if (reply) {
+        return res.status(200).json({
+          choices: [{ message: { role: 'assistant', content: reply } }]
+        });
+      }
+    }
+  } catch(e) {
+    console.log('Cloudflare fallback failed:', e.message);
+  }
+
+  return res.status(500).json({ error: `All models failed: ${lastError}. Please try again in a few minutes! ⏳` });
 }
