@@ -775,17 +775,22 @@ function speakRaw(btn) {
   .then(r => r.json())
   .then(data => {
     btn.disabled = false;
-    if (data.audio && !data.fallback) {
+    if (data.audio) {
       currentAudio = new Audio(data.audio);
-      currentAudio.play();
+      currentAudio.play().catch(() => {
+        speakTextRaw(cleanText, spkLang === 'km' ? 'km-KH' : null);
+      });
       btn.textContent = '⏹ Stop';
       currentAudio.onended = () => { btn.textContent = orig; isSpeaking = false; currentAudio = null; };
-      currentAudio.onerror = () => { btn.textContent = orig; isSpeaking = false; speakTextRaw(cleanText, spkLang === 'km' ? 'km-KH' : null); };
+      currentAudio.onerror = () => {
+        btn.textContent = orig; isSpeaking = false;
+        speakTextRaw(cleanText, spkLang === 'km' ? 'km-KH' : null);
+      };
     } else {
-      speakTextRaw(cleanText, spkLang === 'km' ? 'km-KH' : null);
+      // Use browser speech as fallback
+      speakTextRaw(data.text || cleanText, spkLang === 'km' ? 'km-KH' : null);
       btn.textContent = '⏹ Stop';
-      // Estimate duration and reset button
-      const duration = Math.max(2000, cleanText.length * 80);
+      const duration = Math.max(3000, cleanText.length * 70);
       setTimeout(() => { btn.textContent = orig; isSpeaking = false; }, duration);
     }
   })
