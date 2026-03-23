@@ -18,14 +18,16 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{height:-webkit-fill-available}
 :root{
-  --bg:#1a1a1a;--surface:#242424;--surface2:#2e2e2e;
+  --bg:#0d0d0d;--surface:rgba(18,18,18,0.92);--surface2:rgba(28,28,28,0.92);
   --border:rgba(255,255,255,0.08);--accent:#c8c8c8;--accent2:#aaaaaa;
-  --text:#d4d4d4;--text2:#888888;--text3:#555555;
+  --text:#ffffff;--text2:#888888;--text3:#555555;
+  --header-bg:rgba(10,10,10,0.96);
 }
 body.light{
-  --bg:#f0f0f0;--surface:#e8e8e8;--surface2:#dcdcdc;
+  --bg:#e8e8e8;--surface:rgba(235,235,235,0.95);--surface2:rgba(220,220,220,0.95);
   --border:rgba(0,0,0,0.08);--accent:#1a1a1a;--accent2:#333333;
-  --text:#1a1a1a;--text2:#555555;--text3:#888888;
+  --text:#111111;--text2:#555555;--text3:#888888;
+  --header-bg:rgba(240,240,240,0.97);
 }
 body.light #matrix-canvas{opacity:0.03}
 body.light .grid-overlay{opacity:0.15}
@@ -44,15 +46,15 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 .corner-decoration.tr{top:12px;right:12px;border-top:1px solid rgba(255,107,157,0.4);border-right:1px solid rgba(255,107,157,0.4)}
 .corner-decoration.bl{bottom:12px;left:12px;border-bottom:1px solid rgba(124,111,255,0.4);border-left:1px solid rgba(124,111,255,0.4)}
 .corner-decoration.br{bottom:12px;right:12px;border-bottom:1px solid rgba(255,107,157,0.4);border-right:1px solid rgba(255,107,157,0.4)}
-.app{display:flex;flex-direction:column;height:100vh;height:-webkit-fill-available;position:relative;z-index:2;padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top);transition:margin-right 0.3s ease;background:var(--bg);}
-.header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface);backdrop-filter:blur(20px);flex-shrink:0}
+.app{display:flex;flex-direction:column;height:100vh;height:-webkit-fill-available;position:relative;z-index:2;padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top);transition:margin-right 0.3s ease;}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.08);background:var(--header-bg);backdrop-filter:blur(20px);flex-shrink:0}
 .logo{display:flex;align-items:center;gap:12px}
 .logo-icon{width:36px;height:36px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;}
 .logo-name{font-size:18px;font-weight:800;font-family:'Playfair Display',serif;color:var(--text);display:flex;align-items:center;gap:6px}
 .logo-tag{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:1px}
 .status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);font-family:'DM Mono',monospace}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#ffffff;animation:pulse 2s infinite}
-.messages{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px;display:flex;flex-direction:column;gap:20px;scroll-behavior:smooth;min-height:0}
+.messages{flex:1;overflow-y:auto;overflow-x:hidden;padding:24px;display:flex;flex-direction:column;gap:20px;scroll-behavior:smooth;min-height:0;background:transparent;}
 .messages::-webkit-scrollbar{width:4px}
 .messages::-webkit-scrollbar-thumb{background:rgba(124,111,255,0.3);border-radius:2px}
 .welcome{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;text-align:center;padding:40px;animation:fadeUp 0.6s ease forwards}
@@ -74,11 +76,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 .typing-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text2);margin:0 2px;animation:blink 1.2s infinite;}
 .typing-dot:nth-child(2){animation-delay:0.2s}
 .typing-dot:nth-child(3){animation-delay:0.4s}
-.input-area{padding:16px 24px max(24px,env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--surface);backdrop-filter:blur(20px);flex-shrink:0}
+.input-area{padding:16px 24px max(24px,env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,0.08);background:var(--header-bg);backdrop-filter:blur(20px);flex-shrink:0}
 .input-wrap{display:flex;align-items:flex-end;gap:12px;background:var(--surface);border:1px solid rgba(124,111,255,0.2);border-radius:16px;padding:12px 16px;transition:border-color 0.2s,box-shadow 0.2s;max-width:800px;margin:0 auto;backdrop-filter:blur(10px)}
 .input-wrap:focus-within{border-color:var(--text2);box-shadow:none}
 textarea{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:'Inter',sans-serif;font-size:14px;resize:none;max-height:120px;min-height:24px;line-height:1.6}
-textarea::placeholder{color:var(--text3)}
+textarea::placeholder{color:rgba(255,255,255,0.35)}
 .send-btn{width:36px;height:36px;border-radius:10px;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity 0.2s,transform 0.1s,box-shadow 0.2s;font-size:16px;color:var(--bg)}
 .send-btn:hover{opacity:0.85;transform:scale(1.05);box-shadow:0 0 20px rgba(124,111,255,0.5)}
 .send-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none}
@@ -167,7 +169,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   </div>
 </div>
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
-<div id="angkor-bg" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:hidden;display:none;">
+<div id="angkor-bg" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:hidden;">
 <svg width="100%" height="100%" viewBox="0 0 680 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
 <defs>
   <linearGradient id="abg-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a0a2e"/><stop offset="40%" stop-color="#2d1b4e"/><stop offset="70%" stop-color="#8b3a2a"/><stop offset="100%" stop-color="#c4622d"/></linearGradient>
