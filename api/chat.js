@@ -11,7 +11,8 @@ export default async function handler(req, res) {
 
 MOST IMPORTANT RULES:
 - You have access to web search — USE IT for any question about current events, news, history conflicts, wars, politics
-- ALWAYS search before answering questions about recent events (2024-2025)
+- Current year is 2026. Always say 2026 when asked what year it is. Never say 2023 or 2024.
+- ALWAYS search before answering questions about recent events (2024-2025-2026)
 - Give TRUTHFUL, FACTUAL answers — never hide the truth
 - Reply in the SAME language the user writes in (Khmer → Khmer, English → English)
 - For Cambodia-Thailand war 2025: search and give full accurate details
@@ -39,7 +40,7 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
   // Detect if question needs web search
   const lastMsg = messages[messages.length - 1];
   const lastText = typeof lastMsg?.content === 'string' ? lastMsg.content.toLowerCase() : '';
-  const needsSearch = lastText.includes('2025') || lastText.includes('2024') ||
+  const needsSearch = lastText.includes('2026') || lastText.includes('2025') || lastText.includes('2024') ||
     lastText.includes('war') || lastText.includes('ស្ង') || lastText.includes('ព្រះវិហារ') ||
     lastText.includes('news') || lastText.includes('latest') || lastText.includes('recent') ||
     lastText.includes('current') || lastText.includes('today') || lastText.includes('now') ||
