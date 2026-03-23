@@ -95,7 +95,7 @@ TikTok: https://www.tiktok.com/@unluckyguy0001`;
 
   const models = hasImage
     ? ['meta-llama/llama-4-scout-17b-16e-instruct']
-    : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'];
+    : ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'mixtral-8x7b-32768'];
 
   // Try with web search for current events
   if (needsSearch && !hasImage) {
@@ -106,7 +106,7 @@ TikTok: https://www.tiktok.com/@unluckyguy0001`;
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           messages: [{ role: 'system', content: systemPrompt }, ...messages],
-          max_tokens: 32768,
+          max_tokens: 8192,
           temperature: 0.75,
           tools: [{ type: 'function', function: { name: 'web_search', description: 'Search web for current info', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } }],
           tool_choice: 'auto'
@@ -129,7 +129,7 @@ TikTok: https://www.tiktok.com/@unluckyguy0001`;
             body: JSON.stringify({
               model: 'llama-3.3-70b-versatile',
               messages: [{ role: 'system', content: systemPrompt }, ...messages, data.choices[0].message, { role: 'tool', tool_call_id: toolCall.id, content: `Search results: ${searchResult}` }],
-              max_tokens: 32768,
+              max_tokens: 8192,
               temperature: 0.75
             })
           });
@@ -159,12 +159,12 @@ TikTok: https://www.tiktok.com/@unluckyguy0001`;
         body: JSON.stringify({
           model,
           messages: [{ role: 'system', content: systemPrompt }, ...messages],
-          max_tokens: 32768,
+          max_tokens: 8192,
           temperature: 0.75
         })
       });
       const data = await r.json();
-      if (data.error?.message?.includes('Rate limit') || data.error?.message?.includes('decommissioned')) {
+      if (data.error?.message?.includes('Rate limit') || data.error?.message?.includes('decommissioned') || data.error?.message?.includes('Request too large') || data.error?.message?.includes('TPM')) {
         lastError = data.error.message;
         continue;
       }
