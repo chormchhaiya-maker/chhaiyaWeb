@@ -45,7 +45,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 .corner-decoration.bl{bottom:12px;left:12px;border-bottom:1px solid rgba(124,111,255,0.4);border-left:1px solid rgba(124,111,255,0.4)}
 .corner-decoration.br{bottom:12px;right:12px;border-bottom:1px solid rgba(255,107,157,0.4);border-right:1px solid rgba(255,107,157,0.4)}
 .app{display:flex;flex-direction:column;height:100vh;height:-webkit-fill-available;position:relative;z-index:2;padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top);transition:margin-right 0.3s ease;}
-.header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface);backdrop-filter:blur(20px);flex-shrink:0}
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:rgba(0,0,0,0.4);backdrop-filter:blur(20px);flex-shrink:0}
 .logo{display:flex;align-items:center;gap:12px}
 .logo-icon{width:36px;height:36px;background:var(--surface2);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;}
 .logo-name{font-size:18px;font-weight:800;font-family:'Playfair Display',serif;color:var(--text);display:flex;align-items:center;gap:6px}
@@ -74,7 +74,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 .typing-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text2);margin:0 2px;animation:blink 1.2s infinite;}
 .typing-dot:nth-child(2){animation-delay:0.2s}
 .typing-dot:nth-child(3){animation-delay:0.4s}
-.input-area{padding:16px 24px max(24px,env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--surface);backdrop-filter:blur(20px);flex-shrink:0}
+.input-area{padding:16px 24px max(24px,env(safe-area-inset-bottom));border-top:1px solid var(--border);background:rgba(0,0,0,0.4);backdrop-filter:blur(20px);flex-shrink:0}
 .input-wrap{display:flex;align-items:flex-end;gap:12px;background:var(--surface);border:1px solid rgba(124,111,255,0.2);border-radius:16px;padding:12px 16px;transition:border-color 0.2s,box-shadow 0.2s;max-width:800px;margin:0 auto;backdrop-filter:blur(10px)}
 .input-wrap:focus-within{border-color:var(--text2);box-shadow:none}
 textarea{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:'Inter',sans-serif;font-size:14px;resize:none;max-height:120px;min-height:24px;line-height:1.6}
@@ -103,6 +103,26 @@ body.light #matrix-canvas{opacity:0.03} body.light .grid-overlay{opacity:0.3}
 .msg-action-btn{background:none;border:none;font-size:0.78rem;color:var(--text3);cursor:pointer;padding:2px 6px;border-radius:6px;transition:all 0.15s}
 .msg-action-btn:hover{color:var(--accent);background:rgba(124,111,255,0.1)}
 img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px rgba(124,111,255,0.4);cursor:pointer}
+.sidebar{position:fixed;top:0;left:0;width:260px;height:100vh;background:#171717;border-right:1px solid rgba(255,255,255,0.08);display:flex;flex-direction:column;z-index:100;transform:translateX(-260px);transition:transform 0.3s ease;}
+.sidebar.open{transform:translateX(0);}
+.sidebar-header{padding:16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);}
+.sidebar-logo{font-size:0.95rem;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;}
+.new-chat-btn{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:10px;background:none;border:none;color:var(--text2);font-size:0.85rem;cursor:pointer;width:100%;text-align:left;transition:background 0.15s;font-family:'Inter',sans-serif;}
+.new-chat-btn:hover{background:rgba(255,255,255,0.06);}
+.sidebar-section{padding:8px 10px 4px;font-size:0.7rem;color:var(--text3);font-family:'DM Mono',monospace;letter-spacing:0.05em;}
+.chat-history-item{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-radius:8px;cursor:pointer;color:var(--text2);font-size:0.82rem;margin:1px 6px;transition:background 0.15s;font-family:'Inter',sans-serif;}
+.chat-history-item:hover{background:rgba(255,255,255,0.06);}
+.chat-history-item.active{background:rgba(255,255,255,0.1);color:var(--text);}
+.chat-history-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;}
+.chat-history-del{opacity:0;background:none;border:none;color:var(--text3);cursor:pointer;font-size:0.8rem;padding:2px 4px;border-radius:4px;}
+.chat-history-item:hover .chat-history-del{opacity:1;}
+.sidebar-footer{margin-top:auto;padding:12px;border-top:1px solid rgba(255,255,255,0.08);}
+.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99;display:none;}
+.sidebar-overlay.show{display:block;}
+.app.sidebar-open{margin-left:260px;}
+.sidebar-toggle{background:none;border:none;color:var(--text2);cursor:pointer;font-size:1.1rem;padding:4px 8px;border-radius:6px;transition:background 0.15s;}
+.sidebar-toggle:hover{background:rgba(255,255,255,0.08);}
+@media(max-width:768px){.app.sidebar-open{margin-left:0;}.sidebar-overlay.show{display:block;}}
 .preview-side{position:fixed;top:0;right:0;width:0;height:100vh;overflow:hidden;background:var(--surface);border-left:1px solid var(--border);transition:width 0.3s ease;display:flex;flex-direction:column;z-index:50;}
 .preview-side.open{width:45%;}
 .app.preview-open{margin-right:45%;}
@@ -118,6 +138,66 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 </head>
 <body>
 <canvas id="matrix-canvas"></canvas>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <img src="/icon.png" style="width:22px;height:22px;border-radius:50%;background:white;"/>
+      CC-AI
+    </div>
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="Close">✕</button>
+  </div>
+  <div style="padding:10px;">
+    <button class="new-chat-btn" onclick="newChat()">
+      <span style="font-size:1rem;">✏️</span> New chat
+    </button>
+    <button class="new-chat-btn" onclick="showSearch()">
+      <span style="font-size:1rem;">🔍</span> Search chats
+    </button>
+  </div>
+  <div style="flex:1;overflow-y:auto;" id="chat-history-list">
+    <div class="sidebar-section">TODAY</div>
+  </div>
+  <div class="sidebar-footer">
+    <button class="new-chat-btn" onclick="showProfile()">
+      <span style="font-size:1rem;">👤</span>
+      <span id="sidebar-username">Your Profile</span>
+    </button>
+  </div>
+</div>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+<div id="angkor-bg" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:hidden;">
+<svg width="100%" height="100%" viewBox="0 0 680 400" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="abg-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a0a2e"/><stop offset="40%" stop-color="#2d1b4e"/><stop offset="70%" stop-color="#8b3a2a"/><stop offset="100%" stop-color="#c4622d"/></linearGradient>
+  <linearGradient id="abg-water" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a2a3a"/><stop offset="100%" stop-color="#0d1520"/></linearGradient>
+</defs>
+<rect width="680" height="400" fill="url(#abg-sky)"/>
+<circle cx="50" cy="30" r="1" fill="#fff" opacity="0.8"/><circle cx="120" cy="15" r="1.2" fill="#fff" opacity="0.6"/><circle cx="200" cy="25" r="0.8" fill="#fff" opacity="0.9"/><circle cx="300" cy="10" r="1" fill="#fff" opacity="0.7"/><circle cx="420" cy="20" r="1.2" fill="#fff" opacity="0.8"/><circle cx="530" cy="35" r="0.8" fill="#fff" opacity="0.6"/><circle cx="620" cy="18" r="1" fill="#fff" opacity="0.9"/>
+<circle cx="340" cy="120" r="45" fill="#f4a240" opacity="0.15"/><circle cx="340" cy="120" r="30" fill="#f4a240" opacity="0.2"/><circle cx="340" cy="120" r="18" fill="#ffd580" opacity="0.9"/>
+<path d="M0,220 Q20,190 40,210 Q60,185 80,205 Q100,180 120,200 Q140,175 160,195 Q180,170 200,192 Q220,175 240,195 Q260,178 280,200 Q300,175 320,195 Q340,178 360,198 Q380,175 400,195 Q420,178 440,198 Q460,175 480,195 Q500,178 520,200 Q540,182 560,202 Q580,180 600,198 Q620,182 640,200 Q660,188 680,205 L680,280 L0,280 Z" fill="#0d1a0d" opacity="0.9"/>
+<rect x="0" y="275" width="680" height="40" fill="url(#abg-water)"/>
+<rect x="180" y="240" width="320" height="22" fill="#5a4a30"/><rect x="180" y="240" width="320" height="4" fill="#7a6a48"/>
+<rect x="220" y="215" width="240" height="28" fill="#6a5a38"/><rect x="220" y="215" width="240" height="4" fill="#8a7a50"/>
+<rect x="265" y="192" width="150" height="26" fill="#7a6835"/><rect x="265" y="192" width="150" height="4" fill="#9a8850"/>
+<rect x="200" y="210" width="28" height="32" fill="#6a5a38"/><path d="M200,210 L214,185 L228,210 Z" fill="#5a4a2a"/><ellipse cx="214" cy="185" rx="8" ry="12" fill="#4a3a22"/><ellipse cx="214" cy="178" rx="4" ry="6" fill="#3a2c1a"/><circle cx="214" cy="173" r="3" fill="#2a1e10"/>
+<rect x="452" y="210" width="28" height="32" fill="#6a5a38"/><path d="M452,210 L466,185 L480,210 Z" fill="#5a4a2a"/><ellipse cx="466" cy="185" rx="8" ry="12" fill="#4a3a22"/><ellipse cx="466" cy="178" rx="4" ry="6" fill="#3a2c1a"/><circle cx="466" cy="173" r="3" fill="#2a1e10"/>
+<rect x="248" y="195" width="24" height="25" fill="#7a6835"/><path d="M248,195 L260,165 L272,195 Z" fill="#6a5828"/><ellipse cx="260" cy="165" rx="9" ry="14" fill="#5a4820"/><ellipse cx="260" cy="156" rx="5" ry="7" fill="#4a3818"/><circle cx="260" cy="150" r="4" fill="#3a2810"/>
+<rect x="408" y="195" width="24" height="25" fill="#7a6835"/><path d="M408,195 L420,165 L432,195 Z" fill="#6a5828"/><ellipse cx="420" cy="165" rx="9" ry="14" fill="#5a4820"/><ellipse cx="420" cy="156" rx="5" ry="7" fill="#4a3818"/><circle cx="420" cy="150" r="4" fill="#3a2810"/>
+<rect x="308" y="180" width="64" height="65" fill="#8a7840"/>
+<path d="M308,180 L316,140 L324,120 L332,105 L340,95 L348,105 L356,120 L364,140 L372,180 Z" fill="#7a6832"/>
+<ellipse cx="340" cy="140" rx="26" ry="8" fill="#6a5828"/><ellipse cx="340" cy="120" rx="20" ry="7" fill="#5a4820"/><ellipse cx="340" cy="105" rx="15" ry="6" fill="#4a3818"/><ellipse cx="340" cy="95" rx="10" ry="5" fill="#3a2c12"/>
+<path d="M332,95 L340,65 L348,95 Z" fill="#3a2c12"/><ellipse cx="340" cy="65" rx="5" ry="8" fill="#2a1e0a"/><circle cx="340" cy="58" r="4" fill="#c4a020" opacity="0.9"/><circle cx="340" cy="54" r="2" fill="#f4c840"/>
+<rect x="310" y="260" width="60" height="18" fill="#5a4a30"/>
+<rect x="0" y="313" width="680" height="87" fill="#0a1208"/>
+<rect x="20" y="255" width="8" height="60" fill="#1a0e05"/><ellipse cx="24" cy="248" rx="18" ry="25" fill="#0d1a08"/>
+<rect x="620" y="250" width="8" height="65" fill="#1a0e05"/><ellipse cx="624" cy="243" rx="18" ry="25" fill="#0d1a08"/>
+<rect x="0" y="245" width="680" height="35" fill="#c4622d" opacity="0.06"/>
+<!-- Dark overlay for readability -->
+<rect width="680" height="400" fill="#000" opacity="0.45"/>
+</svg>
+</div>
 <div class="grid-overlay"></div>
 <div class="scanline"></div>
 <div class="corner-decoration tl"></div>
@@ -127,6 +207,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 <div class="app">
   <div class="header">
     <div class="logo">
+      <button class="sidebar-toggle" onclick="toggleSidebar()" style="margin-right:4px;">☰</button>
       <div class="logo-icon" style="border-radius:50%;overflow:hidden;background:white;display:flex;align-items:center;justify-content:center;"><img src="/icon.png" style="width:24px;height:24px;object-fit:contain;"/></div>
       <div>
         <div class="logo-name">CC-AI <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="12" fill="url(#vg)"/><path d="M7 12.5l3.5 3.5 6.5-7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="vg" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7c6fff"/><stop offset="1" stop-color="#ff6b9d"/></linearGradient></defs></svg></div>
@@ -134,8 +215,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
-      <button class="hdr-btn" onclick="showProfile()" title="Profile">👤</button>
-      <button class="hdr-btn" onclick="clearChat()" title="Clear chat">🗑️</button>
+      <button class="hdr-btn" onclick="newChat()" title="New chat">✏️</button>
       <button class="hdr-btn" onclick="showSettings()" title="Settings">⚙️</button>
       <div class="status"><div class="status-dot"></div> Online</div>
     </div>
@@ -590,6 +670,7 @@ async function sendMessage(){
       const code = htmlMatch[0].replace(/```html\n?/i,'').replace(/```$/,'').trim();
       setTimeout(() => openPreview(code, 'html', 'HTML Preview'), 400);
     }
+    saveCurrentSession();
     if(autoSpeak){const cleanReply=cleanTextForSpeech(reply);if(isKhmerText(cleanReply)){speakTextRaw(cleanReply,'km-KH')}else{fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:cleanReply.slice(0,500)})}).then(r=>r.json()).then(d=>{if(d.audio){const a=new Audio(d.audio);a.play()}else speakTextRaw(cleanReply)}).catch(()=>speakTextRaw(cleanReply));}}
     if(typeof trackActivity==='function')trackActivity('chat');
   }catch(e){const t=document.getElementById('typing');if(t)t.remove();addMessage('ai',`❌ Error: ${e.message}`,'')}
@@ -943,6 +1024,131 @@ document.addEventListener('click', (e) => {
 setInterval(saveChatToStorage, 30000);
 
 // ===================== FIREBASE STUBS =====================
+// ===================== SIDEBAR & CHAT HISTORY =====================
+let chatSessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]');
+let currentSessionId = null;
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const app = document.querySelector('.app');
+  const isOpen = sidebar.classList.contains('open');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('show');
+  // Only push on desktop
+  if (window.innerWidth > 768) {
+    app.classList.toggle('sidebar-open', !isOpen);
+  }
+}
+
+function newChat() {
+  // Save current chat first
+  saveCurrentSession();
+  // Clear and start fresh
+  messages = [];
+  currentSessionId = 'session_' + Date.now();
+  const container = document.getElementById('messages');
+  container.innerHTML = '';
+  const p = getProfile();
+  const welcome = document.createElement('div');
+  welcome.className = 'welcome'; welcome.id = 'welcome';
+  welcome.innerHTML = `<div class="welcome-icon"><div style="width:80px;height:80px;border-radius:50%;background:white;display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px rgba(124,111,255,0.6);margin:0 auto 20px;"><img src="/icon.png" style="width:52px;height:52px;object-fit:contain;"/></div></div><h2 style="display:flex;align-items:center;justify-content:center;gap:8px;font-family:'Playfair Display',serif;font-size:32px;font-weight:800;color:var(--text);margin-bottom:10px;">${p.name ? 'Hello '+p.name+'!' : 'Hello!'} I'm CC-AI 🔥</h2><p style="color:var(--text2);font-size:15px;max-width:360px;line-height:1.6;">Created by CC-AI Developer 😎</p><div class="suggestions"><div class="suggestion" onclick="sendSuggestion('What can you do?')">What can you do?</div><div class="suggestion" onclick="sendSuggestion('Tell me a fun fact')">Tell me a fun fact</div><div class="suggestion" onclick="showYoutube()">▶️ YouTube Search</div><div class="suggestion" onclick="showTranslate()">🌐 Translate</div><div class="suggestion" onclick="sendSuggestion('generate image of Angkor Wat at sunset')">🎨 Generate image</div></div>`;
+  container.appendChild(welcome);
+  renderChatHistory();
+  if (window.innerWidth <= 768) toggleSidebar();
+}
+
+function saveCurrentSession() {
+  if (messages.length === 0) return;
+  const title = messages[0]?.content?.slice?.(0,40) || 'New chat';
+  const session = {
+    id: currentSessionId || 'session_' + Date.now(),
+    title: typeof title === 'string' ? title : 'New chat',
+    messages: messages,
+    time: Date.now()
+  };
+  const idx = chatSessions.findIndex(s => s.id === session.id);
+  if (idx >= 0) chatSessions[idx] = session;
+  else chatSessions.unshift(session);
+  // Keep max 30 sessions
+  chatSessions = chatSessions.slice(0, 30);
+  localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
+  renderChatHistory();
+}
+
+function loadSession(sessionId) {
+  saveCurrentSession();
+  const session = chatSessions.find(s => s.id === sessionId);
+  if (!session) return;
+  currentSessionId = session.id;
+  messages = session.messages;
+  const container = document.getElementById('messages');
+  container.innerHTML = '';
+  messages.forEach(msg => {
+    if (msg.role === 'user') {
+      const content = Array.isArray(msg.content) ? (msg.content.find(c=>c.type==='text')?.text||'') : msg.content;
+      const div = document.createElement('div');
+      div.className = 'msg user';
+      div.innerHTML = `<div class="avatar">👤</div><div class="bubble">${String(content).replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/
+/g,'<br>')}</div>`;
+      container.appendChild(div);
+    } else if (msg.role === 'assistant') {
+      addMessage('ai', formatMessage(msg.content), msg.content);
+    }
+  });
+  container.scrollTop = container.scrollHeight;
+  renderChatHistory();
+  if (window.innerWidth <= 768) toggleSidebar();
+}
+
+function deleteSession(sessionId, e) {
+  e.stopPropagation();
+  chatSessions = chatSessions.filter(s => s.id !== sessionId);
+  localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
+  if (sessionId === currentSessionId) newChat();
+  else renderChatHistory();
+}
+
+function renderChatHistory() {
+  const list = document.getElementById('chat-history-list');
+  if (!list) return;
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now()-86400000).toDateString();
+  let html = '';
+  let lastSection = '';
+  chatSessions.forEach(session => {
+    const date = new Date(session.time).toDateString();
+    let section = date === today ? 'TODAY' : date === yesterday ? 'YESTERDAY' : new Date(session.time).toLocaleDateString();
+    if (section !== lastSection) {
+      html += `<div class="sidebar-section">${section}</div>`;
+      lastSection = section;
+    }
+    const isActive = session.id === currentSessionId ? 'active' : '';
+    const safeTitle = String(session.title).replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    html += `<div class="chat-history-item ${isActive}" onclick="loadSession('${session.id}')">
+      <span class="chat-history-title">💬 ${safeTitle}</span>
+      <button class="chat-history-del" onclick="deleteSession('${session.id}',event)">🗑</button>
+    </div>`;
+  });
+  if (chatSessions.length === 0) html = '<div style="padding:16px;color:var(--text3);font-size:0.8rem;text-align:center;">No chats yet</div>';
+  list.innerHTML = html;
+  // Update sidebar username
+  const p = getProfile();
+  const usernameEl = document.getElementById('sidebar-username');
+  if (usernameEl) usernameEl.textContent = p.name || 'Your Profile';
+}
+
+function showSearch() {
+  const q = prompt('Search chats:');
+  if (!q) return;
+  const results = chatSessions.filter(s => s.title.toLowerCase().includes(q.toLowerCase()));
+  if (results.length === 0) { alert('No chats found!'); return; }
+  loadSession(results[0].id);
+}
+
+// Auto-save every 30 seconds
+setInterval(() => { if (messages.length > 0) saveCurrentSession(); }, 30000);
+
 // ===================== CODE PREVIEW PANEL =====================
 let currentPreviewCode = '';
 let currentPreviewLang = '';
@@ -1126,6 +1332,11 @@ window.addEventListener('DOMContentLoaded',()=>{
   setTimeout(trackVisit,2000);
   // Load saved chat history
   loadChatHistory();
+  // Init sidebar
+  currentSessionId = 'session_' + Date.now();
+  renderChatHistory();
+  const sidebarUsername = document.getElementById('sidebar-username');
+  if (sidebarUsername && p.name) sidebarUsername.textContent = p.name;
 });
 </script>
 
