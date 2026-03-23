@@ -66,7 +66,7 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
 
   const models = hasImage
     ? ['meta-llama/llama-4-scout-17b-16e-instruct']
-    : ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'gemma2-9b-it'];
+    : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'];
 
   // Try with web search first if needed
   if (needsSearch && !hasImage) {
