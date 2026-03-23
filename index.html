@@ -41,6 +41,13 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 #matrix-canvas{display:none}
 .grid-overlay{display:none}
 .scanline{display:none}
+.bg-default{background:#0d0d0d !important;}
+.bg-angkor{background:transparent !important;}
+.bg-ocean{background:linear-gradient(180deg,#001a33 0%,#003366 50%,#001a33 100%) !important;}
+.bg-forest{background:linear-gradient(180deg,#001a00 0%,#003300 50%,#001a00 100%) !important;}
+.bg-sunset{background:linear-gradient(180deg,#1a0000 0%,#330011 40%,#661a00 100%) !important;}
+.bg-galaxy{background:linear-gradient(180deg,#000005 0%,#0a0015 50%,#050010 100%) !important;}
+.bg-minimal{background:#0a0a0a !important;}
 .corner-decoration{display:none}
 .corner-decoration.tl{top:12px;left:12px;border-top:1px solid rgba(124,111,255,0.4);border-left:1px solid rgba(124,111,255,0.4)}
 .corner-decoration.tr{top:12px;right:12px;border-top:1px solid rgba(255,107,157,0.4);border-right:1px solid rgba(255,107,157,0.4)}
@@ -415,6 +422,17 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
       <button onclick="installApp();hideSettings();" style="background:#444444;color:#cccccc;border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:4px 12px;font-size:0.8rem;cursor:pointer;font-family:'Inter',sans-serif;">Install</button>
     </div>
     <div class="settings-row"><span>🌙 Dark mode</span><label class="toggle-wrap"><input type="checkbox" id="dark-toggle" checked onchange="toggleDark(this)"/><span class="toggle-slider"></span></label></div>
+    <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
+      <span>🎨 Background</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;">
+        <button onclick="changeBackground('angkor')" style="background:#2a1f0f;border:1px solid #5a4a30;color:#c8a878;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">🏛️ Angkor</button>
+        <button onclick="changeBackground('ocean')" style="background:#001a33;border:1px solid #003366;color:#74b9ff;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">🌊 Ocean</button>
+        <button onclick="changeBackground('forest')" style="background:#001a00;border:1px solid #003300;color:#6bcb77;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">🌲 Forest</button>
+        <button onclick="changeBackground('sunset')" style="background:#1a0000;border:1px solid #661a00;color:#ff9f43;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">🌅 Sunset</button>
+        <button onclick="changeBackground('galaxy')" style="background:#000005;border:1px solid #0a0015;color:#a29bfe;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">🌌 Galaxy</button>
+        <button onclick="changeBackground('minimal')" style="background:#111;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">⬛ Minimal</button>
+      </div>
+    </div>
     <div class="settings-row"><span>🔊 Auto speak replies</span><label class="toggle-wrap"><input type="checkbox" id="speak-toggle" onchange="toggleAutoSpeak(this)"/><span class="toggle-slider"></span></label></div>
     <div class="settings-row" style="border-bottom:none;padding-top:12px;">
       <button onclick="clearChat();hideSettings();" style="width:100%;background:rgba(255,100,100,0.1);border:1px solid rgba(255,100,100,0.3);color:#f87171;border-radius:10px;padding:8px;cursor:pointer;font-family:'Inter',sans-serif;font-size:0.85rem;">🗑️ Clear all chat history</button>
@@ -676,6 +694,37 @@ async function sendMessage(){
   else{userDiv.innerHTML=`<div class="avatar">👤</div><div class="bubble">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`}
   container.appendChild(userDiv);container.scrollTop=container.scrollHeight;
   input.value='';input.style.height='auto';isLoading=true;document.getElementById('sendBtn').disabled=true;
+
+  // Background change detection
+  const bgTriggers = ['change background','background to','set background','make background','switch background','change the background','background color'];
+  const ltext = text.toLowerCase();
+  if(bgTriggers.some(t => ltext.includes(t))) {
+    const bgMap = {
+      'angkor': 'angkor', 'temple': 'angkor', 'cambodia': 'angkor',
+      'ocean': 'ocean', 'sea': 'ocean', 'water': 'ocean', 'blue': 'ocean',
+      'forest': 'forest', 'green': 'forest', 'jungle': 'forest', 'nature': 'forest',
+      'sunset': 'sunset', 'red': 'sunset', 'orange': 'sunset', 'fire': 'sunset',
+      'galaxy': 'galaxy', 'space': 'galaxy', 'stars': 'galaxy', 'universe': 'galaxy',
+      'dark': 'minimal', 'black': 'minimal', 'minimal': 'minimal', 'simple': 'minimal',
+      'default': 'default', 'normal': 'default', 'original': 'default'
+    };
+    let matched = null;
+    for(const [key, val] of Object.entries(bgMap)) {
+      if(ltext.includes(key)) { matched = val; break; }
+    }
+    if(matched) {
+      changeBackground(matched);
+      removeWelcome();
+      const d = document.createElement('div'); d.className='msg user';
+      d.innerHTML=`<div class="avatar">👤</div><div class="bubble">${text.replace(/</g,'&lt;')}</div>`;
+      document.getElementById('messages').appendChild(d);
+      addMessage('ai', `✅ Background changed to <strong>${matched}</strong>! 🎨`, '');
+      document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+      isLoading=false; document.getElementById('sendBtn').disabled=false;
+      input.value=''; input.style.height='auto';
+      return;
+    }
+  }
 
   // Image edit
   if(pendingImage&&text&&isImageEditRequest(text)&&!isImageRequest(text)){
@@ -1066,6 +1115,29 @@ document.addEventListener('click', (e) => {
 setInterval(saveChatToStorage, 30000);
 
 // ===================== FIREBASE STUBS =====================
+// ===================== BACKGROUND THEMES =====================
+const bgThemes = {
+  angkor: { showAngkor: true, bodyBg: 'transparent' },
+  ocean: { showAngkor: false, bodyBg: 'linear-gradient(180deg,#001a33 0%,#003366 50%,#001a33 100%)' },
+  forest: { showAngkor: false, bodyBg: 'linear-gradient(180deg,#001a00 0%,#003300 50%,#001a00 100%)' },
+  sunset: { showAngkor: false, bodyBg: 'linear-gradient(180deg,#1a0000 0%,#330011 40%,#661a00 100%)' },
+  galaxy: { showAngkor: false, bodyBg: 'linear-gradient(180deg,#000005 0%,#0a0015 50%,#050010 100%)' },
+  minimal: { showAngkor: false, bodyBg: '#0a0a0a' },
+  default: { showAngkor: false, bodyBg: '#0d0d0d' }
+};
+
+function changeBackground(theme) {
+  const t = bgThemes[theme] || bgThemes.default;
+  document.body.style.background = t.bodyBg;
+  const angkor = document.getElementById('angkor-bg');
+  if (angkor) angkor.style.display = t.showAngkor ? 'block' : 'none';
+  localStorage.setItem('bg_theme', theme);
+}
+
+// Load saved background on startup
+const savedBg = localStorage.getItem('bg_theme');
+if (savedBg) changeBackground(savedBg);
+
 // ===================== SIDEBAR & CHAT HISTORY =====================
 let chatSessions = JSON.parse(localStorage.getItem('chat_sessions') || '[]');
 let currentSessionId = null;
