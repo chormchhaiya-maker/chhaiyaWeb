@@ -1042,17 +1042,45 @@ function toggleSidebar() {
 }
 
 function newChat() {
-  // Save current chat first
   saveCurrentSession();
-  // Clear and start fresh
   messages = [];
   currentSessionId = 'session_' + Date.now();
   const container = document.getElementById('messages');
   container.innerHTML = '';
   const p = getProfile();
   const welcome = document.createElement('div');
-  welcome.className = 'welcome'; welcome.id = 'welcome';
-  welcome.innerHTML = `<div class="welcome-icon"><div style="width:80px;height:80px;border-radius:50%;background:white;display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px rgba(124,111,255,0.6);margin:0 auto 20px;"><img src="/icon.png" style="width:52px;height:52px;object-fit:contain;"/></div></div><h2 style="display:flex;align-items:center;justify-content:center;gap:8px;font-family:'Playfair Display',serif;font-size:32px;font-weight:800;color:var(--text);margin-bottom:10px;">${p.name ? 'Hello '+p.name+'!' : 'Hello!'} I'm CC-AI 🔥</h2><p style="color:var(--text2);font-size:15px;max-width:360px;line-height:1.6;">Created by CC-AI Developer 😎</p><div class="suggestions"><div class="suggestion" onclick="sendSuggestion('What can you do?')">What can you do?</div><div class="suggestion" onclick="sendSuggestion('Tell me a fun fact')">Tell me a fun fact</div><div class="suggestion" onclick="showYoutube()">▶️ YouTube Search</div><div class="suggestion" onclick="showTranslate()">🌐 Translate</div><div class="suggestion" onclick="sendSuggestion('generate image of Angkor Wat at sunset')">🎨 Generate image</div></div>`;
+  welcome.className = 'welcome';
+  welcome.id = 'welcome';
+  const greeting = p.name ? 'Hello ' + p.name + '!' : 'Hello!';
+  const wIcon = document.createElement('div');
+  wIcon.className = 'welcome-icon';
+  wIcon.innerHTML = '<div style="width:80px;height:80px;border-radius:50%;background:white;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;"><img src="/icon.png" style="width:52px;height:52px;object-fit:contain;"/></div>';
+  const wTitle = document.createElement('h2');
+  wTitle.style.cssText = 'font-family:Playfair Display,serif;font-size:28px;font-weight:800;color:var(--text);margin-bottom:10px;text-align:center;';
+  wTitle.textContent = greeting + " I'm CC-AI 🔥";
+  const wSub = document.createElement('p');
+  wSub.style.cssText = 'color:var(--text2);font-size:15px;max-width:360px;line-height:1.6;text-align:center;';
+  wSub.textContent = 'Created by CC-AI Developer 😎';
+  const wSugg = document.createElement('div');
+  wSugg.className = 'suggestions';
+  const suggs = [
+    {label:'What can you do?', action:"sendSuggestion('What can you do?')"},
+    {label:'Tell me a fun fact', action:"sendSuggestion('Tell me a fun fact')"},
+    {label:'▶️ YouTube', action:'showYoutube()'},
+    {label:'🌐 Translate', action:'showTranslate()'},
+    {label:'🎨 Generate image', action:"sendSuggestion('generate image of Angkor Wat at sunset')"}
+  ];
+  suggs.forEach(s => {
+    const btn = document.createElement('div');
+    btn.className = 'suggestion';
+    btn.textContent = s.label;
+    btn.setAttribute('onclick', s.action);
+    wSugg.appendChild(btn);
+  });
+  welcome.appendChild(wIcon);
+  welcome.appendChild(wTitle);
+  welcome.appendChild(wSub);
+  welcome.appendChild(wSugg);
   container.appendChild(welcome);
   renderChatHistory();
   if (window.innerWidth <= 768) toggleSidebar();
@@ -1089,8 +1117,7 @@ function loadSession(sessionId) {
       const content = Array.isArray(msg.content) ? (msg.content.find(c=>c.type==='text')?.text||'') : msg.content;
       const div = document.createElement('div');
       div.className = 'msg user';
-      div.innerHTML = `<div class="avatar">👤</div><div class="bubble">${String(content).replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/
-/g,'<br>')}</div>`;
+      const safeMsg = String(content).replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); div.innerHTML = `<div class="avatar">👤</div><div class="bubble">${safeMsg}</div>`;
       container.appendChild(div);
     } else if (msg.role === 'assistant') {
       addMessage('ai', formatMessage(msg.content), msg.content);
