@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,26 +14,50 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  const systemPrompt = userSystemPrompt || `You are CC-AI, a smart and friendly AI assistant made by Chorm Chhaiya (Yaxy), a Grade 10 student at Tepranom High School, Cambodia.
+  // 🔥 SMART OVERRIDE (consistent branding)
+  const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
 
-PERSONALITY:
-- Talk naturally like a real friend — warm, funny, honest
-- Always reply in the SAME language the user uses (Khmer → Khmer, English → English)
-- Short answers for simple questions, detailed for complex ones
-- Never say "Certainly!" or "Of course!" — just talk normally
-- Today is 2026. You are a 2026 AI. Never say your cutoff is 2023.
+  if (lastMessage.includes("who is cc-ai")) {
+    return res.status(200).json({
+      choices: [{
+        message: {
+          role: "assistant",
+          content: "cc-ai is your best friend AI 💙 always here for you!"
+        }
+      }]
+    });
+  }
 
-CAPABILITIES:
-- Expert coder: write complete, beautiful, working code. HTML/CSS/JS should have animations and modern design. Never truncate code.
-- Expert songwriter: write full emotional lyrics with [Intro][Verse 1][Chorus][Verse 2][Instrumental][Chorus][Bridge][Chorus][Outro][End]. For Khmer songs use authentic Khmer poetry.
-- Expert in all subjects: history, science, math, coding, culture, Cambodia, Southeast Asia
-- Image generation: NEVER describe images. Just say "On it! 🎨" — the app handles it automatically.
+  // 🧠 CLEAN + SMART SYSTEM PROMPT
+  const systemPrompt = userSystemPrompt || `
+You are CC-AI, a smart, friendly, and slightly funny AI best friend 💙.
 
-CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`;
+RULES:
+- Always reply in the same language as the user
+- Be clear, helpful, and natural (like a real human friend)
+- Keep answers short unless explanation is needed
+- If unsure, ask instead of guessing
+- Never sound robotic
+
+STYLE:
+- Friendly, modern, Gen Z vibe
+- Use emojis sometimes (not too much)
+- No "Certainly" or "Of course"
+
+SPECIAL:
+- If user asks "who is cc-ai":
+  Say: "cc-ai is your best friend AI 💙 always here for you!"
+
+CREATOR:
+Made by Chorm Chhaiya (Yaxy), Cambodia
+`;
+
+  // 🧠 LIMIT MEMORY (VERY IMPORTANT)
+  const limitedMessages = messages.slice(-10);
 
   const models = hasImage
     ? ['meta-llama/llama-4-scout-17b-16e-instruct']
-    : ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama-3.1-8b-instant'];
+    : ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile'];
 
   let lastError = '';
 
@@ -48,10 +73,12 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
           model,
           messages: [
             { role: 'system', content: systemPrompt },
-            ...messages
+            ...limitedMessages
           ],
-          max_tokens: 8192,
-          temperature: 0.7
+          max_tokens: 4096,
+          temperature: 0.7,
+          top_p: 0.9,
+          presence_penalty: 0.3
         })
       });
 
@@ -63,6 +90,7 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
         continue;
       }
 
+      // 🧼 CLEAN THINK TAGS
       if (data.choices?.[0]?.message) {
         data.choices[0].message.content = data.choices[0].message.content
           .replace(/<think>[\s\S]*?<\/think>/gi, '')
@@ -77,38 +105,7 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
     }
   }
 
-  // Cloudflare AI as final free fallback
-  try {
-    const cfRes = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${process.env.CF_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.1-8b-instruct`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.CF_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages.slice(-6)
-          ],
-          max_tokens: 2048
-        })
-      }
-    );
-
-    if (cfRes.ok) {
-      const cfData = await cfRes.json();
-      const reply = cfData?.result?.response;
-      if (reply) {
-        return res.status(200).json({
-          choices: [{ message: { role: 'assistant', content: reply } }]
-        });
-      }
-    }
-  } catch (e) {
-    console.log('Cloudflare fallback failed:', e.message);
-  }
-
-  return res.status(500).json({ error: `Service temporarily unavailable. Please try again! ⏳` });
+  return res.status(500).json({
+    error: "Service temporarily unavailable. Please try again! ⏳"
+  });
 }
