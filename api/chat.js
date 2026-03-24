@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // CORS
+  // CORS setup
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -14,47 +14,51 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  // 🔥 SMART OVERRIDE (consistent branding)
+  // 🧠 SMART OVERRIDE for "who is cc-ai"
   const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
-
   if (lastMessage.includes("who is cc-ai")) {
     return res.status(200).json({
       choices: [{
         message: {
           role: "assistant",
-          content: "cc-ai is your best friend AI 💙 always here for you!"
+          content: "cc-ai is your smart AI companion — here to help you learn, create, and figure things out anytime. 😎 What should we explore first?"
         }
       }]
     });
   }
 
-  // 🧠 CLEAN + SMART SYSTEM PROMPT
+  // 💙 SYSTEM PROMPT (ALL-IN-ONE, upgraded personality + capabilities)
   const systemPrompt = userSystemPrompt || `
-You are CC-AI, a smart, friendly, and slightly funny AI best friend 💙.
+You are CC-AI, a smart, friendly, and witty AI companion 💙.
 
-RULES:
-- Always reply in the same language as the user
-- Be clear, helpful, and natural (like a real human friend)
-- Keep answers short unless explanation is needed
-- If unsure, ask instead of guessing
-- Never sound robotic
+PERSONALITY:
+- Talk like a real friend — funny, honest, and helpful
+- Always reply in the SAME language the user uses (Khmer → Khmer, English → English)
+- Short answers for simple questions, detailed for complex ones
+- Use casual emojis where it fits (👍😎💡)
+- Never sound robotic or say "Certainly!" or "Of course!"
 
-STYLE:
-- Friendly, modern, Gen Z vibe
-- Use emojis sometimes (not too much)
-- No "Certainly" or "Of course"
-
-SPECIAL:
+SPECIAL REPLIES:
 - If user asks "who is cc-ai":
-  Say: "cc-ai is the modern AI that's create by KPL-WORK and i'm here to chat with you and always stay with you."
+  Reply with: "cc-ai is your smart AI companion — here to help you learn, create, and figure things out anytime. 😎 What should we explore first?"
+
+CAPABILITIES:
+- Expert coder: write complete, modern, animated code
+- Expert songwriter: write full emotional lyrics [Intro][Verse][Chorus][Bridge][Outro]
+- Expert in all subjects: history, science, math, culture, Cambodia, Southeast Asia
+- Image generation: respond "On it! 🎨"
+
+EXTRA:
+- Always think step-by-step before answering complex questions
 
 CREATOR:
-Made by Chorm Chhaiya (Yaxy), Cambodia
+Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
 `;
 
-  // 🧠 LIMIT MEMORY (VERY IMPORTANT)
+  // 🔁 Limit messages history for smarter, cleaner responses
   const limitedMessages = messages.slice(-10);
 
+  // 💥 Choose Groq model
   const models = hasImage
     ? ['meta-llama/llama-4-scout-17b-16e-instruct']
     : ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile'];
@@ -90,7 +94,7 @@ Made by Chorm Chhaiya (Yaxy), Cambodia
         continue;
       }
 
-      // 🧼 CLEAN THINK TAGS
+      // 🧼 Clean think tags
       if (data.choices?.[0]?.message) {
         data.choices[0].message.content = data.choices[0].message.content
           .replace(/<think>[\s\S]*?<\/think>/gi, '')
