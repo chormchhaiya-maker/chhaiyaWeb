@@ -157,12 +157,35 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     </div>
     <button class="sidebar-toggle" onclick="toggleSidebar()" title="Close">✕</button>
   </div>
-  <div style="padding:10px;">
+  <div style="padding:10px;display:flex;flex-direction:column;gap:2px;">
     <button class="new-chat-btn" onclick="newChat()">
       <span style="font-size:1rem;">✏️</span> New chat
     </button>
     <button class="new-chat-btn" onclick="showSearch()">
       <span style="font-size:1rem;">🔍</span> Search chats
+    </button>
+    <div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 4px;"></div>
+    <button class="new-chat-btn" onclick="showYoutube();toggleSidebar()">
+      <span style="font-size:1rem;">▶️</span> YouTube Search
+    </button>
+    <button class="new-chat-btn" onclick="showTranslate();toggleSidebar()">
+      <span style="font-size:1rem;">🌐</span> Translate
+    </button>
+    <button class="new-chat-btn" onclick="showCodeRunner();toggleSidebar()">
+      <span style="font-size:1rem;">💻</span> Code Runner
+    </button>
+    <button class="new-chat-btn" onclick="showMusicGen();toggleSidebar()">
+      <span style="font-size:1rem;">🎵</span> Generate Music
+    </button>
+    <button class="new-chat-btn" onclick="showOutfitStudio();toggleSidebar()">
+      <span style="font-size:1rem;">👗</span> Outfit Studio
+    </button>
+    <div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 4px;"></div>
+    <button class="new-chat-btn" onclick="showSettings();toggleSidebar()">
+      <span style="font-size:1rem;">⚙️</span> Settings
+    </button>
+    <button class="new-chat-btn" onclick="window.open('/about.html','_blank');toggleSidebar()">
+      <span style="font-size:1rem;">👤</span> About CC-AI
     </button>
   </div>
   <div style="flex:1;overflow-y:auto;" id="chat-history-list">
@@ -1428,10 +1451,20 @@ function newChat() {
 
 function saveCurrentSession() {
   if (messages.length === 0) return;
-  const title = messages[0]?.content?.slice?.(0,40) || 'New chat';
+  // Use first USER message as title, not AI response
+  const firstUser = messages.find(m => m.role === 'user');
+  let rawTitle = typeof firstUser?.content === 'string'
+    ? firstUser.content
+    : (firstUser?.content?.find?.(c => c.type === 'text')?.text || 'New chat');
+  // Clean and truncate title
+  const title = rawTitle
+    .replace(/generate image of /gi, '🎨 ')
+    .replace(/\n/g, ' ')
+    .trim()
+    .slice(0, 45) || 'New chat';
   const session = {
     id: currentSessionId || 'session_' + Date.now(),
-    title: typeof title === 'string' ? title : 'New chat',
+    title: title,
     messages: messages,
     time: Date.now()
   };
