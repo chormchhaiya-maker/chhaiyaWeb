@@ -14,24 +14,64 @@ body { background: #0a0a0f; color: #f0eeff; font-family: system-ui, sans-serif; 
 input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(124,111,255,0.3); border-radius: 10px; padding: 10px 14px; color: #f0eeff; font-size: 0.95rem; outline: none; margin-bottom: 12px; }
 .btn { width: 100%; background: linear-gradient(135deg, #7c6fff, #ff6b9d); color: white; border: none; border-radius: 10px; padding: 12px; font-size: 0.95rem; font-weight: 700; cursor: pointer; }
 .error { color: #f87171; font-size: 0.82rem; margin-top: 8px; }
-.dashboard { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
-.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+
+.dashboard { display: none; padding: 24px; max-width: 1000px; margin: 0 auto; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
 .header h1 { font-size: 1.4rem; background: linear-gradient(135deg, #7c6fff, #ff6b9d); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.logout { background: rgba(255,100,100,0.1); border: 1px solid rgba(255,100,100,0.3); color: #f87171; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 0.85rem; }
+
+.btn-group button {
+  margin-left: 8px;
+  background: rgba(124,111,255,0.1); 
+  border: 1px solid rgba(124,111,255,0.3); 
+  color: #a093f8; 
+  border-radius: 8px; 
+  padding: 6px 14px; 
+  cursor: pointer; 
+  font-size: 0.82rem;
+}
+.logout { background: rgba(255,100,100,0.1); border: 1px solid rgba(255,100,100,0.3); color: #f87171; }
+
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 28px; }
 .stat-card { background: #13131a; border: 1px solid rgba(124,111,255,0.2); border-radius: 16px; padding: 20px; text-align: center; }
 .stat-card .num { font-size: 2rem; font-weight: 800; background: linear-gradient(135deg, #7c6fff, #ff6b9d); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .stat-card .label { font-size: 0.8rem; color: #9b97c0; margin-top: 4px; }
+
 .section { background: #13131a; border: 1px solid rgba(124,111,255,0.2); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
 .section h3 { color: #9b97c0; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; font-size: 0.78rem; }
-.user-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem; }
+
+.user-row { 
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between; 
+  padding: 12px 0; 
+  border-bottom: 1px solid rgba(255,255,255,0.05); 
+  font-size: 0.9rem; 
+}
 .user-row:last-child { border-bottom: none; }
-.user-name { color: #f0eeff; font-weight: 600; }
-.user-meta { color: #9b97c0; font-size: 0.78rem; }
-.badge { background: rgba(124,111,255,0.2); color: #a093f8; border-radius: 20px; padding: 2px 10px; font-size: 0.75rem; }
+
+.user-name { 
+  color: #f0eeff; 
+  font-weight: 600; 
+  font-size: 1rem;
+}
+.user-id { 
+  font-size: 0.78rem; 
+  color: #777; 
+  margin-left: 10px;
+}
+.user-meta { color: #9b97c0; font-size: 0.82rem; margin-top: 2px; }
+
+.badge { 
+  background: rgba(124,111,255,0.2); 
+  color: #a093f8; 
+  border-radius: 20px; 
+  padding: 3px 10px; 
+  font-size: 0.78rem; 
+  margin-left: 6px;
+}
 .badge.green { background: rgba(74,222,128,0.15); color: #4ade80; }
-.refresh { background: rgba(124,111,255,0.1); border: 1px solid rgba(124,111,255,0.3); color: #a093f8; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 0.82rem; }
-.loading { color: #9b97c0; font-size: 0.85rem; text-align: center; padding: 20px; }
+
+.loading { color: #9b97c0; font-size: 0.85rem; text-align: center; padding: 30px; }
 </style>
 </head>
 <body>
@@ -50,9 +90,10 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
 <div class="dashboard" id="dashboard">
   <div class="header">
     <h1>🛡️ CC-AI Admin</h1>
-    <div style="display:flex;gap:8px;">
-      <button class="refresh" onclick="deleteAnonymous()" style="background:rgba(255,100,100,0.1);border:1px solid rgba(255,100,100,0.3);color:#f87171;">🗑️ Delete Anonymous</button>
-      <button class="refresh" onclick="loadData()">🔄 Refresh</button>
+    <div class="btn-group">
+      <button onclick="makeNamesUnique()">🔧 Fix Duplicate Names</button>
+      <button onclick="deleteAnonymous()">🗑️ Delete Anonymous</button>
+      <button onclick="loadData()">🔄 Refresh</button>
       <button class="logout" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -65,14 +106,14 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
   </div>
 
   <div class="section">
-    <h3>👥 All Users</h3>
+    <h3>👥 All Users (One name per device)</h3>
     <div id="users-list"><div class="loading">Loading...</div></div>
   </div>
 </div>
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
-import { getDatabase, ref, get, remove } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
+import { getDatabase, ref, get, remove, set } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
 
 const ADMIN_PASSWORD = 'chh@iy@';
 const DB_URL = 'https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';
@@ -113,6 +154,39 @@ if (sessionStorage.getItem('admin_auth')) {
   document.getElementById('dashboard').style.display = 'block';
 }
 
+// ====================== FIX DUPLICATE NAMES ======================
+window.makeNamesUnique = async () => {
+  if (!confirm('This will keep ONLY ONE user per name and delete all duplicates.\n\nContinue?')) return;
+
+  try {
+    const snap = await get(ref(db, 'users'));
+    const data = snap.val() || {};
+    const seen = new Map();
+    let deleted = 0;
+
+    for (const [uid, user] of Object.entries(data)) {
+      let name = (user.name || 'Anonymous').toLowerCase().trim();
+      if (!name) name = 'anonymous';
+
+      if (seen.has(name)) {
+        // Delete duplicate
+        await remove(ref(db, 'users/' + uid));
+        deleted++;
+      } else {
+        seen.set(name, uid);
+        // Reserve this name so no one else can use it
+        await set(ref(db, 'usernames/' + name), uid);
+      }
+    }
+
+    alert(`✅ Done!\nDeleted ${deleted} duplicate users.\nNames are now unique.`);
+    loadData();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+};
+
+// ====================== DELETE ANONYMOUS ======================
 window.deleteAnonymous = async () => {
   if (!confirm('Delete all Anonymous users?')) return;
   try {
@@ -120,7 +194,7 @@ window.deleteAnonymous = async () => {
     const data = snap.val() || {};
     let count = 0;
     for (const [uid, u] of Object.entries(data)) {
-      if (!u.name || u.name === 'Anonymous') {
+      if (!u.name || u.name.toLowerCase() === 'anonymous') {
         await remove(ref(db, 'users/' + uid));
         count++;
       }
@@ -132,6 +206,7 @@ window.deleteAnonymous = async () => {
   }
 };
 
+// ====================== LOAD DATA ======================
 window.loadData = async () => {
   try {
     const usersRef = ref(db, 'users');
@@ -156,15 +231,18 @@ window.loadData = async () => {
       return;
     }
 
-    // Sort by lastSeen
+    // Sort by last seen (newest first)
     users.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
 
     usersList.innerHTML = users.map(u => {
       const time = u.lastSeen ? new Date(u.lastSeen).toLocaleString() : 'Unknown';
       const isToday = u.date === today;
+      const displayName = u.name || 'Anonymous';
+      const userId = u.uid ? u.uid.substring(0, 8) + '...' : 'no-id';
+
       return `<div class="user-row">
         <div>
-          <div class="user-name">${u.name || 'Anonymous'}</div>
+          <div class="user-name">${displayName} <span class="user-id">(${userId})</span></div>
           <div class="user-meta">Last seen: ${time}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;">
