@@ -70,7 +70,9 @@ Chorm Chhaiya (Yaxy)
       }
     );
 
-    console.log("Gemini response:", data);
+    const data = await r.json();
+
+console.log("Gemini response:", data);
 
     const text =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
