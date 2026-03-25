@@ -73,6 +73,9 @@ Chorm Chhaiya (Yaxy)
     const data = await r.json();
 
 console.log("Gemini response:", data);
+if (!r.ok) {
+  throw new Error(JSON.stringify(data));
+}
 
     const text =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
