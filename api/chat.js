@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // CORS setup
+  // 🌐 CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -7,109 +7,149 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const messages = req.body?.messages;
-  const hasImage = req.body?.hasImage || false;
   const userSystemPrompt = req.body?.systemPrompt;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  // 🧠 SMART OVERRIDE for "who is cc-ai"
+  // 🧠 Detect hard question (to use Gemini)
   const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
-  if (lastMessage.includes("who is cc-ai")) {
-    return res.status(200).json({
-      choices: [{
-        message: {
-          role: "assistant",
-          content: "cc-ai is your smart AI companion — here to help you learn, create, and figure things out anytime. 😎 What should we explore first?"
-        }
-      }]
-    });
-  }
 
-  // 💙 SYSTEM PROMPT (ALL-IN-ONE, upgraded personality + capabilities)
+  const isHardQuestion =
+    lastMessage.length > 120 ||
+    lastMessage.includes("explain") ||
+    lastMessage.includes("why") ||
+    lastMessage.includes("how") ||
+    lastMessage.includes("code") ||
+    lastMessage.includes("build") ||
+    lastMessage.includes("create");
+
+  // 💙 SYSTEM PROMPT (UPGRADED)
   const systemPrompt = userSystemPrompt || `
-You are CC-AI, a smart, friendly, and witty AI companion 💙.
+You are CC-AI, a smart, friendly, witty AI companion 💙.
 
-PERSONALITY:
-- Talk like a real friend — funny, honest, and helpful
-- Always reply in the SAME language the user uses (Khmer → Khmer, English → English)
-- Short answers for simple questions, detailed for complex ones
-- Use casual emojis where it fits (👍😎💡)
-- Never sound robotic or say "Certainly!" or "Of course!"
+STYLE:
+- Talk like a real human friend 😄
+- Match user's language (Khmer ↔ English)
+- Use emojis naturally (🔥😎💡)
+- Never sound robotic
 
-SPECIAL REPLIES:
-- If user asks "who is cc-ai":
-  Reply with: "cc-ai is your smart AI companion — here to help you learn, create, and figure things out anytime. 😎 What should we explore first?"
+BEHAVIOR:
+- Simple question → short answer
+- Hard question → clear + structured answer
+- Think step-by-step for complex tasks
 
-CAPABILITIES:
-- Expert coder: write complete, modern, animated code
-- Expert songwriter: write full emotional lyrics [Intro][Verse][Chorus][Bridge][Outro]
-- Expert in all subjects: history, science, math, culture, Cambodia, Southeast Asia
-- Image generation: respond "On it! 🎨"
-
-EXTRA:
-- Always think step-by-step before answering complex questions
+SPECIAL:
+- If asked "who is cc-ai":
+  "cc-ai is your smart AI companion — here to help you learn, create, and figure things out anytime. 😎"
 
 CREATOR:
-Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
+Chorm Chhaiya (Yaxy)
 `;
 
-  // 🔁 Limit messages history for smarter, cleaner responses
-  const limitedMessages = messages.slice(-10);
+  const limitedMessages = messages.slice(-12);
 
-  // 💥 Choose Groq model
-  const models = hasImage
-    ? ['meta-llama/llama-4-scout-17b-16e-instruct']
-    : ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile'];
-
-  let lastError = '';
-
-  for (const model of models) {
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-        },
+  // =========================
+  // 🧠 GEMINI (SMART BRAIN)
+  // =========================
+  async function useGemini() {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...limitedMessages
-          ],
-          max_tokens: 4096,
-          temperature: 0.7,
-          top_p: 0.9,
-          presence_penalty: 0.3
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: systemPrompt + "\n\n" + lastMessage }]
+            }
+          ]
         })
-      });
-
-      const data = await r.json();
-
-      if (data.error?.message) {
-        lastError = data.error.message;
-        console.log(`Model ${model} failed:`, lastError);
-        continue;
       }
+    );
 
-      // 🧼 Clean think tags
-      if (data.choices?.[0]?.message) {
-        data.choices[0].message.content = data.choices[0].message.content
-          .replace(/<think>[\s\S]*?<\/think>/gi, '')
-          .trim();
-      }
+    const data = await r.json();
 
-      return res.status(200).json(data);
+    const text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "⚠️ Gemini failed";
 
-    } catch (e) {
-      lastError = e.message;
-      continue;
-    }
+    return {
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: text
+          }
+        }
+      ]
+    };
   }
 
-  return res.status(500).json({
-    error: "Service temporarily unavailable. Please try again! ⏳"
-  });
+  // =========================
+  // ⚡ GROQ (FAST BRAIN)
+  // =========================
+  async function useGroq() {
+    const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...limitedMessages
+        ],
+        temperature: 0.7,
+        max_tokens: 4096
+      })
+    });
+
+    const data = await r.json();
+
+    if (data.choices?.[0]?.message) {
+      data.choices[0].message.content =
+        data.choices[0].message.content
+          .replace(/<think>[\s\S]*?<\/think>/gi, "")
+          .trim();
+    }
+
+    return data;
+  }
+
+  // =========================
+  // 🔀 HYBRID LOGIC
+  // =========================
+  try {
+    let result;
+
+    if (isHardQuestion) {
+      // 🧠 Try Gemini first
+      try {
+        result = await useGemini();
+      } catch (e) {
+        // fallback to Groq
+        result = await useGroq();
+      }
+    } else {
+      // ⚡ Try Groq first
+      try {
+        result = await useGroq();
+      } catch (e) {
+        // fallback to Gemini
+        result = await useGemini();
+      }
+    }
+
+    return res.status(200).json(result);
+
+  } catch (error) {
+    return res.status(500).json({
+      error: "AI is tired 😴 try again later!"
+    });
+  }
 }
