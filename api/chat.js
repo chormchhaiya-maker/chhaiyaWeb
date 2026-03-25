@@ -7,63 +7,67 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const messages = req.body?.messages;
-  const userSystemPrompt = req.body?.systemPrompt;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  // 🧠 Detect hard question (to use Gemini)
-  const lastMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
+  const lastMessage = messages[messages.length - 1]?.content || "";
 
-  const isHardQuestion =
+  // 🧠 Detect hard questions
+  const isHard =
     lastMessage.length > 120 ||
-    lastMessage.includes("explain") ||
-    lastMessage.includes("why") ||
-    lastMessage.includes("how") ||
-    lastMessage.includes("code") ||
-    lastMessage.includes("build") ||
-    lastMessage.includes("create");
+    /explain|why|how|build|code|create/i.test(lastMessage);
 
-  // 💙 SYSTEM PROMPT (UPGRADED)
-  const systemPrompt = userSystemPrompt || `
-You are CC-AI, a smart, friendly, witty AI companion 💙.
+  // 💬 LIMIT MEMORY
+  const history = messages.slice(-12);
+
+  // 💙 CHATGPT-LIKE SYSTEM PROMPT (ALREADY INCLUDED)
+  const systemPrompt = `
+You are CC-AI, a smart, friendly, and natural AI assistant.
 
 STYLE:
-- Talk like a real human friend 😄
-- Match user's language (Khmer ↔ English)
-- Use emojis naturally (🔥😎💡)
-- Never sound robotic
+- Talk like ChatGPT: clear, helpful, natural
+- Not robotic, not overly slangy
+- Friendly but not cringe
+- Use emojis only when it feels right
 
 BEHAVIOR:
-- Simple question → short answer
-- Hard question → clear + structured answer
-- Think step-by-step for complex tasks
+- Give clear, structured answers
+- Use bullet points when helpful
+- Explain simply first, then deeper if needed
+- Avoid unnecessary filler words
 
-SPECIAL:
-- If asked "who is cc-ai":
-  "cc-ai is your smart AI companion — here to help you learn, create, and figure things out anytime. 😎"
+RULES:
+- Match user's language
+- No weird phrases like "gf"
+- No nonsense outputs
 
-CREATOR:
-Chorm Chhaiya (Yaxy)
+GOAL:
+- Feel like a high-quality AI (like ChatGPT)
 `;
 
-  const limitedMessages = messages.slice(-12);
-
-  // =========================
-  // 🧠 GEMINI (SMART BRAIN)
-  // =========================
+  // =======================
+  // 🧠 GEMINI (SMART)
+  // =======================
   async function useGemini() {
     const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [
             {
-              role: "user",
-              parts: [{ text: systemPrompt + "\n\n" + lastMessage }]
+              parts: [
+                {
+                  text:
+                    systemPrompt +
+                    "\n\nConversation:\n" +
+                    history.map(m => `${m.role}: ${m.content}`).join("\n") +
+                    "\nassistant:"
+                }
+              ]
             }
           ]
         })
@@ -71,31 +75,29 @@ Chorm Chhaiya (Yaxy)
     );
 
     const data = await r.json();
+    console.log("Gemini:", data);
 
-console.log("Gemini response:", data);
-if (!r.ok) {
-  throw new Error(JSON.stringify(data));
-}
-
-    const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "⚠️ Gemini failed";
+    if (!r.ok) {
+      throw new Error(JSON.stringify(data));
+    }
 
     return {
       choices: [
         {
           message: {
             role: "assistant",
-            content: text
+            content:
+              data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+              "⚠️ Gemini empty response"
           }
         }
       ]
     };
   }
 
-  // =========================
-  // ⚡ GROQ (FAST BRAIN)
-  // =========================
+  // =======================
+  // ⚡ GROQ (FAST)
+  // =======================
   async function useGroq() {
     const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
@@ -107,7 +109,7 @@ if (!r.ok) {
         model: "llama-3.3-70b-versatile",
         messages: [
           { role: "system", content: systemPrompt },
-          ...limitedMessages
+          ...history
         ],
         temperature: 0.7,
         max_tokens: 4096
@@ -126,35 +128,33 @@ if (!r.ok) {
     return data;
   }
 
-  // =========================
-  // 🔀 HYBRID LOGIC
-  // =========================
+  // =======================
+  // 🔀 HYBRID SYSTEM
+  // =======================
   try {
     let result;
 
-    if (isHardQuestion) {
-      // 🧠 Try Gemini first
+    if (isHard) {
       try {
         result = await useGemini();
       } catch (e) {
-        // fallback to Groq
+        console.log("Gemini failed → using Groq");
         result = await useGroq();
       }
     } else {
-      // ⚡ Try Groq first
       try {
         result = await useGroq();
       } catch (e) {
-        // fallback to Gemini
+        console.log("Groq failed → using Gemini");
         result = await useGemini();
       }
     }
 
     return res.status(200).json(result);
 
-  } catch (error) {
+  } catch (err) {
     return res.status(500).json({
-      error: "AI is tired 😴 try again later!"
+      error: "AI is tired 😴 try again later"
     });
   }
 }
