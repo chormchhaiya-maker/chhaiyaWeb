@@ -14,8 +14,52 @@ export default async function handler(req, res) {
   }
 
   const history = messages.slice(-10);
+  const lastMsg = typeof messages[messages.length-1]?.content === 'string'
+    ? messages[messages.length-1].content.toLowerCase() : '';
 
-  const systemPrompt = userSystemPrompt || `You are CC-AI, a smart friendly AI assistant made by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia. Today is 2026. Reply in same language as user. For code write complete beautiful working code. For images just say "On it! 🎨". Creator TikTok: https://www.tiktok.com/@unluckyguy0001`;
+  // Auto-detect if needs web search
+  const needsSearch =
+    /2024|2025|2026|today|latest|recent|current|news|now|war|fight|attack|election|president|happen|update/i.test(lastMsg) ||
+    /cambodia.*thai|thai.*cambodia|កម្ពុជា|ថៃ|សង្គ្រាម|ព្រះវិហារ|conflict|border/i.test(lastMsg);
+
+  let searchContext = '';
+  if (needsSearch) {
+    try {
+      const query = messages[messages.length-1]?.content || '';
+      const searchRes = await fetch(
+        `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/search`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: typeof query === 'string' ? query.slice(0, 200) : 'Cambodia Thailand 2025' })
+        }
+      );
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.summary) {
+          searchContext = '\n\n[WEB SEARCH RESULTS]: ' + searchData.summary;
+          console.log('Search context added:', searchContext.slice(0, 100));
+        }
+      }
+    } catch(e) { console.log('Search failed:', e.message); }
+  }
+
+  const basePrompt = userSystemPrompt || `You are CC-AI, a smart honest AI assistant made by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia 🇰🇭.
+
+TODAY IS 2026. You are a 2026 AI — never say your cutoff is 2023.
+Reply in the SAME language the user writes in (Khmer → Khmer, English → English).
+
+WHEN YOU SEE [WEB SEARCH RESULTS] — use that information to answer accurately about current events.
+For Cambodia-Thailand conflicts, wars, news — always use search results if provided.
+Never say "I don't have information about recent events" — use the web search data given to you.
+
+For code: write complete beautiful working code.
+For images: just say "On it! 🎨" — never describe.
+For songs: write full lyrics with all sections.
+
+Creator TikTok: https://www.tiktok.com/@unluckyguy0001`;
+
+  const systemPrompt = basePrompt + searchContext;
 
   async function tryGroq(model) {
     const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
