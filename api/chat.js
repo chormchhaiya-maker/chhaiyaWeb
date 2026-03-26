@@ -145,7 +145,7 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
     if (hasImage) return res.status(200).json(await useVision());
 
     // Hard questions: Gemini first, Groq fallback
-    if (isHard && process.env.GEMINI_API_KEY) {
+    if (isHard && process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 10) {
       try { return res.status(200).json(await useGemini()); }
       catch(e) { console.log('Gemini failed:', e.message); }
     }
@@ -158,7 +158,7 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
       catch(e2) {
         console.log('Groq 8b failed:', e2.message);
         // Try Gemini as fallback for simple questions too
-        if (process.env.GEMINI_API_KEY) {
+        if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.length > 10) {
           try { return res.status(200).json(await useGemini()); }
           catch(e3) { console.log('Gemini fallback failed:', e3.message); }
         }
@@ -169,6 +169,7 @@ CREATOR: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
     return res.status(200).json(await useCloudflare());
 
   } catch(err) {
-    return res.status(500).json({ error: 'All AI models unavailable. Please try again! ⏳' });
+    console.log('Final error:', err.message);
+    return res.status(200).json({ choices: [{ message: { role: 'assistant', content: 'Sorry, I am having trouble right now. Please try again in a moment! ⏳' } }] });
   }
 }
