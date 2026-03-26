@@ -2,8 +2,11 @@
 import axios from "axios";
 
 export default async function handler(req, res) {
-  const API_KEY =process.env.NEWSAPI_KEY;
-  const url = `https://newsapi.org/v2/top-headlines?language=en&pageSize=5&apiKey=${API_KEY}`;
+  const API_KEY = process.env.NEWSAPI_KEY;
+  const query = req.query.q || ""; // get optional search term from URL
+  const url = query
+    ? `https://newsapi.org/v2/everything?q=${encodeURIComponent(query)}&language=en&pageSize=5&sortBy=publishedAt&apiKey=${API_KEY}`
+    : `https://newsapi.org/v2/top-headlines?language=en&pageSize=5&apiKey=${API_KEY}`;
 
   try {
     const response = await axios.get(url);
