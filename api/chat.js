@@ -7,7 +7,6 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const messages = req.body?.messages;
-  const hasImage = req.body?.hasImage || false;
   const userSystemPrompt = req.body?.systemPrompt;
 
   if (!messages || !Array.isArray(messages)) {
@@ -31,7 +30,6 @@ export default async function handler(req, res) {
 
   // --- Fetch web search and news if needed ---
   if (needsSearch) {
-    // 🔍 Web search
     try {
       const query = messages[messages.length - 1]?.content || 'world news';
       const searchRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/search`, {
@@ -49,7 +47,6 @@ export default async function handler(req, res) {
       console.log('Search fetch failed:', e.message);
     }
 
-    // 📰 News fetch
     try {
       const newsRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/news`);
       if (newsRes.ok) {
@@ -69,9 +66,9 @@ export default async function handler(req, res) {
   // --- System prompt ---
   const basePrompt = userSystemPrompt || `You are CC-AI, a smart honest AI assistant.
 TODAY IS 2026.
-You can provide historical context for years before 2026 if available from search or news.
-Always include [WEB SEARCH RESULTS] or [LATEST NEWS] if present.
-Answer clearly and naturally.`;
+You can provide historical context for years before 2026 using your knowledge and public sources.
+If [WEB SEARCH RESULTS] or [LATEST NEWS] exist, always include them in your answer.
+Answer clearly, naturally, and do not refuse to answer historical questions unless completely impossible.`;
 
   const systemPrompt = basePrompt + searchContext;
 
