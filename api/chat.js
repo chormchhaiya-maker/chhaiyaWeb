@@ -1,6 +1,6 @@
-
+// api/chat.js
 export default async function handler(req, res) {
-  
+  // --- CORS headers ---
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  
+  // --- Keep last 10 messages and trim ---
   const history = messages.slice(-10).map(m => ({
     role: m.role || 'user',
     content: String(m.content).slice(0, 1000)
@@ -29,54 +29,41 @@ export default async function handler(req, res) {
 
   let searchContext = '';
 
-  // --- Fetch web search if needed ---
-  if (needsSearch) {
-    try {
-      const query = messages[messages.length - 1]?.content || 'world news';
-      const searchRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.slice(0, 200) })
-      });
-      if (searchRes.ok) {
-        const searchData = await searchRes.json();
-        if (searchData.summary) searchContext += '\n\n[WEB SEARCH RESULTS]: ' + searchData.summary;
-      } else {
-        console.log('Search API failed with status', searchRes.status);
-      }
-    } catch (e) {
-      console.log('Search fetch failed:', e.message);
-    }
-  }
+  // --- Determine search query ---
+  let searchQuery = needsSearch ? messages[messages.length-1]?.content || '' : '';
 
-  // --- Fetch latest news ---
+  // --- Fetch news with query ---
   try {
-    const newsRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/news`);
+    const newsRes = await fetch(
+      `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/news?q=${encodeURIComponent(searchQuery)}`
+    );
     if (newsRes.ok) {
       const newsData = await newsRes.json();
       if (newsData.articles?.length) {
         const formattedNews = newsData.articles
-          .map((a, i) => `${i + 1}. ${a.title}${a.description ? ' — ' + a.description : ''}`)
+          .map((a,i)=>`${i+1}. ${a.title}${a.description ? ' — ' + a.description : ''}`)
           .join('\n');
         searchContext += '\n\n[LATEST NEWS]:\n' + formattedNews;
       }
-    } else {
-      console.log('News API failed with status', newsRes.status);
     }
-  } catch (e) {
+  } catch(e) {
     console.log('News fetch failed:', e.message);
   }
+
+  // --- Optional: add web search here if you have a search API ---
+  // try { ... fetch /api/search ... append to searchContext ... } catch(e) { ... }
 
   // --- System prompt ---
   const basePrompt = userSystemPrompt || `You are CC-AI, a smart honest AI assistant.
 TODAY IS 2026.
-You can provide historical context for years before 2026 using your knowledge and public sources.
-If [WEB SEARCH RESULTS] or [LATEST NEWS] exist, always include them in your answer.
-Answer clearly, naturally, and accurately.`;
+You have access to [LATEST NEWS] and [WEB SEARCH RESULTS].
+Always include them when relevant.
+If there are no results for a specific question, provide historical context, summary, or educated explanation based on known public information.
+Answer clearly and naturally.`;
 
   const systemPrompt = basePrompt + searchContext;
 
-  // --- Check API key ---
+  // --- Check AI API key ---
   if (!process.env.GROQ_API_KEY) {
     console.error('GROQ_API_KEY missing!');
     return res.status(500).json({ error: 'Server misconfigured' });
