@@ -297,7 +297,18 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     </div>
       <input type="file" id="camera-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
       <input type="file" id="gallery-upload" accept="image/*" style="display:none" onchange="handlePhoto(this)"/>
-    <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
+    <div class="input-hint" id="input-hint">Press Enter to send · Shift+Enter for new line</div>
+    <script>
+    (function(){
+      const u = JSON.parse(localStorage.getItem('daily_usage')||'{}');
+      const today = new Date().toDateString();
+      if(u.date === today && u.chats > 0) {
+        const rem = 30 - (u.chats||0);
+        const hint = document.getElementById('input-hint');
+        if(hint && rem <= 10) hint.textContent = `Press Enter to send · ${rem} chats remaining today`;
+      }
+    })();
+    </script>
     <div style="text-align:center;padding:6px 0 2px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
       <span style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--text3);"><span style="color:#4ade80;">🔒</span> Secure & Private</span>
       <span style="color:var(--text3);font-size:0.7rem;">·</span>
@@ -863,6 +874,8 @@ async function sendMessage(){
   const input=document.getElementById('userInput');
   const text=input.value.trim();
   if(!text&&!pendingImage)return;
+  // Check daily chat limit
+  if(!pendingImage && !isImageRequest(text||'') && !checkChatLimit()) return;
   removeWelcome();
   const container=document.getElementById('messages');
   const userDiv=document.createElement('div');userDiv.className='msg user';
@@ -933,6 +946,7 @@ async function sendMessage(){
       setTimeout(() => openPreview(code, 'html', 'HTML Preview'), 400);
     }
     saveCurrentSession();
+    incrementChatUsage();
     if(autoSpeak){const cleanReply=cleanTextForSpeech(reply);if(isKhmerText(cleanReply)){speakTextRaw(cleanReply,'km-KH')}else{fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:cleanReply.slice(0,500)})}).then(r=>r.json()).then(d=>{if(d.audio){const a=new Audio(d.audio);a.play()}else speakTextRaw(cleanReply)}).catch(()=>speakTextRaw(cleanReply));}}
     if(typeof trackActivity==='function')trackActivity('chat');
   }catch(e){const t=document.getElementById('typing');if(t)t.remove();addMessage('ai',`❌ Error: ${e.message}`,'')}
@@ -1116,6 +1130,71 @@ function dismissInstall(){document.getElementById('install-banner').style.displa
 
 // Service worker
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}))}
+
+// ===================== CHAT LIMITS =====================
+const DAILY_CHAT_LIMIT = 30;   // free users: 30 chats/day
+const DAILY_IMAGE_LIMIT = 5;   // free users: 5 images/day
+
+function getChatUsage() {
+  const data = JSON.parse(localStorage.getItem('daily_usage') || '{}');
+  const today = new Date().toDateString();
+  if (data.date !== today) return { date: today, chats: 0, images: 0 };
+  return data;
+}
+
+function incrementChatUsage() {
+  const usage = getChatUsage();
+  usage.chats = (usage.chats || 0) + 1;
+  localStorage.setItem('daily_usage', JSON.stringify(usage));
+}
+
+function checkChatLimit() {
+  const usage = getChatUsage();
+  const remaining = DAILY_CHAT_LIMIT - (usage.chats || 0);
+  if (remaining <= 0) {
+    showLimitModal('chat');
+    return false;
+  }
+  if (remaining <= 5) {
+    showLimitWarning(remaining, 'chats');
+  }
+  return true;
+}
+
+function showLimitModal(type) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:600;display:flex;align-items:center;justify-content:center;';
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0,0,0,0);
+  const hours = Math.ceil((tomorrow - Date.now()) / 3600000);
+  overlay.innerHTML = `
+    <div style="background:#1a1a1a;border:1px solid rgba(124,111,255,0.3);border-radius:20px;padding:32px;max-width:340px;width:90%;text-align:center;">
+      <div style="font-size:3rem;margin-bottom:12px;">${type === 'chat' ? '💬' : '🎨'}</div>
+      <div style="font-family:'Playfair Display',serif;font-size:1.3rem;color:#fff;margin-bottom:8px;">Daily Limit Reached</div>
+      <div style="color:#888;font-size:0.88rem;margin-bottom:20px;line-height:1.6;">
+        You've used all your free ${type === 'chat' ? DAILY_CHAT_LIMIT + ' chats' : DAILY_IMAGE_LIMIT + ' images'} for today.<br>
+        Resets in <strong style="color:#fff;">${hours} hours</strong> ⏰
+      </div>
+      <div style="background:rgba(124,111,255,0.1);border:1px solid rgba(124,111,255,0.2);border-radius:12px;padding:14px;margin-bottom:16px;font-size:0.82rem;color:#a093f8;">
+        ☕ Support CC-AI to get more chats!<br>
+        <a href="https://ko-fi.com/chhaiyaweb" target="_blank" style="color:#ff6b9d;font-weight:700;">ko-fi.com/chhaiyaweb</a>
+      </div>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:10px 24px;cursor:pointer;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:600;">Got it!</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function showLimitWarning(remaining, type) {
+  const existing = document.getElementById('limit-warning');
+  if (existing) existing.remove();
+  const warn = document.createElement('div');
+  warn.id = 'limit-warning';
+  warn.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);background:#2a1f00;border:1px solid #f59e0b;color:#fbbf24;padding:8px 18px;border-radius:20px;font-size:0.78rem;z-index:400;font-family:Inter,sans-serif;';
+  warn.textContent = `⚠️ ${remaining} ${type} remaining today`;
+  document.body.appendChild(warn);
+  setTimeout(() => warn.remove(), 4000);
+}
 
 // ===================== VOICE INPUT =====================
 let isRecording = false;
