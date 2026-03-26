@@ -196,6 +196,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
       <span style="font-size:1rem;">👤</span>
       <span id="sidebar-username">Your Profile</span>
     </button>
+    <div style="font-size:0.7rem;color:var(--text3);font-family:'DM Mono',monospace;padding:4px 14px 8px;text-align:left;" id="sidebar-uid"></div>
   </div>
 </div>
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
@@ -296,7 +297,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     </div>
       <input type="file" id="camera-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
       <input type="file" id="gallery-upload" accept="image/*" style="display:none" onchange="handlePhoto(this)"/>
-    
+    <div class="input-hint">Press Enter to send · Shift+Enter for new line</div>
     <div style="text-align:center;padding:6px 0 2px;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;">
       <span style="display:flex;align-items:center;gap:4px;font-size:0.7rem;color:var(--text3);"><span style="color:#4ade80;">🔒</span> Secure & Private</span>
       <span style="color:var(--text3);font-size:0.7rem;">·</span>
@@ -372,6 +373,9 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     <button onclick="saveProfileUnique(this)" id="save-profile-btn" style="width:100%;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:12px;font-family:'Inter',sans-serif;font-size:0.95rem;font-weight:700;cursor:pointer;position:relative;overflow:hidden;transition:all 0.3s;">
       ✨ Sign In
     </button>
+    <div style="text-align:center;margin-top:12px;font-size:0.75rem;color:var(--text3);font-family:'DM Mono',monospace;">
+      Your Device ID: <span id="display-uid" style="color:var(--text2);font-weight:600;"></span>
+    </div>
     <style>
     @keyframes ripple{0%{transform:scale(0);opacity:1}100%{transform:scale(4);opacity:0}}
     @keyframes glowPulse{0%,100%{box-shadow:0 0 10px rgba(124,111,255,0.5)}50%{box-shadow:0 0 30px rgba(124,111,255,0.9),0 0 60px rgba(255,107,157,0.6)}}
@@ -622,6 +626,9 @@ For images: just say "On it! 🎨" — never describe images.
 Creator: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`;
 }
 function showProfile(required=false){
+  // Show device ID in modal
+  const displayEl = document.getElementById('display-uid');
+  if (displayEl) displayEl.textContent = getUserId().replace('UID-','#');
   const p=getProfile();
   document.getElementById('profile-name').value=p.name;
   document.getElementById('profile-lang').value=p.lang;
@@ -1788,13 +1795,18 @@ function closeAdPopup() {
 
 // ===================== USER ID =====================
 function getUserId(){
-  let id=localStorage.getItem('uid');
+  let id = localStorage.getItem('uid');
   if(!id){
-    // Create permanent device ID - never changes
-    id='dev_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);
-    localStorage.setItem('uid',id);
+    // Generate random 8-digit number ID - permanent, 1 per device
+    const randomId = Math.floor(10000000 + Math.random() * 90000000); // e.g. 47382910
+    id = 'UID-' + randomId;
+    localStorage.setItem('uid', id);
   }
   return id;
+}
+
+function getDisplayId(){
+  return getUserId().replace('UID-','#');
 }
 function trackVisit(){if(window._trackVisit)window._trackVisit()}
 function trackActivity(t){if(window._trackActivity)window._trackActivity(t)}
@@ -1816,6 +1828,13 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   else{const w=document.getElementById('welcome');if(w){const h2=w.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${p.name}! I'm CC-AI 🔥 `}}
   setTimeout(trackVisit,2000);
+  // Show device ID
+  const uid = getUserId();
+  const displayId = uid.replace('UID-','#');
+  const displayEl = document.getElementById('display-uid');
+  if (displayEl) displayEl.textContent = displayId;
+  const sidebarUid = document.getElementById('sidebar-uid');
+  if (sidebarUid) sidebarUid.textContent = 'ID: ' + displayId;
   // Load saved chat history
   loadChatHistory();
   // Init sidebar
