@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // CORS headers
+  // --- CORS headers ---
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -14,21 +14,24 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  // Limit to last 10 messages and trim content to avoid token overflow
+  // --- Keep last 10 messages and trim ---
   const history = messages.slice(-10).map(m => ({
     role: m.role || 'user',
     content: String(m.content).slice(0, 1000)
   }));
 
   const lastMsg = String(messages[messages.length - 1]?.content || '').toLowerCase();
+
+  // --- Determine if search/news is needed ---
   const needsSearch =
     /2024|2025|2026|today|latest|recent|current|news|now|war|fight|attack|election|president|happen|update/i.test(lastMsg) ||
     /cambodia.*thai|thai.*cambodia|កម្ពុជា|ថៃ|សង្គ្រាម|ព្រះវិហារ|conflict|border/i.test(lastMsg);
 
   let searchContext = '';
 
-  // 🔍 Web search and news
+  // --- Fetch web search and news if needed ---
   if (needsSearch) {
+    // 🔍 Web search
     try {
       const query = messages[messages.length - 1]?.content || 'world news';
       const searchRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/search`, {
@@ -46,6 +49,7 @@ export default async function handler(req, res) {
       console.log('Search fetch failed:', e.message);
     }
 
+    // 📰 News fetch
     try {
       const newsRes = await fetch(`${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/news`);
       if (newsRes.ok) {
@@ -62,22 +66,22 @@ export default async function handler(req, res) {
     }
   }
 
+  // --- System prompt ---
   const basePrompt = userSystemPrompt || `You are CC-AI, a smart honest AI assistant.
-
 TODAY IS 2026.
-Never say you don’t have real-time info.
-If [WEB SEARCH RESULTS] or [LATEST NEWS] exist, ALWAYS use them.
+You can provide historical context for years before 2026 if available from search or news.
+Always include [WEB SEARCH RESULTS] or [LATEST NEWS] if present.
 Answer clearly and naturally.`;
 
   const systemPrompt = basePrompt + searchContext;
 
-  // Ensure API key exists
+  // --- Check API key ---
   if (!process.env.GROQ_API_KEY) {
     console.error('GROQ_API_KEY missing!');
     return res.status(500).json({ error: 'Server misconfigured' });
   }
 
-  // Function to call Groq AI
+  // --- AI call function ---
   async function tryGroq(model) {
     const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
@@ -89,7 +93,7 @@ Answer clearly and naturally.`;
         model,
         messages: [{ role: 'system', content: systemPrompt }, ...history],
         temperature: 0.7,
-        max_tokens: 2000 // safer than 4096
+        max_tokens: 2000
       })
     });
     const data = await r.json();
@@ -97,6 +101,7 @@ Answer clearly and naturally.`;
     throw new Error('Groq returned no choices');
   }
 
+  // --- Try AI call ---
   try {
     const aiRes = await tryGroq('llama-3.3-70b-versatile');
     return res.status(200).json(aiRes);
@@ -104,7 +109,7 @@ Answer clearly and naturally.`;
     console.log('AI call failed:', e.message);
   }
 
-  // Fallback response
+  // --- Fallback response ---
   return res.status(200).json({
     choices: [{
       message: {
