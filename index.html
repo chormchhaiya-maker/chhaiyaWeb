@@ -289,7 +289,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
           <option value="zh-CN">🇨🇳 Chinese</option>
           <option value="ja-JP">🇯🇵 Japanese</option>
           <option value="ko-KR">🇰🇷 Korean</option>
-          <option value="th-TH">🇹🇭 Thai</option>
+         
           <option value="vi-VN">🇻🇳 Vietnamese</option>
         </select>
       </div>
@@ -368,7 +368,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
         <option value="Korean">🇰🇷 Korean</option>
         <option value="French">🇫🇷 French</option>
         <option value="Spanish">🇪🇸 Spanish</option>
-        <option value="Thai">🇹🇭 Thai</option>
+       
         <option value="Vietnamese">🇻🇳 Vietnamese</option>
       </select>
     </div>
@@ -419,7 +419,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
       <option value="Korean">🇰🇷 Korean</option>
       <option value="French">🇫🇷 French</option>
       <option value="Spanish">🇪🇸 Spanish</option>
-      <option value="Thai">🇹🇭 Thai</option>
+     
       <option value="Vietnamese">🇻🇳 Vietnamese</option>
     </select>
     <button onclick="doTranslate()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:10px;padding:0.6rem;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:600;cursor:pointer;">Translate</button>
@@ -1001,7 +1001,7 @@ function speakRaw(btn) {
 
   const isKhmer = isKhmerText(cleanText);
   const p = typeof getProfile === 'function' ? getProfile() : {};
-  const langMap2 = {'English':'en','Khmer':'km','Chinese':'zh','Japanese':'ja','Korean':'ko','French':'fr','Spanish':'es','Thai':'th','Vietnamese':'vi'};
+  const langMap2 = {'English':'en','Khmer':'km','Chinese':'zh','Japanese':'ja','Korean':'ko','French':'fr','Spanish':'es','Vietnamese':'vi'};
   const spkLang = isKhmer ? 'km' : (langMap2[p.lang] || 'en');
 
   btn.textContent = '⏳ Loading...';
@@ -1049,7 +1049,7 @@ function speakTextRaw(text, lang) {
   if (!clean) return;
 
   const p = typeof getProfile === 'function' ? getProfile() : {};
-  const langMap = {'English':'en-US','Khmer':'km-KH','Chinese':'zh-CN','Japanese':'ja-JP','Korean':'ko-KR','French':'fr-FR','Spanish':'es-ES','Thai':'th-TH','Vietnamese':'vi-VN'};
+  const langMap = {'English':'en-US','Khmer':'km-KH','Chinese':'zh-CN','Japanese':'ja-JP','Korean':'ko-KR','French':'fr-FR','Spanish':'es-ES','Vietnamese':'vi-VN'};
   const targetLang = lang || langMap[p.lang] || 'en-US';
 
   function doSpeak(voices) {
@@ -1226,7 +1226,6 @@ function toggleVoice() {
     'Korean': 'ko-KR',
     'French': 'fr-FR',
     'Spanish': 'es-ES',
-    'Thai': 'th-TH',
     'Vietnamese': 'vi-VN'
   };
   // Use selected language from dropdown, fallback to profile lang, default to Khmer
