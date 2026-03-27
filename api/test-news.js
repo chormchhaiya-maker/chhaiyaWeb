@@ -1,26 +1,28 @@
-// api/test-news.js
-// TEMPORARY DEBUG FILE — delete after testing
+// api/test-news.js — TEMPORARY DEBUG FILE, delete after testing
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  const GNEWS_KEY = process.env.GNEWS_KEY;
-
-  if (!GNEWS_KEY) {
-    return res.status(200).json({ status: 'ERROR', reason: 'GNEWS_KEY is missing from env vars' });
-  }
-
   try {
-    const url = `https://gnews.io/api/v4/search?q=Cambodia+Thailand+border+2025&lang=en&max=3&sortby=publishedAt&token=${GNEWS_KEY}`;
-    const r = await fetch(url);
-    const data = await r.json();
+    const query = encodeURIComponent('Cambodia Thailand border');
+    const url = `https://news.google.com/rss/search?q=${query}&hl=en&gl=US&ceid=US:en`;
+
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CC-AI/1.0)' }
+    });
+
+    const xml = await r.text();
+
+    // Simple parse — count items and grab first title
+    const items = xml.match(/<item>/g) || [];
+    const firstTitle = xml.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/)?.[1] ||
+                       xml.match(/<title>(.*?)<\/title>/g)?.[1] || 'none';
 
     return res.status(200).json({
-      status: r.ok ? 'OK' : 'FETCH_FAILED',
+      status: r.ok ? 'OK' : 'FAILED',
       httpStatus: r.status,
-      totalArticles: data.totalArticles || 0,
-      articleCount: data.articles?.length || 0,
-      firstArticle: data.articles?.[0] || null,
-      rawError: data.errors || null,
+      articleCount: items.length,
+      firstTitle,
+      rssWorking: items.length > 0
     });
   } catch (e) {
     return res.status(200).json({ status: 'EXCEPTION', error: e.message });
