@@ -21,15 +21,15 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
 
 .btn-group button {
   margin-left: 8px;
-  background: rgba(124,111,255,0.1); 
-  border: 1px solid rgba(124,111,255,0.3); 
-  color: #a093f8; 
-  border-radius: 8px; 
-  padding: 6px 14px; 
-  cursor: pointer; 
+  background: rgba(124,111,255,0.1);
+  border: 1px solid rgba(124,111,255,0.3);
+  color: #a093f8;
+  border-radius: 8px;
+  padding: 6px 14px;
+  cursor: pointer;
   font-size: 0.82rem;
 }
-.logout { background: rgba(255,100,100,0.1); border: 1px solid rgba(255,100,100,0.3); color: #f87171; }
+.logout { background: rgba(255,100,100,0.1) !important; border: 1px solid rgba(255,100,100,0.3) !important; color: #f87171 !important; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-bottom: 28px; }
 .stat-card { background: #13131a; border: 1px solid rgba(124,111,255,0.2); border-radius: 16px; padding: 20px; text-align: center; }
@@ -39,39 +39,68 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
 .section { background: #13131a; border: 1px solid rgba(124,111,255,0.2); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
 .section h3 { color: #9b97c0; margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; font-size: 0.78rem; }
 
-.user-row { 
-  display: flex; 
-  align-items: center; 
-  justify-content: space-between; 
-  padding: 12px 0; 
-  border-bottom: 1px solid rgba(255,255,255,0.05); 
-  font-size: 0.9rem; 
+.user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.9rem;
+  gap: 12px;
 }
 .user-row:last-child { border-bottom: none; }
 
-.user-name { 
-  color: #f0eeff; 
-  font-weight: 600; 
-  font-size: 1rem;
+.user-info { flex: 1; min-width: 0; }
+.user-name { color: #f0eeff; font-weight: 600; font-size: 1rem; }
+.user-uid {
+  font-size: 0.72rem;
+  color: #555;
+  margin-top: 2px;
+  font-family: monospace;
+  word-break: break-all;
 }
-.user-id { 
-  font-size: 0.78rem; 
-  color: #777; 
-  margin-left: 10px;
-}
-.user-meta { color: #9b97c0; font-size: 0.82rem; margin-top: 2px; }
+.user-meta { color: #9b97c0; font-size: 0.82rem; margin-top: 3px; }
 
-.badge { 
-  background: rgba(124,111,255,0.2); 
-  color: #a093f8; 
-  border-radius: 20px; 
-  padding: 3px 10px; 
-  font-size: 0.78rem; 
-  margin-left: 6px;
+.badge {
+  background: rgba(124,111,255,0.2);
+  color: #a093f8;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 .badge.green { background: rgba(74,222,128,0.15); color: #4ade80; }
 
+/* Delete button per user */
+.delete-btn {
+  background: rgba(255,80,80,0.1);
+  border: 1px solid rgba(255,80,80,0.3);
+  color: #f87171;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.delete-btn:hover { background: rgba(255,80,80,0.25); }
+
+.right-col { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
 .loading { color: #9b97c0; font-size: 0.85rem; text-align: center; padding: 30px; }
+
+/* Search bar */
+.search-bar {
+  width: 100%;
+  background: #1c1c26;
+  border: 1px solid rgba(124,111,255,0.3);
+  border-radius: 10px;
+  padding: 8px 14px;
+  color: #f0eeff;
+  font-size: 0.9rem;
+  outline: none;
+  margin-bottom: 16px;
+}
 </style>
 </head>
 <body>
@@ -91,7 +120,7 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
   <div class="header">
     <h1>🛡️ CC-AI Admin</h1>
     <div class="btn-group">
-      <button onclick="makeNamesUnique()">🔧 Fix Duplicate Names</button>
+      <button onclick="makeNamesUnique()">🔧 Fix Duplicates</button>
       <button onclick="deleteAnonymous()">🗑️ Delete Anonymous</button>
       <button onclick="loadData()">🔄 Refresh</button>
       <button class="logout" onclick="logout()">Logout</button>
@@ -106,7 +135,8 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
   </div>
 
   <div class="section">
-    <h3>👥 All Users (One name per device)</h3>
+    <h3>👥 All Users</h3>
+    <input class="search-bar" id="search-input" placeholder="🔍 Search by name or ID..." oninput="filterUsers()"/>
     <div id="users-list"><div class="loading">Loading...</div></div>
   </div>
 </div>
@@ -129,6 +159,10 @@ const app = initializeApp({
 });
 
 const db = getDatabase(app);
+
+// Store all users globally for search filtering
+let allUsers = [];
+let allUserKeys = {}; // name -> firebase key mapping
 
 window.checkPwd = () => {
   const pwd = document.getElementById('pwd-input').value;
@@ -154,32 +188,90 @@ if (sessionStorage.getItem('admin_auth')) {
   document.getElementById('dashboard').style.display = 'block';
 }
 
+// ====================== DELETE SINGLE USER ======================
+window.deleteUser = async (firebaseKey, displayName) => {
+  if (!confirm(`Delete user "${displayName}"?\n\nThis will remove them from the database permanently.`)) return;
+  try {
+    await remove(ref(db, 'users/' + firebaseKey));
+    // Also remove their reserved username
+    const nameLower = displayName.toLowerCase().trim();
+    await remove(ref(db, 'usernames/' + nameLower)).catch(() => {});
+    loadData();
+  } catch(e) {
+    alert('Error deleting user: ' + e.message);
+  }
+};
+
+// ====================== SEARCH/FILTER ======================
+window.filterUsers = () => {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  const filtered = q
+    ? allUsers.filter(u =>
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.uid || '').toLowerCase().includes(q) ||
+        (u._firebaseKey || '').toLowerCase().includes(q)
+      )
+    : allUsers;
+  renderUsers(filtered);
+};
+
+// ====================== RENDER USERS ======================
+function renderUsers(users) {
+  const today = new Date().toDateString();
+  const usersList = document.getElementById('users-list');
+
+  if (users.length === 0) {
+    usersList.innerHTML = '<div class="loading">No users found.</div>';
+    return;
+  }
+
+  usersList.innerHTML = users.map(u => {
+    const time = u.lastSeen ? new Date(u.lastSeen).toLocaleString() : 'Unknown';
+    const isToday = u.date === today;
+    const displayName = u.name || 'Anonymous';
+
+    // Show the FULL uid (the actual user ID stored in Firebase)
+    // _firebaseKey is the database path key
+    const fullUid = u.uid || u._firebaseKey || 'no-id';
+    const firebaseKey = u._firebaseKey;
+
+    return `<div class="user-row" id="row-${firebaseKey}">
+      <div class="user-info">
+        <div class="user-name">${displayName}</div>
+        <div class="user-uid">ID: ${fullUid}</div>
+        <div class="user-meta">Last seen: ${time}</div>
+      </div>
+      <div class="right-col">
+        ${u.images ? `<span class="badge">🎨 ${u.images}</span>` : ''}
+        ${u.chats ? `<span class="badge">💬 ${u.chats}</span>` : ''}
+        <span class="badge ${isToday ? 'green' : ''}">${isToday ? '🟢 Today' : '⚪ Inactive'}</span>
+        <button class="delete-btn" onclick="deleteUser('${firebaseKey}', '${displayName.replace(/'/g, "\\'")}')">🗑️ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ====================== FIX DUPLICATE NAMES ======================
 window.makeNamesUnique = async () => {
   if (!confirm('This will keep ONLY ONE user per name and delete all duplicates.\n\nContinue?')) return;
-
   try {
     const snap = await get(ref(db, 'users'));
     const data = snap.val() || {};
     const seen = new Map();
     let deleted = 0;
 
-    for (const [uid, user] of Object.entries(data)) {
+    for (const [key, user] of Object.entries(data)) {
       let name = (user.name || 'Anonymous').toLowerCase().trim();
-      if (!name) name = 'anonymous';
-
       if (seen.has(name)) {
-        // Delete duplicate
-        await remove(ref(db, 'users/' + uid));
+        await remove(ref(db, 'users/' + key));
         deleted++;
       } else {
-        seen.set(name, uid);
-        // Reserve this name so no one else can use it
-        await set(ref(db, 'usernames/' + name), uid);
+        seen.set(name, key);
+        await set(ref(db, 'usernames/' + name), key);
       }
     }
 
-    alert(`✅ Done!\nDeleted ${deleted} duplicate users.\nNames are now unique.`);
+    alert(`✅ Done!\nDeleted ${deleted} duplicate users.`);
     loadData();
   } catch(e) {
     alert('Error: ' + e.message);
@@ -193,9 +285,9 @@ window.deleteAnonymous = async () => {
     const snap = await get(ref(db, 'users'));
     const data = snap.val() || {};
     let count = 0;
-    for (const [uid, u] of Object.entries(data)) {
+    for (const [key, u] of Object.entries(data)) {
       if (!u.name || u.name.toLowerCase() === 'anonymous') {
-        await remove(ref(db, 'users/' + uid));
+        await remove(ref(db, 'users/' + key));
         count++;
       }
     }
@@ -209,50 +301,31 @@ window.deleteAnonymous = async () => {
 // ====================== LOAD DATA ======================
 window.loadData = async () => {
   try {
-    const usersRef = ref(db, 'users');
-    const snap = await get(usersRef);
+    const snap = await get(ref(db, 'users'));
     const data = snap.val() || {};
-    const users = Object.values(data);
     const today = new Date().toDateString();
 
-    const totalUsers = users.length;
-    const activeToday = users.filter(u => u.date === today).length;
-    const totalImages = users.reduce((sum, u) => sum + (u.images || 0), 0);
-    const totalChats = users.reduce((sum, u) => sum + (u.chats || 0), 0);
+    // Attach firebase key to each user object so we can delete by key
+    allUsers = Object.entries(data).map(([key, u]) => ({
+      ...u,
+      _firebaseKey: key
+    }));
 
-    document.getElementById('stat-users').textContent = totalUsers;
-    document.getElementById('stat-today').textContent = activeToday;
-    document.getElementById('stat-images').textContent = totalImages;
-    document.getElementById('stat-chats').textContent = totalChats;
+    // Sort newest first
+    allUsers.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
 
-    const usersList = document.getElementById('users-list');
-    if (users.length === 0) {
-      usersList.innerHTML = '<div class="loading">No users yet — visit your AI to start tracking!</div>';
+    // Update stats
+    document.getElementById('stat-users').textContent = allUsers.length;
+    document.getElementById('stat-today').textContent = allUsers.filter(u => u.date === today).length;
+    document.getElementById('stat-images').textContent = allUsers.reduce((s, u) => s + (u.images || 0), 0);
+    document.getElementById('stat-chats').textContent = allUsers.reduce((s, u) => s + (u.chats || 0), 0);
+
+    if (allUsers.length === 0) {
+      document.getElementById('users-list').innerHTML = '<div class="loading">No users yet.</div>';
       return;
     }
 
-    // Sort by last seen (newest first)
-    users.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
-
-    usersList.innerHTML = users.map(u => {
-      const time = u.lastSeen ? new Date(u.lastSeen).toLocaleString() : 'Unknown';
-      const isToday = u.date === today;
-      const displayName = u.name || 'Anonymous';
-      const userId = u.uid ? u.uid.substring(0, 8) + '...' : 'no-id';
-
-      return `<div class="user-row">
-        <div>
-          <div class="user-name">${displayName} <span class="user-id">(${userId})</span></div>
-          <div class="user-meta">Last seen: ${time}</div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          ${u.images ? `<span class="badge">🎨 ${u.images}</span>` : ''}
-          ${u.chats ? `<span class="badge">💬 ${u.chats}</span>` : ''}
-          <span class="badge ${isToday ? 'green' : ''}">${isToday ? '🟢 Today' : '⚪ Inactive'}</span>
-        </div>
-      </div>`;
-    }).join('');
-
+    renderUsers(allUsers);
   } catch(e) {
     document.getElementById('users-list').innerHTML = `<div class="loading">❌ Error: ${e.message}</div>`;
   }
