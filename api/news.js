@@ -1,80 +1,71 @@
-// api/news.js
+// api/news.js — uses GNews.io (works on Vercel free plan)
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const NEWSAPI_KEY = process.env.NEWSAPI_KEY;
-  if (!NEWSAPI_KEY) {
-    console.error('NEWSAPI_KEY missing!');
-    return res.status(500).json({ error: 'Server misconfigured: missing NEWSAPI_KEY' });
+  const GNEWS_KEY = process.env.GNEWS_KEY;
+  if (!GNEWS_KEY) {
+    console.error('GNEWS_KEY missing!');
+    return res.status(200).json({ articles: [], error: 'Missing GNEWS_KEY' });
   }
 
   // Get query from request, default to Cambodia-Thailand if empty
   let q = (req.query?.q || '').trim();
-  if (!q || q.length < 3) {
-    q = 'Cambodia Thailand';
-  }
+  if (!q || q.length < 3) q = 'Cambodia Thailand';
 
-  // Boost Cambodia-Thailand queries with extra keywords for better coverage
+  // Detect Cambodia-Thailand topic
   const isCambodiaThaiQuery =
-    /cambodia|thailand|khmer|preah vihear|ta moan|hun manet|hun sen/i.test(q);
+    /cambodia|thailand|khmer|preah vihear|ta moan|hun manet|hun sen|border/i.test(q);
 
-  // NewsAPI supports AND with spaces, OR with OR keyword
+  // Build smarter query
   const finalQuery = isCambodiaThaiQuery
-    ? `${q} OR "Cambodia Thailand" OR "Preah Vihear" OR "Ta Moan"`
+    ? 'Cambodia Thailand border 2025'
     : q;
 
   // ============================================================
-  // --- Fetch from NewsAPI.org ---
+  // --- GNews API call ---
+  // GNews free plan: 100 requests/day, works from Vercel servers
   // ============================================================
   const params = new URLSearchParams({
     q: finalQuery,
-    language: 'en',          // English articles (best coverage)
-    sortBy: 'publishedAt',   // Most recent first
-    pageSize: '10',
-    apiKey: NEWSAPI_KEY,
+    lang: 'en',
+    country: 'any',
+    max: '10',
+    sortby: 'publishedAt',
+    token: GNEWS_KEY,
   });
 
-  // For Cambodia-Thailand: search from 2025-01-01 onwards to get 2025 events
-  if (isCambodiaThaiQuery) {
-    params.set('from', '2025-01-01');
-  }
-
   try {
-    const apiUrl = `https://newsapi.org/v2/everything?${params.toString()}`;
-    const newsRes = await fetch(apiUrl, {
-      headers: { 'User-Agent': 'CC-AI/1.0' }
-    });
+    const url = `https://gnews.io/api/v4/search?${params.toString()}`;
+    const r = await fetch(url);
 
-    if (!newsRes.ok) {
-      const errText = await newsRes.text();
-      console.error('NewsAPI error:', newsRes.status, errText);
-      return res.status(200).json({ articles: [], error: `NewsAPI returned ${newsRes.status}` });
+    if (!r.ok) {
+      const errText = await r.text();
+      console.error('GNews error:', r.status, errText);
+      return res.status(200).json({ articles: [], error: `GNews returned ${r.status}` });
     }
 
-    const data = await newsRes.json();
+    const data = await r.json();
 
-    if (data.status !== 'ok') {
-      console.error('NewsAPI bad status:', data);
-      return res.status(200).json({ articles: [], error: data.message || 'NewsAPI error' });
-    }
+    // Normalize to same shape as before so chat.js needs no changes
+    const articles = (data.articles || []).map(a => ({
+      title: a.title,
+      description: a.description,
+      url: a.url,
+      publishedAt: a.publishedAt,
+      source: { name: a.source?.name || 'Unknown' },
+    }));
 
-    // Filter out articles with "[Removed]" titles (deleted articles)
-    const clean = (data.articles || []).filter(
-      a => a.title && a.title !== '[Removed]' && a.url && !a.url.includes('removed')
-    );
-
-    // Return cleaned articles
     return res.status(200).json({
-      articles: clean,
-      totalResults: data.totalResults || 0,
-      query: finalQuery
+      articles,
+      totalResults: data.totalArticles || 0,
+      query: finalQuery,
     });
 
   } catch (e) {
-    console.error('NewsAPI fetch exception:', e.message);
+    console.error('GNews fetch exception:', e.message);
     return res.status(200).json({ articles: [], error: e.message });
   }
 }
