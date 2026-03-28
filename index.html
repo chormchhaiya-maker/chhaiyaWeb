@@ -798,7 +798,7 @@ function fallbackCopy(text,btn,label,ok){const ta=document.createElement('textar
 
 // Image detection
 function isImageRequest(text){const l=text.toLowerCase().trim();const avoid=['code','script','html','css','python','function','program','website','algorithm'];if(avoid.some(k=>l.includes(k)))return false;const triggers=['generate image','generate a image','generate an image','generate picture','create image','create a image','make image','draw ','paint ','sketch ','image of','picture of','photo of','show me a picture','visualize','create art','make art','/image','/img','/draw','imagine ','render '];return triggers.some(k=>l.includes(k))}
-function isImageEditRequest(text){const l=text.toLowerCase().trim();const notEdit=['generate image','generate a','create image','draw a','draw an'];if(notEdit.some(k=>l.includes(k)))return false;const triggers=['change background','remove background','change color','change the background','replace background','make background','background to','remove the background','change the outfit','change outfit','outfit to','change image','edit this image','edit the image','make it look','turn this into','convert this to','apply filter','make vintage','make anime','make cartoon','make sketch','make painting'];return triggers.some(k=>l.includes(k))}
+function isImageEditRequest(text){const l=text.toLowerCase().trim();const notEdit=['generate image','generate a','create image','draw a','draw an'];if(notEdit.some(k=>l.includes(k)))return false;const triggers=['change background','remove background','change color','change the background','replace background','make background','background to','remove the background','change the outfit','change outfit','outfit to','change image','edit this image','edit the image','make it look','turn this into','convert this to','apply filter','make vintage','make anime','make cartoon','make sketch','make painting','change this','change him','change her','change this guy','change this person','make him','make her','make this','turn him','turn her','turn this','convert him','convert her','transform this','transform him','transform her','change to','turn into','make into','edit photo','edit picture','change style','apply style','change look','change appearance'];return triggers.some(k=>l.includes(k))}
 
 // Image generation
 async function generateImage(prompt){
@@ -1622,10 +1622,12 @@ function newChat() {
 
 function saveCurrentSession() {
   if (messages.length === 0) return;
+  // Use first USER message as title, not AI response
   const firstUser = messages.find(m => m.role === 'user');
   let rawTitle = typeof firstUser?.content === 'string'
     ? firstUser.content
     : (firstUser?.content?.find?.(c => c.type === 'text')?.text || 'New chat');
+  // Clean and truncate title
   const title = rawTitle
     .replace(/generate image of /gi, '🎨 ')
     .replace(/\n/g, ' ')
@@ -1633,25 +1635,16 @@ function saveCurrentSession() {
     .slice(0, 45) || 'New chat';
   const session = {
     id: currentSessionId || 'session_' + Date.now(),
-    title,
+    title: title,
     messages: messages,
     time: Date.now()
   };
   const idx = chatSessions.findIndex(s => s.id === session.id);
   if (idx >= 0) chatSessions[idx] = session;
   else chatSessions.unshift(session);
+  // Keep max 30 sessions
   chatSessions = chatSessions.slice(0, 30);
-  try {
-    localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
-  } catch (e) {
-    chatSessions = chatSessions.slice(0, 15);
-    try {
-      localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
-    } catch (e2) {
-      chatSessions = [session];
-      try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e3) {}
-    }
-  }
+  try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e) { chatSessions = chatSessions.slice(0, 15); try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e2) { chatSessions = [session]; try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e3) {} } }
   renderChatHistory();
 }
 
