@@ -798,7 +798,7 @@ function fallbackCopy(text,btn,label,ok){const ta=document.createElement('textar
 
 // Image detection
 function isImageRequest(text){const l=text.toLowerCase().trim();const avoid=['code','script','html','css','python','function','program','website','algorithm'];if(avoid.some(k=>l.includes(k)))return false;const triggers=['generate image','generate a image','generate an image','generate picture','create image','create a image','make image','draw ','paint ','sketch ','image of','picture of','photo of','show me a picture','visualize','create art','make art','/image','/img','/draw','imagine ','render '];return triggers.some(k=>l.includes(k))}
-function isImageEditRequest(text){const l=text.toLowerCase().trim();const notEdit=['generate image','generate a','create image','draw a','draw an'];if(notEdit.some(k=>l.includes(k)))return false;const triggers=['change background','remove background','change color','change the background','replace background','make background','background to','remove the background','change the outfit','change outfit','outfit to','change image','edit this image','edit the image','make it look','turn this into','convert this to','apply filter','make vintage','make anime','make cartoon','make sketch','make painting','change this','change him','change her','change this guy','change this person','make him','make her','make this','turn him','turn her','turn this','convert him','convert her','transform this','transform him','transform her','change to','turn into','make into','edit photo','edit picture','change style','apply style','change look','change appearance'];return triggers.some(k=>l.includes(k))}
+function isImageEditRequest(text){const l=text.toLowerCase().trim();const notEdit=['generate image','generate a','create image','draw a','draw an'];if(notEdit.some(k=>l.includes(k)))return false;const triggers=['change background','remove background','change color','change the background','replace background','make background','background to','remove the background','change the outfit','change outfit','outfit to','change image','edit this image','edit the image','make it look','turn this into','convert this to','apply filter','make vintage','make anime','make cartoon','make sketch','make painting'];return triggers.some(k=>l.includes(k))}
 
 // Image generation
 async function generateImage(prompt){
@@ -923,7 +923,7 @@ async function sendMessage(){
   // Image generate
   if(!pendingImage&&isImageRequest(text)){
     if(getImgCount()>=IMG_LIMIT){const d=document.createElement('div');d.className='msg ai';const b=document.createElement('div');b.className='bubble';b.innerHTML=`⚠️ You've used all <strong>${IMG_LIMIT} free image generations</strong> for today!<br><small style="color:var(--text3)">Come back tomorrow 😊</small>`;d.innerHTML='<div class="avatar">🤖</div>';d.appendChild(b);container.appendChild(d);container.scrollTop=container.scrollHeight;isLoading=false;document.getElementById('sendBtn').disabled=false;return}
-    let cleanPrompt=text.replace(/^(can you |please |hey |chhaiya |generate |draw |create |make |show me |image of |picture of |photo of |visualize )/gi,'').replace(/generate image\??/gi,'').replace(/[?]/g,'').trim();
+    let cleanPrompt=text.replace(/^(can you |please |hey |chhaiya |generate |draw |create |make |show me |image of |picture of |photo of |visualize )/gi,'').replace(/generate image\??/gi,'').replace(/[?]/g,'').trim();cleanPrompt=cleanPrompt+', highly detailed, photorealistic, no text, no watermark, no logo, no words, clean image, 4k quality';
     if(!cleanPrompt||cleanPrompt.length<3)cleanPrompt='a beautiful fantasy landscape';
     isLoading=false;document.getElementById('sendBtn').disabled=false;
     await generateImage(cleanPrompt);document.getElementById('userInput').focus();return;
@@ -1348,7 +1348,15 @@ let voiceLang = 'km-KH';
 function setVoiceLang(lang) {
   voiceLang = lang;
   document.getElementById('voiceLangSelect').style.display = 'none';
+  const labels = {'km-KH':'🇰🇭 KH','en-US':'🇺🇸 EN','zh-CN':'🇨🇳 CN','ja-JP':'🇯🇵 JP','ko-KR':'🇰🇷 KR','fr-FR':'🇫🇷 FR','es-ES':'🇪🇸 ES','vi-VN':'🇻🇳 VN'};
+  const lbl = document.getElementById('voice-lang-label');
+  if(lbl) lbl.textContent = labels[lang] || lang;
   document.getElementById('voiceBtn').title = 'Speaking: ' + lang;
+}
+
+
+
+
 }
 
 // Long press mic to show language picker
@@ -1644,7 +1652,7 @@ function saveCurrentSession() {
   else chatSessions.unshift(session);
   // Keep max 30 sessions
   chatSessions = chatSessions.slice(0, 30);
-  try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e) { chatSessions = chatSessions.slice(0, 15); try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e2) { chatSessions = [session]; try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e3) {} } }
+  localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
   renderChatHistory();
 }
 
