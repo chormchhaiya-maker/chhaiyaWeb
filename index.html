@@ -1622,12 +1622,10 @@ function newChat() {
 
 function saveCurrentSession() {
   if (messages.length === 0) return;
-  // Use first USER message as title, not AI response
   const firstUser = messages.find(m => m.role === 'user');
   let rawTitle = typeof firstUser?.content === 'string'
     ? firstUser.content
     : (firstUser?.content?.find?.(c => c.type === 'text')?.text || 'New chat');
-  // Clean and truncate title
   const title = rawTitle
     .replace(/generate image of /gi, '🎨 ')
     .replace(/\n/g, ' ')
@@ -1635,16 +1633,25 @@ function saveCurrentSession() {
     .slice(0, 45) || 'New chat';
   const session = {
     id: currentSessionId || 'session_' + Date.now(),
-    title: title,
+    title,
     messages: messages,
     time: Date.now()
   };
   const idx = chatSessions.findIndex(s => s.id === session.id);
   if (idx >= 0) chatSessions[idx] = session;
   else chatSessions.unshift(session);
-  // Keep max 30 sessions
   chatSessions = chatSessions.slice(0, 30);
-  localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
+  try {
+    localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
+  } catch (e) {
+    chatSessions = chatSessions.slice(0, 15);
+    try {
+      localStorage.setItem('chat_sessions', JSON.stringify(chatSessions));
+    } catch (e2) {
+      chatSessions = [session];
+      try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e3) {}
+    }
+  }
   renderChatHistory();
 }
 
