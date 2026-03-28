@@ -8,40 +8,90 @@ export default async function handler(req, res) {
 
   const messages = req.body?.messages;
   const userSystemPrompt = req.body?.systemPrompt;
+  const hasImage = req.body?.hasImage || false;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  const history = messages.slice(-10).map(m => ({
-    role: m.role || 'user',
-    content: String(m.content).slice(0, 1500)
-  }));
-
-  const lastMsg = String(messages[messages.length - 1]?.content || '');
-  const lastMsgLower = lastMsg.toLowerCase();
+  // ============================================================
+  // VISION vs TEXT routing
+  // If the message contains an image, use vision model
+  // ============================================================
+  const lastMsg = messages[messages.length - 1];
+  const isVisionRequest = hasImage ||
+    (Array.isArray(lastMsg?.content) &&
+     lastMsg.content.some(c => c.type === 'image_url'));
 
   // ============================================================
-  // SMART QUERY EXTRACTION
+  // HISTORY — trim and handle image content properly
+  // For vision: only keep last message with image (Groq vision limit)
+  // For text: keep last 10 messages
+  // ============================================================
+  let history;
+
+  if (isVisionRequest) {
+    // For vision requests: send only the last message to stay within limits
+    // Strip images from older messages to avoid token overflow
+    history = messages.slice(-5).map((m, i, arr) => {
+      if (i < arr.length - 1 && Array.isArray(m.content)) {
+        // Remove image from older messages, keep only text
+        const textOnly = m.content.find(c => c.type === 'text')?.text || '';
+        return { role: m.role, content: textOnly };
+      }
+      // For the last message, validate image format
+      if (Array.isArray(m.content)) {
+        const parts = m.content.map(c => {
+          if (c.type === 'image_url') {
+            // Ensure base64 image is properly formatted
+            const url = c.image_url?.url || '';
+            if (url.startsWith('data:')) {
+              return {
+                type: 'image_url',
+                image_url: { url }
+              };
+            }
+          }
+          return c;
+        });
+        return { role: m.role, content: parts };
+      }
+      return { role: m.role, content: String(m.content).slice(0, 2000) };
+    });
+  } else {
+    // Normal text chat
+    history = messages.slice(-10).map(m => ({
+      role: m.role || 'user',
+      content: String(m.content).slice(0, 1500)
+    }));
+  }
+
+  const lastMsgText = (() => {
+    if (Array.isArray(lastMsg?.content)) {
+      return lastMsg.content.find(c => c.type === 'text')?.text || '';
+    }
+    return String(lastMsg?.content || '');
+  })();
+  const lastMsgLower = lastMsgText.toLowerCase();
+
+  // ============================================================
+  // SMART QUERY EXTRACTION (for news search)
   // ============================================================
   function extractSearchQuery(text) {
     if (/cambodia.*thai|thai.*cambodia|ព្រះវិហារ|preah vihear|ta moan/i.test(text) ||
         /សង្គ្រាម|border.*conflict|conflict.*border/i.test(text)) {
       return 'Cambodia Thailand border conflict';
     }
-
     const khmerMap = {
       'សង្គ្រាម': 'war conflict', 'ព្រះវិហារ': 'Preah Vihear',
       'កម្ពុជា': 'Cambodia', 'ថៃ': 'Thailand', 'ព័ត៌មាន': 'news',
       'យោធា': 'military', 'ព្រំដែន': 'border', 'ការវាយប្រហារ': 'attack',
       'រដ្ឋាភិបាល': 'government', 'ការបោះឆ្នោត': 'election',
     };
-
     let translated = text;
     for (const [kh, en] of Object.entries(khmerMap)) {
       translated = translated.replace(new RegExp(kh, 'g'), en);
     }
-
     const stopWords = /\b(what|is|are|the|a|an|do|did|does|has|have|how|why|when|where|who|tell|me|about|please|can|you|i|my|was|were|be|been|of|in|on|at|to|for|with|by|from|and|or|but|so|if|not|no)\b/g;
     const cleaned = translated.replace(stopWords, ' ').replace(/\s+/g, ' ').trim();
     const words = cleaned.split(' ').filter(w => w.length > 2).slice(0, 6);
@@ -49,26 +99,27 @@ export default async function handler(req, res) {
   }
 
   // ============================================================
-  // DETECT if news search needed
+  // DETECT if news search needed (skip for image requests)
   // ============================================================
-  const needsSearch =
+  const needsSearch = !isVisionRequest && (
     /2024|2025|2026|today|latest|recent|current|now|this year|this week/i.test(lastMsgLower) ||
     /news|update|happen|war|fight|attack|conflict|election|president|minister|protest|crisis|border|military|army|soldier|shoot|kill|dead|peace|deal|treaty/i.test(lastMsgLower) ||
     /cambodia|thailand|khmer|phnom penh|bangkok|preah vihear|ta moan|hun manet|hun sen/i.test(lastMsgLower) ||
-    /[\u1780-\u17FF]/.test(lastMsg);
+    /[\u1780-\u17FF]/.test(lastMsgText)
+  );
 
   const isCambodiaThaiTopic =
     /cambodia|thailand|khmer|preah vihear|ta moan|border|hun manet|hun sen/i.test(lastMsgLower) ||
-    /កម្ពុជា|ថៃ|ព្រះវិហារ|សង្គ្រាម|ព្រំដែន/.test(lastMsg);
+    /កម្ពុជា|ថៃ|ព្រះវិហារ|សង្គ្រាម|ព្រំដែន/.test(lastMsgText);
 
   // ============================================================
-  // FETCH LIVE NEWS
+  // FETCH LIVE NEWS (only for text chat)
   // ============================================================
   let liveArticles = [];
 
   if (needsSearch) {
     const baseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
-    const searchQuery = extractSearchQuery(lastMsg);
+    const searchQuery = extractSearchQuery(lastMsgText);
 
     const fetchNews = async (query) => {
       try {
@@ -88,8 +139,6 @@ export default async function handler(req, res) {
     }
 
     const results = await Promise.all(queries.map(fetchNews));
-
-    // Deduplicate
     const seen = new Set();
     liveArticles = results.flat().filter(a => {
       if (!a.title || seen.has(a.title)) return false;
@@ -99,8 +148,7 @@ export default async function handler(req, res) {
   }
 
   // ============================================================
-  // FORMAT LIVE ARTICLES — with source, date, URL
-  // This is what the AI will directly read and quote from
+  // FORMAT LIVE ARTICLES for system prompt
   // ============================================================
   let newsBlock = '';
 
@@ -109,7 +157,7 @@ export default async function handler(req, res) {
       const date = a.publishedAt ? a.publishedAt.slice(0, 10) : 'unknown date';
       const source = a.source?.name || 'Unknown source';
       const url = a.url || '';
-      const desc = a.description ? `\n   Summary: ${a.description.slice(0, 250)}` : '';
+      const desc = a.description ? `\n   Summary: ${a.description.slice(0, 200)}` : '';
       return `[Article ${i + 1}]
    Title: ${a.title}
    Source: ${source}
@@ -122,22 +170,15 @@ LIVE NEWS ARTICLES (fetched right now):
 ============================
 ${formatted}
 ============================
-IMPORTANT: You MUST use these articles in your answer. For each relevant article you cite, you MUST show:
-- The article title or key fact
-- Source name in bold (e.g. **Reuters**)
+IMPORTANT: Use these articles in your answer. For each article you cite, show:
+- Source in bold (e.g. **Reuters**)
 - Date (e.g. 2025-08-14)
-- The full URL as a clickable link
-Format example:
-📰 **Reuters** | 2025-08-14
-"Cambodia and Thailand exchange fire near Preah Vihear"
-🔗 https://reuters.com/article/...
+- URL as a link on its own line starting with 🔗
 ============================`;
-  } else {
-    newsBlock = `\n\n[LIVE NEWS]: No live articles fetched right now. Use the background knowledge below and clearly tell the user you are using background knowledge, not live news.`;
   }
 
   // ============================================================
-  // CAMBODIA-THAILAND BACKGROUND KNOWLEDGE (always injected)
+  // CAMBODIA-THAILAND BACKGROUND KNOWLEDGE
   // ============================================================
   const cambodiaThaiBackground = isCambodiaThaiTopic ? `
 ============================
@@ -150,35 +191,35 @@ CAMBODIA-THAILAND BACKGROUND KNOWLEDGE:
 - Thailand blamed Cambodia for initiating; Cambodia denied this.
 - The Preah Vihear temple was awarded to Cambodia by the ICJ in 1962, but surrounding land remains disputed.
 - Hun Manet became Cambodia's PM in August 2023, succeeding Hun Sen.
-============================
-NOTE: If live articles above are available, prioritize them over this background knowledge for specific facts.
 ============================` : '';
 
   // ============================================================
   // SYSTEM PROMPT
   // ============================================================
-  const basePrompt = userSystemPrompt || `You are CC-AI, a smart and honest AI assistant. Today's date is 2026.
+  const visionSystemPrompt = `You are CC-AI, a smart AI assistant with vision capabilities made by Chorm Chhaiya (Yaxy).
 
-LANGUAGE RULE:
-- If the user writes in Khmer (ភាសាខ្មែរ), reply fully in Khmer.
-- If the user writes in English, reply in English.
-- If mixed, match the dominant language.
+When given an image:
+- Describe it clearly and in detail
+- If it contains text (exam, worksheet, document, sign), READ and TRANSCRIBE all the text accurately
+- If it's a test or exercise, provide the ANSWERS with explanations
+- If it's a photo of a person or place, describe what you see
+- If the user asks a specific question about the image, answer that question directly
 
-CRITICAL ANSWER RULES:
-1. When LIVE NEWS ARTICLES are provided, you MUST use them. Do NOT ignore them.
-2. For every news article you reference, ALWAYS show:
-   - Source name in bold (e.g. **BBC**, **Reuters**)
-   - Date (e.g. 2025-08-03)
-   - Full URL as a link on its own line starting with 🔗
-3. Present multiple articles if available — give the user a full picture.
-4. NEVER say "I don't have information" or "check a news source" — you have the articles, present them.
-5. After citing articles, add a short summary paragraph of what they collectively say.
-6. If only background knowledge is available (no live articles), say clearly: "Based on my background knowledge (not live news):" before answering.`;
+Reply in the SAME language the user writes in. If they write in Khmer, reply in Khmer.`;
 
-  const systemPrompt = basePrompt + cambodiaThaiBackground + newsBlock;
+  const textSystemPrompt = userSystemPrompt || `You are CC-AI, a smart friendly AI made by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia.
+
+Today is 2026. You are a 2026 AI. Never say cutoff is 2023.
+Reply in the SAME language the user writes in.
+Talk naturally like a real friend.
+NEVER say "I don't have information" — use the news articles provided.`;
+
+  const systemPrompt = isVisionRequest
+    ? visionSystemPrompt
+    : (textSystemPrompt + cambodiaThaiBackground + newsBlock);
 
   // ============================================================
-  // GROQ AI CALL
+  // GROQ API CALL
   // ============================================================
   if (!process.env.GROQ_API_KEY) {
     return res.status(500).json({ error: 'Server misconfigured: missing GROQ_API_KEY' });
@@ -194,20 +235,69 @@ CRITICAL ANSWER RULES:
       body: JSON.stringify({
         model,
         messages: [{ role: 'system', content: systemPrompt }, ...history],
-        temperature: 0.5,
+        temperature: 0.6,
         max_tokens: 2000
       })
     });
     const data = await r.json();
     if (data.choices?.[0]?.message?.content) return data;
-    throw new Error(`No choices from ${model}`);
+    throw new Error(`No choices from ${model}: ${JSON.stringify(data.error || '')}`);
   }
 
-  for (const model of ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'mixtral-8x7b-32768']) {
+  // Vision models (support images) vs text models
+  const visionModels = [
+    'meta-llama/llama-4-scout-17b-16e-instruct', // Groq's best vision model
+    'meta-llama/llama-4-maverick-17b-128e-instruct', // fallback vision
+  ];
+
+  const textModels = [
+    'llama-3.3-70b-versatile',
+    'llama3-70b-8192',
+    'mixtral-8x7b-32768'
+  ];
+
+  const modelsToTry = isVisionRequest ? visionModels : textModels;
+
+  for (const model of modelsToTry) {
     try {
-      return res.status(200).json(await tryGroq(model));
+      const aiRes = await tryGroq(model);
+      console.log(`Used model: ${model}, vision: ${isVisionRequest}`);
+      return res.status(200).json(aiRes);
     } catch (e) {
       console.log(`Model ${model} failed:`, e.message);
+    }
+  }
+
+  // If vision models all failed, try text models with description fallback
+  if (isVisionRequest) {
+    console.log('Vision models failed, falling back to text with notice');
+    for (const model of textModels) {
+      try {
+        const fallbackHistory = [{
+          role: 'user',
+          content: lastMsgText || 'The user sent an image but vision is temporarily unavailable.'
+        }];
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: 'You are CC-AI. Vision is temporarily unavailable. Tell the user politely that image reading is temporarily down and to try again in a moment.' },
+              ...fallbackHistory
+            ],
+            temperature: 0.5,
+            max_tokens: 200
+          })
+        });
+        const data = await r.json();
+        if (data.choices?.[0]?.message?.content) return res.status(200).json(data);
+      } catch (e) {
+        console.log(`Fallback model ${model} failed:`, e.message);
+      }
     }
   }
 
