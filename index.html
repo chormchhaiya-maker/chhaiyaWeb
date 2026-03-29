@@ -37,6 +37,14 @@ body.light .grid-overlay{opacity:0.15}
 @keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
 @keyframes glitch{0%,90%,100%{transform:translate(0)}92%{transform:translate(-2px,1px)}94%{transform:translate(2px,-1px)}96%{transform:translate(-1px,2px)}}
 @keyframes pulse{0%,100%{box-shadow:0 0 8px #4ade80}50%{box-shadow:0 0 16px #4ade80,0 0 30px #4ade80}}
+@keyframes streakPop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
+.streak-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#ff6b00,#ff9500);color:white;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;font-family:'DM Mono',monospace;animation:streakPop 0.4s ease forwards;}
+.rating-bar{display:flex;gap:6px;margin-top:8px;align-items:center;}
+.star-btn{background:none;border:none;font-size:1.2rem;cursor:pointer;transition:transform 0.15s;color:#555;}
+.star-btn:hover{transform:scale(1.3);}
+.star-btn.active{color:#f59e0b;}
+.feedback-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;}
+.feedback-box{background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:28px;width:90%;max-width:380px;text-align:center;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;height:100vh;height:-webkit-fill-available;display:flex;flex-direction:column;overflow:hidden;}
 #matrix-canvas{display:none}
 .grid-overlay{display:none}
@@ -245,7 +253,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     <div style="display:flex;align-items:center;gap:8px;">
       <button class="hdr-btn" onclick="newChat()" title="New chat">✏️</button>
       <button class="hdr-btn" onclick="showSettings()" title="Settings">⚙️</button>
-      <div class="status"><div class="status-dot"></div> Online</div>
+      <div class="status"><div class="status-dot"></div> Online <span id="header-streak"></span></div>
     </div>
   </div>
   <div class="messages" id="messages">
@@ -535,6 +543,164 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 
 // State
 let messages=[],isLoading=false,autoSpeak=false,pendingImage=null;
+
+// ===================== STREAK SYSTEM =====================
+function getStreak() {
+  try {
+    const s = JSON.parse(localStorage.getItem('streak_data') || '{}');
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    if (s.lastDate === today) return s.count || 1;
+    if (s.lastDate === yesterday) return s.count || 1;
+    return 0;
+  } catch(e) { return 0; }
+}
+
+function updateStreak() {
+  try {
+    const s = JSON.parse(localStorage.getItem('streak_data') || '{}');
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    let count = 1;
+    if (s.lastDate === today) return s.count; // already updated today
+    if (s.lastDate === yesterday) count = (s.count || 1) + 1; // continue streak
+    const newData = { count, lastDate: today, best: Math.max(count, s.best || 1) };
+    localStorage.setItem('streak_data', JSON.stringify(newData));
+    if (count > 1) showStreakToast(count);
+    return count;
+  } catch(e) { return 1; }
+}
+
+function showStreakToast(count) {
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;animation:streakPop 0.4s ease forwards;';
+  toast.innerHTML = `<div class="streak-badge">🔥 ${count} day streak! Keep it up!</div>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+function getStreakDisplay() {
+  const s = JSON.parse(localStorage.getItem('streak_data') || '{}');
+  const count = getStreak();
+  if (count === 0) return '';
+  return `<span class="streak-badge" style="animation:none;margin-left:8px;font-size:0.7rem;">🔥 ${count}d</span>`;
+}
+
+// ===================== RATING SYSTEM =====================
+function addRatingBar(bubble, messageIndex) {
+  const bar = document.createElement('div');
+  bar.className = 'rating-bar';
+  bar.innerHTML = `
+    <span style="font-size:0.72rem;color:var(--text3);">Rate:</span>
+    ${[1,2,3,4,5].map(i => `<button class="star-btn" onclick="rateMessage(${messageIndex},${i},this.parentElement)" title="${i} star">★</button>`).join('')}
+    <span id="rating-thanks-${messageIndex}" style="font-size:0.72rem;color:#4ade80;display:none;">Thanks! 🙏</span>`;
+  bubble.appendChild(bar);
+}
+
+function rateMessage(idx, stars, bar) {
+  // Save rating
+  try {
+    const ratings = JSON.parse(localStorage.getItem('msg_ratings') || '[]');
+    const msg = messages[idx];
+    const userMsg = messages[idx - 1];
+    ratings.push({
+      stars,
+      aiReply: (msg?.content || '').slice(0, 100),
+      userAsked: typeof userMsg?.content === 'string' ? userMsg.content.slice(0, 100) : '',
+      time: new Date().toISOString()
+    });
+    // Keep last 50 ratings
+    localStorage.setItem('msg_ratings', JSON.stringify(ratings.slice(-50)));
+    // Save to Firebase for admin to see
+    if (window.rtdb) {
+      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(({ ref, push }) => {
+        const uid = getUserId();
+        push(ref(window.rtdb, 'ratings'), {
+          uid, stars,
+          aiReply: (msg?.content || '').slice(0, 150),
+          userAsked: typeof userMsg?.content === 'string' ? userMsg.content.slice(0, 150) : '',
+          time: Date.now()
+        }).catch(() => {});
+      });
+    }
+  } catch(e) {}
+
+  // Update stars UI
+  const stars_btns = bar.querySelectorAll('.star-btn');
+  stars_btns.forEach((btn, i) => {
+    btn.classList.toggle('active', i < stars);
+    btn.onclick = null; // disable re-rating
+  });
+  const thanks = document.getElementById(`rating-thanks-${idx}`);
+  if (thanks) thanks.style.display = 'inline';
+}
+
+// ===================== FEEDBACK COLLECTOR =====================
+let chatCountSinceFeedback = parseInt(localStorage.getItem('chats_since_feedback') || '0');
+
+function checkFeedbackPrompt() {
+  chatCountSinceFeedback++;
+  localStorage.setItem('chats_since_feedback', chatCountSinceFeedback);
+  if (chatCountSinceFeedback >= 5) {
+    chatCountSinceFeedback = 0;
+    localStorage.setItem('chats_since_feedback', '0');
+    setTimeout(() => showFeedbackModal(), 1500);
+  }
+}
+
+function showFeedbackModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'feedback-overlay';
+  overlay.id = 'feedback-overlay';
+  overlay.innerHTML = `
+    <div class="feedback-box">
+      <div style="font-size:2.5rem;margin-bottom:12px;">💬</div>
+      <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text);margin-bottom:6px;font-weight:700;">Quick Feedback!</div>
+      <div style="font-size:0.82rem;color:var(--text2);margin-bottom:16px;line-height:1.6;">Help make CC-AI better! What do you think so far?</div>
+      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;">
+        ${['😍 Love it','😊 Good','😐 OK','😕 Needs work'].map(e => `<button onclick="selectFeedback(this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:0.78rem;color:var(--text2);cursor:pointer;">${e}</button>`).join('')}
+      </div>
+      <textarea id="feedback-text" placeholder="Tell me more... (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;resize:none;height:70px;margin-bottom:12px;"></textarea>
+      <div style="display:flex;gap:8px;">
+        <button onclick="submitFeedback()" style="flex:1;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;">Send Feedback 🚀</button>
+        <button onclick="document.getElementById('feedback-overlay').remove()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:10px;padding:10px 16px;font-family:'Inter',sans-serif;font-size:0.88rem;cursor:pointer;">Skip</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+let selectedFeedbackEmoji = '';
+function selectFeedback(btn) {
+  document.querySelectorAll('#feedback-overlay button').forEach(b => b.style.borderColor = '');
+  btn.style.borderColor = '#7c6fff';
+  btn.style.color = '#a093f8';
+  selectedFeedbackEmoji = btn.textContent;
+}
+
+async function submitFeedback() {
+  const text = document.getElementById('feedback-text')?.value?.trim() || '';
+  const rating = selectedFeedbackEmoji || 'No rating';
+  try {
+    if (window.rtdb) {
+      const { ref, push } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
+      await push(ref(window.rtdb, 'feedback'), {
+        uid: getUserId(),
+        name: getProfile().name || 'Anonymous',
+        rating,
+        text,
+        time: Date.now(),
+        date: new Date().toDateString()
+      });
+    }
+  } catch(e) {}
+  document.getElementById('feedback-overlay').remove();
+  // Show thank you toast
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border-radius:20px;padding:8px 20px;font-size:0.82rem;font-weight:700;font-family:Inter,sans-serif;';
+  toast.textContent = '✅ Thanks for your feedback!';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
 
 // Profile
 function getProfile(){return{name:localStorage.getItem('user_name')||'',lang:localStorage.getItem('user_lang')||'English',personality:localStorage.getItem('user_personality')||'friendly'}}
@@ -945,6 +1111,8 @@ async function sendMessage(){
     }
     saveCurrentSession();
     incrementChatUsage();
+    updateStreak();
+    checkFeedbackPrompt();
     // Auto-extract memory from conversation
     (function extractMemory() {
       const lastUser = messages.filter(m => m.role === 'user').slice(-1)[0];
@@ -972,7 +1140,7 @@ function addMessage(role,html,raw){
   const container=document.getElementById('messages');
   const div=document.createElement('div');div.className=`msg ${role}`;
   const bubble=document.createElement('div');bubble.className='bubble';bubble.innerHTML=html;
-  if(role==='ai'&&raw){const actions=document.createElement('div');actions.className='msg-actions';const safe=raw.replace(/"/g,'&quot;');actions.innerHTML=`<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button><button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;bubble.appendChild(actions)}
+  if(role==='ai'&&raw){const actions=document.createElement('div');actions.className='msg-actions';const safe=raw.replace(/"/g,'&quot;');actions.innerHTML=`<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button><button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;bubble.appendChild(actions);addRatingBar(bubble,messages.length-1);}
   div.innerHTML=`<div class="avatar" style="background:white;border-radius:50%;">${role==='user'?'👤':'<img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/>'}</div>`;div.appendChild(bubble);container.appendChild(div);container.scrollTop=container.scrollHeight;
 }
 function copyRaw(btn){copyToClipboard(btn.getAttribute('data-text'),btn,'📋 Copy')}
@@ -1920,6 +2088,9 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   else{const w=document.getElementById('welcome');if(w){const h2=w.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${p.name}! I'm CC-AI 🔥 `}}
   setTimeout(trackVisit,2000);
+  // Show streak in header
+  const streakEl = document.getElementById('header-streak');
+  if (streakEl) { const s = getStreak(); if(s>0) streakEl.innerHTML = `<span class="streak-badge" style="animation:none;font-size:0.65rem;padding:2px 7px;margin-left:4px;">🔥${s}d</span>`; }
 
   // Personalized welcome message based on time + mood + memory
   (function updateWelcome() {
