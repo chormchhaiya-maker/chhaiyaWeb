@@ -174,12 +174,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     <button class="new-chat-btn" onclick="showCodeRunner();toggleSidebar()">
       <span style="font-size:1rem;">💻</span> Code Runner
     </button>
-    <button class="new-chat-btn" onclick="showMusicGen();toggleSidebar()">
-      <span style="font-size:1rem;">🎵</span> Generate Music
-    </button>
-    <button class="new-chat-btn" onclick="showOutfitStudio();toggleSidebar()">
-      <span style="font-size:1rem;">👗</span> Outfit Studio
-    </button>
+
     <div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 4px;"></div>
     <button class="new-chat-btn" onclick="showSettings();toggleSidebar()">
       <span style="font-size:1rem;">⚙️</span> Settings
@@ -441,26 +436,6 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   </div>
 </div>
 
-<!-- Music Modal -->
-<div class="settings-overlay" id="music-overlay" onclick="hideModal('music-overlay',event)">
-  <div class="settings-box" onclick="event.stopPropagation()" style="width:380px;">
-    <div class="settings-title">🎵 AI Music Generator <button onclick="hideModal('music-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
-    <div style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Describe the music you want to generate:</div>
-    <input type="text" id="music-prompt" placeholder="e.g. relaxing lofi hip hop, epic orchestral..." style="width:100%;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.9rem;outline:none;margin-bottom:8px;" onkeydown="if(event.key==='Enter')generateMusic()"/>
-    <select id="music-style" style="width:100%;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.9rem;outline:none;margin-bottom:12px;">
-      <option value="">🎵 Any style</option>
-      <option value="lofi hip hop">🎧 Lofi Hip Hop</option>
-      <option value="epic orchestral">🎻 Epic Orchestral</option>
-      <option value="electronic EDM">🎛️ Electronic EDM</option>
-      <option value="acoustic guitar">🎸 Acoustic Guitar</option>
-      <option value="jazz piano">🎹 Jazz Piano</option>
-      <option value="ambient meditation">🧘 Ambient Meditation</option>
-      <option value="pop upbeat">🎤 Pop Upbeat</option>
-    </select>
-    <button onclick="generateMusic()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;">🎵 Generate Music</button>
-    <div id="music-result" style="margin-top:12px;display:none;"></div>
-  </div>
-</div>
 
 <!-- Upload Link Modal -->
 <div class="settings-overlay" id="uploadlink-overlay" onclick="hideModal('uploadlink-overlay',event)">
@@ -476,55 +451,6 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   </div>
 </div>
 
-<!-- Outfit Studio Modal -->
-<div class="settings-overlay" id="outfit-overlay" onclick="hideModal('outfit-overlay',event)">
-  <div class="settings-box" onclick="event.stopPropagation()" style="width:420px;max-height:90vh;overflow-y:auto;">
-    <div class="settings-title">👗 Outfit Studio <button onclick="hideModal('outfit-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
-
-    <!-- Tabs -->
-    <div style="display:flex;gap:8px;margin-bottom:16px;">
-      <button id="tab-describe" onclick="switchOutfitTab('describe')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);font-size:0.82rem;cursor:pointer;font-family:'Inter',sans-serif;">✍️ Describe Person</button>
-      <button id="tab-upload" onclick="switchOutfitTab('upload')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:0.82rem;cursor:pointer;font-family:'Inter',sans-serif;">📷 Upload Photo</button>
-    </div>
-
-    <!-- Describe Tab -->
-    <div id="outfit-describe-tab">
-      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">PERSON DESCRIPTION</div>
-      <input type="text" id="outfit-person" placeholder="e.g. young man, tall, dark hair..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;margin-bottom:10px;"/>
-      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">OUTFIT / CLOTHING</div>
-      <input type="text" id="outfit-clothing" placeholder="e.g. red t-shirt with jeans, formal suit..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;margin-bottom:10px;"/>
-      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">QUICK OUTFIT PRESETS</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
-        <button onclick="setOutfit('red t-shirt and blue jeans')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">👕 Casual</button>
-        <button onclick="setOutfit('black formal suit and tie')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🤵 Formal</button>
-        <button onclick="setOutfit('traditional Khmer costume')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🇰🇭 Khmer</button>
-        <button onclick="setOutfit('sportswear and sneakers')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🏃 Sport</button>
-        <button onclick="setOutfit('cyberpunk leather jacket with neon details')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🌆 Cyberpunk</button>
-        <button onclick="setOutfit('anime school uniform')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🎌 Anime</button>
-        <button onclick="setOutfit('hoodie and sweatpants streetwear')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🧥 Street</button>
-        <button onclick="setOutfit('royal king outfit with crown')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">👑 Royal</button>
-      </div>
-      <button onclick="generateOutfit()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--bg);border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;">✨ Generate</button>
-    </div>
-
-    <!-- Upload Tab -->
-    <div id="outfit-upload-tab" style="display:none;">
-      <div style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Upload your photo and change the outfit style:</div>
-      <div id="outfit-photo-preview" style="display:none;margin-bottom:10px;text-align:center;">
-        <img id="outfit-preview-img" style="max-width:100%;max-height:150px;border-radius:10px;object-fit:contain;"/>
-      </div>
-      <label style="display:block;background:var(--surface2);border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;color:var(--text2);font-size:0.85rem;">
-        📷 Click to upload photo
-        <input type="file" accept="image/*" style="display:none;" onchange="handleOutfitPhoto(this)"/>
-      </label>
-      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">NEW OUTFIT STYLE</div>
-      <input type="text" id="outfit-style-input" placeholder="e.g. anime style, cyberpunk, formal suit..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;margin-bottom:12px;"/>
-      <button onclick="applyOutfitStyle()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--bg);border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;">🎨 Apply Style</button>
-    </div>
-
-    <div id="outfit-result" style="margin-top:12px;display:none;"></div>
-  </div>
-</div>
 
 <!-- Settings Modal -->
 <div class="settings-overlay" id="settings-overlay" onclick="hideSettings(event)">
