@@ -611,18 +611,19 @@ function rateMessage(idx, stars, bar) {
     });
     // Keep last 50 ratings
     localStorage.setItem('msg_ratings', JSON.stringify(ratings.slice(-50)));
-    // Save to Firebase for admin to see
-    if (window.rtdb) {
-      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js').then(({ ref, push }) => {
-        const uid = getUserId();
-        push(ref(window.rtdb, 'ratings'), {
-          uid, stars,
-          aiReply: (msg?.content || '').slice(0, 150),
-          userAsked: typeof userMsg?.content === 'string' ? userMsg.content.slice(0, 150) : '',
-          time: Date.now()
-        }).catch(() => {});
-      });
-    }
+    // Save to Firebase REST API — always works
+    const DB_URL2 = 'https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';
+    fetch(`${DB_URL2}/ratings.json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        uid: getUserId(),
+        stars,
+        aiReply: (msg?.content || '').slice(0, 150),
+        userAsked: typeof userMsg?.content === 'string' ? userMsg.content.slice(0, 150) : '',
+        time: Date.now()
+      })
+    }).catch(() => {});
   } catch(e) {}
 
   // Update stars UI
@@ -680,21 +681,24 @@ function selectFeedback(btn) {
 async function submitFeedback() {
   const text = document.getElementById('feedback-text')?.value?.trim() || '';
   const rating = selectedFeedbackEmoji || 'No rating';
+  const DB_URL = 'https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';
   try {
-    if (window.rtdb) {
-      const { ref, push } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js');
-      await push(ref(window.rtdb, 'feedback'), {
-        uid: getUserId(),
-        name: getProfile().name || 'Anonymous',
-        rating,
-        text,
-        time: Date.now(),
-        date: new Date().toDateString()
-      });
-    }
-  } catch(e) {}
+    // Use Firebase REST API directly — no import needed, always works
+    const payload = {
+      uid: getUserId(),
+      name: getProfile().name || 'Anonymous',
+      rating,
+      text,
+      time: Date.now(),
+      date: new Date().toDateString()
+    };
+    await fetch(`${DB_URL}/feedback.json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  } catch(e) { console.log('Feedback save error:', e); }
   document.getElementById('feedback-overlay').remove();
-  // Show thank you toast
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border-radius:20px;padding:8px 20px;font-size:0.82rem;font-weight:700;font-family:Inter,sans-serif;';
   toast.textContent = '✅ Thanks for your feedback!';
