@@ -72,6 +72,11 @@ input[type=password] { width: 100%; background: #1c1c26; border: 1px solid rgba(
 .badge.green { background: rgba(74,222,128,0.15); color: #4ade80; }
 
 .loading { color: #9b97c0; font-size: 0.85rem; text-align: center; padding: 30px; }
+.delete-btn { background: rgba(255,80,80,0.1); border: 1px solid rgba(255,80,80,0.3); color: #f87171; border-radius: 8px; padding: 5px 10px; font-size: 0.78rem; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+.delete-btn:hover { background: rgba(255,80,80,0.25); }
+.search-bar { width: 100%; background: #1c1c26; border: 1px solid rgba(124,111,255,0.3); border-radius: 10px; padding: 8px 14px; color: #f0eeff; font-family: 'Inter',sans-serif; font-size: 0.9rem; outline: none; margin-bottom: 16px; display: block; }
+.right-col { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.user-uid { font-size: 0.72rem; color: #555; margin-top: 2px; font-family: monospace; word-break: break-all; }
 </style>
 </head>
 <body>
@@ -217,13 +222,59 @@ window.deleteAnonymous = async () => {
   }
 };
 
+// ====================== DELETE SINGLE USER ======================
+window.deleteUser = async (firebaseKey, displayName) => {
+  if (!confirm(`Delete user "${displayName}"?\n\nThis will remove them permanently.`)) return;
+  try {
+    await remove(ref(db, 'users/' + firebaseKey));
+    const nameLower = displayName.toLowerCase().trim();
+    await remove(ref(db, 'usernames/' + nameLower)).catch(() => {});
+    loadData();
+  } catch(e) {
+    alert('Error deleting user: ' + e.message);
+  }
+};
+
+// ====================== SEARCH/FILTER ======================
+let allUsers = [];
+window.filterUsers = () => {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  const filtered = q ? allUsers.filter(u => (u.name||'').toLowerCase().includes(q) || (u._key||'').toLowerCase().includes(q)) : allUsers;
+  renderUsers(filtered);
+};
+
+function renderUsers(users) {
+  const today = new Date().toDateString();
+  const usersList = document.getElementById('users-list');
+  if (users.length === 0) { usersList.innerHTML = '<div class="loading">No users found.</div>'; return; }
+  usersList.innerHTML = users.map(u => {
+    const time = u.lastSeen ? new Date(u.lastSeen).toLocaleString() : 'Unknown';
+    const isToday = u.date === today;
+    const displayName = u.name || 'Anonymous';
+    const fullUid = u.uid || u._key || 'no-id';
+    return `<div class="user-row">
+      <div class="user-info" style="flex:1;min-width:0;">
+        <div class="user-name">${displayName}</div>
+        <div class="user-uid">ID: ${fullUid}</div>
+        <div class="user-meta">Last seen: ${time}</div>
+      </div>
+      <div class="right-col">
+        ${u.images ? `<span class="badge">🎨 ${u.images}</span>` : ''}
+        ${u.chats ? `<span class="badge">💬 ${u.chats}</span>` : ''}
+        <span class="badge ${isToday ? 'green' : ''}">${isToday ? '🟢 Today' : '⚪ Inactive'}</span>
+        <button class="delete-btn" onclick="deleteUser('${u._key}', '${displayName.replace(/'/g,"\\'")}')">🗑️ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ====================== LOAD DATA ======================
 window.loadData = async () => {
   try {
     const usersRef = ref(db, 'users');
     const snap = await get(usersRef);
     const data = snap.val() || {};
-    const users = Object.values(data);
+    const users = Object.entries(data).map(([key, u]) => ({...u, _key: key}));
     const today = new Date().toDateString();
 
     const totalUsers = users.length;
@@ -244,25 +295,8 @@ window.loadData = async () => {
 
     // Sort by last seen (newest first)
     users.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
-
-    usersList.innerHTML = users.map(u => {
-      const time = u.lastSeen ? new Date(u.lastSeen).toLocaleString() : 'Unknown';
-      const isToday = u.date === today;
-      const displayName = u.name || 'Anonymous';
-      const userId = u.uid ? u.uid.substring(0, 8) + '...' : 'no-id';
-
-      return `<div class="user-row">
-        <div>
-          <div class="user-name">${displayName} <span class="user-id">(${userId})</span></div>
-          <div class="user-meta">Last seen: ${time}</div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          ${u.images ? `<span class="badge">🎨 ${u.images}</span>` : ''}
-          ${u.chats ? `<span class="badge">💬 ${u.chats}</span>` : ''}
-          <span class="badge ${isToday ? 'green' : ''}">${isToday ? '🟢 Today' : '⚪ Inactive'}</span>
-        </div>
-      </div>`;
-    }).join('');
+    allUsers = users;
+    renderUsers(users);
 
   } catch(e) {
     document.getElementById('users-list').innerHTML = `<div class="loading">❌ Error: ${e.message}</div>`;
