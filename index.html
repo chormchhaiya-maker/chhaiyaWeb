@@ -640,11 +640,22 @@ function rateMessage(idx, stars, bar) {
 let chatCountSinceFeedback = parseInt(localStorage.getItem('chats_since_feedback') || '0');
 
 function checkFeedbackPrompt() {
+  const feedbackCount = parseInt(localStorage.getItem('feedback_count') || '0');
+  // Max 3 feedbacks per device (at 5, 15, 20 chats)
+  if (feedbackCount >= 3) return;
+
   chatCountSinceFeedback++;
   localStorage.setItem('chats_since_feedback', chatCountSinceFeedback);
-  if (chatCountSinceFeedback >= 5) {
+
+  // Schedule: first at 5, second at 15, third at 20
+  const thresholds = [5, 15, 20];
+  const nextThreshold = thresholds[feedbackCount];
+  if (!nextThreshold) return;
+
+  if (chatCountSinceFeedback >= nextThreshold) {
     chatCountSinceFeedback = 0;
     localStorage.setItem('chats_since_feedback', '0');
+    localStorage.setItem('feedback_count', feedbackCount + 1);
     setTimeout(() => showFeedbackModal(), 1500);
   }
 }
