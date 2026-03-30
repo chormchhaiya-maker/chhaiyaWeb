@@ -268,6 +268,17 @@ function renderUsers(users) {
   }).join('');
 }
 
+// ====================== DELETE FEEDBACK ======================
+window.deleteFeedback = async (key) => {
+  if (!confirm('Delete this feedback?')) return;
+  try {
+    await remove(ref(db, 'feedback/' + key));
+    loadData();
+  } catch(e) {
+    alert('Error: ' + e.message);
+  }
+};
+
 // ====================== LOAD DATA ======================
 window.loadData = async () => {
   try {
@@ -306,18 +317,19 @@ window.loadData = async () => {
   try {
     const fbSnap = await get(ref(db, 'feedback'));
     const fbData = fbSnap.val() || {};
-    const feedbacks = Object.values(fbData).sort((a,b) => (b.time||0)-(a.time||0)).slice(0,20);
+    const feedbacks = Object.entries(fbData).sort((a,b) => (b[1].time||0)-(a[1].time||0)).slice(0,20);
     const fbList = document.getElementById('feedback-list');
     if (feedbacks.length === 0) {
-      fbList.innerHTML = '<div class="loading">No feedback yet.</div>';
+      fbList.innerHTML = '<div class="loading">No feedback yet — users will see popup after 5, 15, and 20 chats.</div>';
     } else {
-      fbList.innerHTML = feedbacks.map(f => `
+      fbList.innerHTML = feedbacks.map(([key, f]) => `
         <div class="user-row">
-          <div>
+          <div style="flex:1;">
             <div class="user-name">${f.rating || 'No rating'} <span style="font-size:0.78rem;color:#777;">— ${f.name || 'Anonymous'}</span></div>
-            <div class="user-meta">${f.text || '<em>No message</em>'}</div>
+            <div class="user-meta">${f.text || '<em>No message written</em>'}</div>
             <div class="user-meta">${f.date || ''}</div>
           </div>
+          <button class="delete-btn" onclick="deleteFeedback('${key}')">🗑️ Delete</button>
         </div>`).join('');
     }
   } catch(e) {
