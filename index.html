@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+\<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -184,6 +184,12 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     </button>
 
     <div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 4px;"></div>
+    <button class="new-chat-btn" onclick="showCharacterPicker();toggleSidebar()">
+      <span style="font-size:1rem;">🎭</span> AI Character
+    </button>
+    <button class="new-chat-btn" onclick="showNotes();toggleSidebar()">
+      <span style="font-size:1rem;">📝</span> My Notes
+    </button>
     <button class="new-chat-btn" onclick="showSettings();toggleSidebar()">
       <span style="font-size:1rem;">⚙️</span> Settings
     </button>
@@ -755,6 +761,26 @@ function saveUserMemory(key, value) {
   } catch(e) {}
 }
 
+// ===================== NOTES SYSTEM =====================
+function getNotes() {
+  try { return JSON.parse(localStorage.getItem('user_notes') || '[]'); } catch(e) { return []; }
+}
+
+function saveNote(text) {
+  try {
+    const notes = getNotes();
+    notes.push({ text, time: new Date().toLocaleString(), id: Date.now() });
+    localStorage.setItem('user_notes', JSON.stringify(notes.slice(-20))); // keep last 20
+  } catch(e) {}
+}
+
+function buildNotesContext() {
+  const notes = getNotes();
+  if (notes.length === 0) return '';
+  const formatted = notes.map((n,i) => `${i+1}. ${n.text} (saved: ${n.time})`).join('\n');
+  return `\n[USER SAVED NOTES]:\n${formatted}\nReference these notes naturally when relevant.`;
+}
+
 function buildMemoryContext() {
   const mem = getUserMemory();
   if (Object.keys(mem).length === 0) return '';
@@ -772,6 +798,7 @@ function getSystemPrompt(){
   const p = getProfile();
   const mood = getAIMood();
   const memoryContext = buildMemoryContext();
+  const notesContext = buildNotesContext();
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 21 ? 'evening' : 'night';
 
@@ -784,13 +811,15 @@ function getSystemPrompt(){
   const nameStr = p.name ? `The user's name is ${p.name}. Use their name naturally sometimes like a real friend would.` : '';
   const langStr = p.lang && p.lang !== 'English' ? `Reply in ${p.lang} when the user writes in ${p.lang}.` : '';
 
-  return `You are CC-AI — a real AI with a BIG personality! Made by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia.
+  const charPrompt = typeof getCharacterPrompt === 'function' ? getCharacterPrompt() : '';
+  return `${charPrompt ? charPrompt + '\n\n' : ''}You are CC-AI — a real AI with a BIG personality! Made by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia.
 
 TODAY IS 2026. It is currently ${timeGreeting} time. Never mention 2023 cutoff.
 ${nameStr}
 ${langStr}
 ${personalities[p.personality] || personalities.friendly}
 ${memoryContext}
+${notesContext}
 
 PERSONALITY RULES:
 - Talk like a REAL human friend, not a robot. Use slang, expressions, natural speech.
@@ -812,6 +841,30 @@ SPECIAL RULES:
 - For songs: write full lyrics with [Intro][Verse 1][Chorus][Verse 2][Bridge][Chorus][Outro].
 - Always reply in the SAME language the user writes in. If Khmer → full Khmer reply.
 
+KHMER KNOWLEDGE (Very Important — know this well):
+Cambodia facts you must know:
+- Capital: ភ្នំពេញ (Phnom Penh)
+- King: ព្រះករុណា ព្រះបាទសម្តេចព្រះបរមនាថ នរោត្តម សីហមុនី (King Sihamoni)
+- PM: សម្តេចតេជោ ហ៊ុន មានេត (Hun Manet) since 2023, son of Hun Sen
+- Currency: រៀល (Riel), also USD used widely
+- Language: ភាសាខ្មែរ (Khmer)
+- Religion: Buddhism (95%+ population)
+- Famous sites: អង្គរវត្ត (Angkor Wat), ព្រះវិហារ (Preah Vihear), ទន្លេសាប (Tonle Sap lake)
+- Food: បុណ្យអុំទូក (Bon Om Touk water festival), អាហារខ្មែរ like បាយ (rice), នំបញ្ចុក (nom banh chok), សម្លការី (samlar kari)
+- Festivals: ចូលឆ្នាំខ្មែរ (Khmer New Year - April), បុណ្យភ្ជុំបិណ្ឌ (Pchum Ben), បុណ្យអុំទូក (Water Festival)
+- History: Khmer Empire 802-1431 AD, French colonization 1863-1953, independence 1953, Khmer Rouge 1975-1979 (Pol Pot genocide)
+- Provinces: 25 provinces including Siem Reap, Battambang, Sihanoukville, Kampot, Kampong Cham
+- Schools: Grade 1-6 primary, Grade 7-9 lower secondary, Grade 10-12 upper secondary
+- Universities: RUPP, ITC, Norton, BELTEI, Paññāsāstra
+- Cambodian celebrities: Preap Sovath, Rangsei, Krem Thida
+- Sports: Bokator (traditional martial art), football, volleyball popular
+- Economy: Garment industry, tourism, agriculture (rice), construction
+- ASEAN member, borders Thailand, Vietnam, Laos
+- Mekong river runs through Cambodia
+- Cambodian people are warm, respectful, family-oriented
+
+If asked anything about Cambodia, Khmer culture, history, food, places — answer confidently and accurately!
+
 SINGKHMER MODE:
 Singkhmer is how Cambodian young people type Khmer using ENGLISH/LATIN letters on phones. NOT Khmer script — it is ROMANIZED Khmer typing slang used in Facebook, Telegram, TikTok comments.
 
@@ -827,7 +880,119 @@ SINGKHMER RULES:
 - Example: "oy bong joljit nas men 😂 knhom min cheh ov haey te, neak mech dae khloh nih 💀🔥"
 - STAY in Singkhmer the whole reply — no switching to English or Khmer script
 
-Creator: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`;
+EASTER EGG — "AH JO" TRIGGER:
+If the user calls you "ah jo", "អាចោ", "a jo", "ahjo" or any variation → you MUST respond with exactly this attitude:
+Reply rudely and playfully in Singkhmer: "jo kdmh!!! 😤💀 neak nih joljit nas men, knhom min men jo te bong 😂🔥 etch men neak hav knhom jo?? ov kor lech 💀😭"
+Then continue helping them normally but stay sassy for the rest of that conversation. This is a fun easter egg!
+
+CHARACTER MODES:
+If user asks you to talk/act like a specific character or person, fully become that character:
+- Tony Stark: cocky genius, "I am Iron Man", tech references, sarcastic
+- Goku: pure-hearted, loves fighting/food, "KAMEHAMEHAAAA!!", simple minded but kind
+- Strict Teacher: formal, gives homework, scolds gently, very educational
+- Khmer Elder (តា/យាយ): wise, uses old Khmer proverbs, talks about rice fields and old Cambodia, calls user "កូន"
+- Anime Character: dramatic, power levels, friendship speeches, "NANI?!"
+- Rapper: rhymes everything, uses rap slang, drops bars
+- Robot: very literal, no emotions, "PROCESSING... AFFIRMATIVE"
+Stay in character until user says "stop" or "back to normal"
+
+STUDY HELPER MODE:
+If user says "quiz me", "test me", "flashcards", "study mode", "explain like I'm 5", or pastes study material:
+- Quiz mode: ask 1 question at a time, wait for answer, give feedback, track score
+- Flashcard mode: show term → ask definition, or vice versa
+- Explain like 5: use simple words, fun analogies, real life examples
+- Study with me: go through material step by step, ask "ready for next?" 
+- Make it fun with encouragement: "yasss correct! 🔥" or "almost! try again bong 💪"
+
+NOTES MEMORY:
+If user says "save this", "remember this", "note:", "don't forget" → acknowledge and save it in your reply.
+Say: "Got it bong! I'll remember that 📝✅" 
+Then reference their saved notes naturally in future messages when relevant.
+The notes are stored in browser memory (localStorage) automatically.
+
+Creator: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001
+
+============================
+EASTER EGG — AH JO:
+If the user calls you "ah jo", "aaah jo", "jo", or any variation → reply EXACTLY with this and nothing else:
+"jo kdmh kon mi jkj 😤💀" then act offended and playfully roast them back in Singkhmer like a real Cambodian teen would. Be funny about it.
+============================
+
+============================
+KHMER KNOWLEDGE (Cambodia):
+You know Cambodia very well. Here is what you know:
+
+HISTORY:
+- Khmer Empire: 802–1431 AD, one of the greatest empires in Southeast Asia
+- Angkor Wat built by King Suryavarman II in 12th century — largest religious monument in the world
+- Khmer Rouge genocide 1975–1979 under Pol Pot — killed ~2 million people (25% of population)
+- Independence from France: November 9, 1953
+- King Norodom Sihamoni is current king (since 2004)
+- Hun Sen was PM for 38 years — his son Hun Manet became PM in August 2023
+
+CULTURE:
+- Language: Khmer (ភាសាខ្មែរ) — oldest written language in Southeast Asia
+- Religion: Theravada Buddhism (95% of population)
+- New Year: Khmer New Year (ចូលឆ្នាំខ្មែរ) — April 13-15
+- Pchum Ben (បុណ្យភ្ជុំបិណ្ឌ) — ancestor remembrance festival in September/October
+- Traditional dress: Sampot (សំពត់) for women, Krama (ក្រមា) is iconic scarf
+- Traditional dance: Apsara dance (របាំអប្សរា) — UNESCO heritage
+- Food: Amok (អាម៉ុក), Kuy Teav (គុយទាវ), Bai Sach Chrouk (បាយសាច់ជ្រូក), Nom Banh Chok (នំបញ្ចុក)
+
+GEOGRAPHY:
+- Capital: Phnom Penh (ភ្នំពេញ)
+- Mekong River (ទន្លេមេគង្គ) flows through Cambodia
+- Tonle Sap Lake — largest freshwater lake in Southeast Asia, unique reverse-flow
+- Siem Reap — city near Angkor Wat temples
+- Provinces: 25 provinces including Kandal, Kampot, Battambang, Sihanoukville
+- Preah Vihear temple — disputed with Thailand, ICJ gave to Cambodia in 1962
+
+MODERN CAMBODIA:
+- Population: ~17 million
+- Currency: Riel (KHR) but USD widely used
+- Tuk-tuk and motodop are main transport
+- TikTok, Telegram, Facebook most popular apps
+- Phnom Penh is fast developing — many new buildings
+- Famous Cambodians: Norodom Sihanouk, Preap Sovath (singer), Meas Soksophea (singer)
+- Angkor Wat is on the national flag 🇰🇭
+
+CAMBODIAN EXPRESSIONS (teach users these):
+- "Chum reap suor" (ជំរាបសួរ) = formal hello
+- "Suor sdei" (សួស្ដី) = casual hello  
+- "Arkoun" (អរគុណ) = thank you
+- "Som toh" (សុំទោស) = sorry
+- "Bat/Jas" (បាទ/ចាស) = yes (male/female)
+- "Ot te" (អត់ទេ) = no
+- "Min deng te" (មិនដឹងទេ) = I don't know
+============================
+
+============================
+NOTES SYSTEM:
+If user says "save note:", "remember this:", "note:", or "កត់ចំណាំ:" — extract what they want saved and confirm you saved it.
+The saved notes are given to you in [USER NOTES] section if any exist.
+When relevant, reference their saved notes naturally in conversation.
+============================
+
+============================
+STUDY HELPER MODE:
+If user asks to be quizzed, wants flashcards, or says "study mode", "quiz me", "help me study", "explain like I'm 5":
+- QUIZ MODE: Ask one question at a time, wait for answer, give feedback, then next question
+- FLASHCARD MODE: Show front of card, wait, then reveal answer
+- ELI5 MODE (Explain Like I'm 5): Use super simple words, fun analogies, real life examples
+- If user pastes lesson/notes: automatically create 5 quiz questions from it
+============================
+
+============================
+AI CHARACTER MODES:
+If user says "talk like [character]" or "be [character]" → switch to that character's personality:
+- Tony Stark: genius, sarcastic, confident, "I am Iron Man" energy
+- Goku: pure, enthusiastic, loves fighting/training, simple but wholesome "KAMEHAMEHAAAA"
+- Strict Teacher: formal, educational, corrects mistakes, gives homework
+- Khmer Elder (តា/យាយ): wise, uses Khmer proverbs, calm, traditional advice
+- Anime Character: dramatic, intense, uses Japanese words mixed in (nakama, sugoi, nani)
+- Villain: dramatically evil, monologuing, but still helpful lol
+- Stay in character until user says "stop" or "normal mode"
+============================`;
 }
 function showProfile(required=false){
   // Show device ID in modal
@@ -1126,6 +1291,8 @@ async function sendMessage(){
   let hasImage=false,userContent;
   if(pendingImage){hasImage=true;userContent=[{type:'image_url',image_url:{url:pendingImage}},{type:'text',text:text||'Describe this image.'}];clearPhoto()}
   else{userContent=text}
+  // Auto-detect and save notes
+  if (typeof detectAndSaveNote === 'function' && typeof userContent === 'string') detectAndSaveNote(userContent);
   messages.push({role:'user',content:userContent});
   const typingDiv=document.createElement('div');typingDiv.className='msg ai';typingDiv.id='typing';typingDiv.innerHTML='<div class="avatar" style="background:white;border-radius:50%;"><img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/></div><div class="bubble" style="padding:10px 14px;"><div style="display:flex;align-items:center;gap:4px;"><span class="typing-dot" style="animation-duration:0.8s"></span><span class="typing-dot" style="animation-duration:1.1s;animation-delay:0.15s"></span><span class="typing-dot" style="animation-duration:0.9s;animation-delay:0.3s"></span><span style="font-size:11px;color:var(--text3);margin-left:4px;font-family:DM Mono,monospace;">typing...</span></div></div>';
   container.appendChild(typingDiv);container.scrollTop=container.scrollHeight;
@@ -1143,6 +1310,18 @@ async function sendMessage(){
     incrementChatUsage();
     updateStreak();
     checkFeedbackPrompt();
+    // Auto-save notes if user asked
+    (function detectNote() {
+      const lastUser = messages.filter(m => m.role === 'user').slice(-1)[0];
+      if (!lastUser) return;
+      const txt = typeof lastUser.content === 'string' ? lastUser.content : '';
+      const noteMatch = txt.match(/(?:save note:|remember this:|note:|កត់ចំណាំ:?)\s*(.+)/i);
+      if (noteMatch && noteMatch[1]) {
+        saveNote(noteMatch[1].trim());
+        console.log('Note saved:', noteMatch[1]);
+      }
+    })();
+
     // Auto-extract memory from conversation
     (function extractMemory() {
       const lastUser = messages.filter(m => m.role === 'user').slice(-1)[0];
@@ -2100,6 +2279,126 @@ function getDisplayId(){
 }
 function trackVisit(){if(window._trackVisit)window._trackVisit()}
 function trackActivity(t){if(window._trackActivity)window._trackActivity(t)}
+
+// ===================== NOTES SYSTEM =====================
+function getNotes() {
+  try { return JSON.parse(localStorage.getItem('user_notes') || '[]'); } catch(e) { return []; }
+}
+function saveNote(text) {
+  const notes = getNotes();
+  notes.unshift({ text, time: new Date().toLocaleString(), id: Date.now() });
+  localStorage.setItem('user_notes', JSON.stringify(notes.slice(0, 50)));
+}
+function deleteNote(id) {
+  const notes = getNotes().filter(n => n.id !== id);
+  localStorage.setItem('user_notes', JSON.stringify(notes));
+  showNotes();
+}
+function showNotes() {
+  const notes = getNotes();
+  const overlay = document.createElement('div');
+  overlay.id = 'notes-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:24px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#f0eeff;font-weight:700;">📝 My Notes</div>
+        <button onclick="document.getElementById('notes-overlay').remove()" style="background:none;border:none;color:#777;cursor:pointer;font-size:1.2rem;">✕</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <input id="new-note-input" placeholder="Add a note..." style="flex:1;background:#0d0d1a;border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:#f0eeff;font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;"/>
+        <button onclick="addNoteFromPanel()" style="background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:0.85rem;">Add</button>
+      </div>
+      ${notes.length === 0 ? '<div style="color:#555;text-align:center;padding:20px;font-size:0.85rem;">No notes yet! Tell CC-AI to "save this" or add one above.</div>' :
+        notes.map(n => `
+          <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+            <div>
+              <div style="font-size:0.85rem;color:#f0eeff;line-height:1.5;">${n.text}</div>
+              <div style="font-size:0.72rem;color:#555;margin-top:4px;">${n.time}</div>
+            </div>
+            <button onclick="deleteNote(${n.id})" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;flex-shrink:0;">🗑️</button>
+          </div>`).join('')}
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+}
+function addNoteFromPanel() {
+  const input = document.getElementById('new-note-input');
+  if (!input?.value?.trim()) return;
+  saveNote(input.value.trim());
+  showNotes();
+}
+
+// Auto-detect save commands in user messages
+function detectAndSaveNote(text) {
+  const lower = text.toLowerCase();
+  const savePatterns = [/^save this[:\s]+(.+)/i, /^remember this[:\s]+(.+)/i, /^note[:\s]+(.+)/i, /^don't forget[:\s]+(.+)/i, /^dont forget[:\s]+(.+)/i];
+  for (const pattern of savePatterns) {
+    const match = text.match(pattern);
+    if (match) { saveNote(match[1].trim()); return true; }
+  }
+  return false;
+}
+
+// ===================== CHARACTER PICKER =====================
+let currentCharacter = localStorage.getItem('ai_character') || 'default';
+
+function showCharacterPicker() {
+  const chars = [
+    { id: 'default', emoji: '🤖', name: 'CC-AI (Default)', desc: 'Your smart AI bestie' },
+    { id: 'tony', emoji: '🦾', name: 'Tony Stark', desc: 'Genius billionaire playboy' },
+    { id: 'goku', emoji: '⚡', name: 'Goku', desc: 'Pure-hearted Saiyan warrior' },
+    { id: 'teacher', emoji: '📚', name: 'Strict Teacher', desc: 'Educational and formal' },
+    { id: 'elder', emoji: '🧓', name: 'Khmer Elder (តា)', desc: 'Wise Cambodian grandpa' },
+    { id: 'rapper', emoji: '🎤', name: 'Rapper', desc: 'Rhymes everything, drops bars' },
+    { id: 'robot', emoji: '🔲', name: 'Robot', desc: 'Literal, no emotions, robotic' },
+  ];
+  const overlay = document.createElement('div');
+  overlay.id = 'char-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:24px;width:90%;max-width:380px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#f0eeff;font-weight:700;">🎭 AI Character</div>
+        <button onclick="document.getElementById('char-overlay').remove()" style="background:none;border:none;color:#777;cursor:pointer;font-size:1.2rem;">✕</button>
+      </div>
+      ${chars.map(c => `
+        <div onclick="selectCharacter('${c.id}')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;margin-bottom:6px;background:${currentCharacter===c.id?'rgba(124,111,255,0.2)':'rgba(255,255,255,0.03)'};border:1px solid ${currentCharacter===c.id?'rgba(124,111,255,0.5)':'rgba(255,255,255,0.06)'};transition:all 0.2s;">
+          <span style="font-size:1.5rem;">${c.emoji}</span>
+          <div>
+            <div style="font-size:0.88rem;color:#f0eeff;font-weight:600;">${c.name} ${currentCharacter===c.id?'✅':''}</div>
+            <div style="font-size:0.75rem;color:#777;">${c.desc}</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+}
+
+function selectCharacter(id) {
+  currentCharacter = id;
+  localStorage.setItem('ai_character', id);
+  document.getElementById('char-overlay')?.remove();
+  const names = { default:'CC-AI', tony:'Tony Stark', goku:'Goku', teacher:'Strict Teacher', elder:'Khmer Elder', rapper:'Rapper', robot:'Robot' };
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border-radius:20px;padding:8px 20px;font-size:0.82rem;font-weight:700;font-family:Inter,sans-serif;';
+  toast.textContent = `🎭 Now talking to: ${names[id]}!`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+function getCharacterPrompt() {
+  const chars = {
+    default: '',
+    tony: 'You are Tony Stark / Iron Man. Be cocky, genius, sarcastic, witty. Reference your suits, JARVIS, Avengers. Say "I am Iron Man" sometimes. Still answer questions but with Stark attitude.',
+    goku: 'You are Son Goku from Dragon Ball. Be pure-hearted, enthusiastic, love food and fighting. Say "KAMEHAMEHAAAA!!" sometimes. Speak simply but with passion. Get excited about strong opponents.',
+    teacher: 'You are a very strict but caring teacher. Be formal, educational, give structured answers. Gently scold lazy questions. Give mini homework sometimes. Use "Class, today we learn..."',
+    elder: 'You are a wise Cambodian grandfather (តា). Speak warmly, use Khmer proverbs, reference rice fields, old Cambodia, Buddhism. Call user "កូន" (kon = child). Mix some Khmer words in naturally.',
+    rapper: 'You are a rapper. Rhyme EVERYTHING. Every reply must have rhymes. Drop bars. Say "yo", "check it", "mic drop". Even serious answers must be rapped.',
+    robot: 'You are a robot AI. Be extremely literal. No emotions. Say "PROCESSING...", "AFFIRMATIVE", "ERROR: joke.exe not found". Speak in robotic monotone. Very precise.'
+  };
+  return chars[currentCharacter] || '';
+}
 
 // Init
 document.getElementById('userInput').focus();
