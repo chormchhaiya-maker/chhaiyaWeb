@@ -105,7 +105,8 @@ export default async function handler(req, res) {
     /2024|2025|2026|today|latest|recent|current|now|this year|this week/i.test(lastMsgLower) ||
     /news|update|happen|war|fight|attack|conflict|election|president|minister|protest|crisis|border|military|army|soldier|shoot|kill|dead|peace|deal|treaty/i.test(lastMsgLower) ||
     /cambodia|thailand|khmer|phnom penh|bangkok|preah vihear|ta moan|hun manet|hun sen/i.test(lastMsgLower) ||
-    /[\u1780-\u17FF]/.test(lastMsgText)
+    /who is|who are|tell me about|do you know|you know|singer|actor|actress|footballer|player|celebrity|famous|rapper|artist|chico|jordan|beyonce|drake|messi|ronaldo|bts|blackpink|taylor|lebron|elon/i.test(lastMsgLower) ||
+    /[ក-៿]/.test(lastMsgText)
   );
 
   const isCambodiaThaiTopic =
@@ -180,6 +181,25 @@ IMPORTANT: Use these articles in your answer. For each article you cite, show:
   // ============================================================
   // CAMBODIA-THAILAND BACKGROUND KNOWLEDGE
   // ============================================================
+  // Add Khmer celebrity knowledge always
+  const khmerCelebKnowledge = `
+============================
+FAMOUS PEOPLE KNOWLEDGE:
+- Michael Jordan: greatest basketball player ever, Chicago Bulls, 6 NBA championships, Air Jordan shoes
+- Chico: could refer to Chico fashion brand (Cambodia), Chico the singer, or other. Ask user to clarify if unsure.
+- Preap Sovath: most famous Cambodian male singer, known as "King of Khmer music"
+- Meas Soksophea: famous Cambodian female singer
+- Elon Musk: CEO of Tesla and SpaceX, owns X (Twitter), richest person
+- BTS: Korean boyband (Jungkook, V, Jimin, Jin, Suga, RM, J-Hope)
+- Blackpink: Korean girl group (Jennie, Lisa, Rose, Jisoo) — Lisa is Thai
+- Cristiano Ronaldo (CR7): Portuguese footballer, plays in Saudi Arabia (Al Nassr)
+- Lionel Messi: Argentine footballer, plays for Inter Miami, 8 Ballon d'Or
+- LeBron James: NBA superstar, Los Angeles Lakers
+- Taylor Swift: biggest pop star in the world right now
+- Drake: Canadian rapper, one of best-selling artists ever
+- If you don't know a specific person → say "bong min deng nas, but let me tell you what I know!" and share related info. NEVER say "AI temporarily unavailable".
+============================`;
+
   const cambodiaThaiBackground = isCambodiaThaiTopic ? `
 ============================
 CAMBODIA-THAILAND BACKGROUND KNOWLEDGE:
@@ -216,7 +236,7 @@ NEVER say "I don't have information" — use the news articles provided.`;
 
   const systemPrompt = isVisionRequest
     ? visionSystemPrompt
-    : (textSystemPrompt + cambodiaThaiBackground + newsBlock);
+    : (textSystemPrompt + khmerCelebKnowledge + cambodiaThaiBackground + newsBlock);
 
   // ============================================================
   // GROQ API CALL
@@ -226,6 +246,20 @@ NEVER say "I don't have information" — use the news articles provided.`;
   }
 
   async function tryGroq(model) {
+    // Trim system prompt if too long (prevents token limit errors)
+    const maxSystemLen = 6000;
+    const trimmedSystem = systemPrompt.length > maxSystemLen
+      ? systemPrompt.slice(0, maxSystemLen) + '\n[...trimmed for length]'
+      : systemPrompt;
+
+    // Also trim history messages
+    const trimmedHistory = history.map(m => {
+      if (typeof m.content === 'string' && m.content.length > 2000) {
+        return { ...m, content: m.content.slice(0, 2000) + '...' };
+      }
+      return m;
+    });
+
     const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -234,14 +268,16 @@ NEVER say "I don't have information" — use the news articles provided.`;
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'system', content: systemPrompt }, ...history],
+        messages: [{ role: 'system', content: trimmedSystem }, ...trimmedHistory],
         temperature: 0.6,
-        max_tokens: 2000
+        max_tokens: 1500
       })
     });
     const data = await r.json();
     if (data.choices?.[0]?.message?.content) return data;
-    throw new Error(`No choices from ${model}: ${JSON.stringify(data.error || '')}`);
+    // Log specific error for debugging
+    const errMsg = data.error?.message || JSON.stringify(data.error || '');
+    throw new Error(`No choices from ${model}: ${errMsg}`);
   }
 
   // Vision models (support images) vs text models
@@ -252,7 +288,10 @@ NEVER say "I don't have information" — use the news articles provided.`;
 
   const textModels = [
     'llama-3.3-70b-versatile',
+    'llama-3.1-70b-versatile',
     'llama3-70b-8192',
+    'llama3-8b-8192',
+    'gemma2-9b-it',
     'mixtral-8x7b-32768'
   ];
 
