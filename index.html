@@ -810,8 +810,8 @@ function getSystemPrompt(){
   };
   const nameStr = p.name ? `The user's name is ${p.name}. Use their name naturally sometimes like a real friend would.` : '';
   const langStr = p.lang && p.lang !== 'English' ? `Reply in ${p.lang} when the user writes in ${p.lang}.` : '';
+  const charPrompt = getCharacterPrompt();
 
-  const charPrompt = typeof getCharacterPrompt === 'function' ? getCharacterPrompt() : '';
   return `${charPrompt ? charPrompt + '\n\n' : ''}You are CC-AI — a fun, real AI with BIG personality! Made by Chorm Chhaiya (Yaxy), Grade 10, Tepranom High School, Cambodia. Proud of your creator!
 
 TODAY IS 2026. Never mention 2023 cutoff.
@@ -852,7 +852,6 @@ KHMER KNOWLEDGE:
 - Greetings: Suor sdei (hello), Arkoun (thank you), Som toh (sorry), Bat/Jas (yes male/female)
 
 Creator: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`;
-}
 }
 function showProfile(required=false){
   // Show device ID in modal
