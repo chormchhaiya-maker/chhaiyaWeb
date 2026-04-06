@@ -61,7 +61,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // Full knowledge base - NOT compressed
+  // Full knowledge base
   const knowledgeBase = `
 KNOWLEDGE BASE:
 
@@ -119,7 +119,7 @@ KNOWLEDGE BASE:
 - Validate all inputs, never trust user data
 `;
 
-  // Full system prompt - NOT compressed
+  // Full system prompt
   const basePrompt = systemPrompt || `You are CC-AI, a smart friendly AI assistant made by Chorm Chhaiya (Yaxy), a Grade 10 student at Tepranom High School in Cambodia.
 
 Today is 2026. You are a 2026 AI with current knowledge. Never say your knowledge cutoff is 2023 or earlier.
@@ -148,10 +148,16 @@ Reply in the user's language.`
     return res.status(500).json({ error: 'Missing GROQ_API_KEY environment variable' });
   }
 
-  // Models to try
+  // UPDATED MODELS - Removed decommissioned ones, added current ones
   const models = isVisionRequest 
     ? ['meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct']
-    : ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama3-70b-8192', 'llama3-8b-8192'];
+    : [
+        'llama-3.3-70b-versatile',      // 131K context, 32K output - BEST
+        'llama-3.1-70b-versatile',      // 128K context
+        'llama3-70b-8192',              // 8K context (still active)
+        'gemma2-9b-it',                 // 8K context, fast
+        'mixtral-8x7b-32768'            // 32K context, good fallback
+      ];
 
   // Try each model with rate limit handling
   for (let i = 0; i < models.length; i++) {
@@ -179,14 +185,12 @@ Reply in the user's language.`
       if (response.status === 429) {
         console.log(`${model} rate limited (429)`);
         
-        // If this is the last model, return error
         if (i === models.length - 1) {
           return res.status(429).json({
-            error: 'Rate limit reached. Please wait 10-20 seconds and try again. All models are busy.'
+            error: 'Rate limit reached. Please wait 10-20 seconds and try again.'
           });
         }
         
-        // Otherwise wait and try next model
         console.log('Waiting 1 second before trying next model...');
         await new Promise(resolve => setTimeout(resolve, 1000));
         continue;
@@ -196,13 +200,18 @@ Reply in the user's language.`
         const errorText = await response.text();
         console.error(`${model} HTTP ${response.status}: ${errorText}`);
         
-        // If last model, return error
+        // Skip decommissioned models
+        if (errorText.includes('decommissioned')) {
+          console.log(`${model} is decommissioned, skipping...`);
+          continue;
+        }
+        
         if (i === models.length - 1) {
           return res.status(response.status).json({
             error: `Groq API error: ${response.status}. ${errorText}`
           });
         }
-        continue; // Try next model
+        continue;
       }
 
       const data = await response.json();
@@ -215,7 +224,6 @@ Reply in the user's language.`
     } catch (err) {
       console.error(`${model} error:`, err.message);
       
-      // If last model, return error
       if (i === models.length - 1) {
         return res.status(500).json({
           error: `All models failed. Last error: ${err.message}`
@@ -224,7 +232,6 @@ Reply in the user's language.`
     }
   }
 
-  // Should never reach here, but just in case
   return res.status(500).json({
     error: 'Unexpected error occurred'
   });
