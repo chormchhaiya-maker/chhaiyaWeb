@@ -55,95 +55,41 @@ export default async function handler(req, res) {
   })();
   const lastMsgLower = lastMsgText.toLowerCase();
 
-  function extractSearchQuery(text) {
-    if (/cambodia.*thai|thai.*cambodia|preah vihear|ta moan/i.test(text)) {
-      return 'Cambodia Thailand border conflict';
-    }
-    const stopWords = /\b(what|is|are|the|a|an|do|did|does|has|have|how|why|when|where|who|tell|me|about|please|can|you|i|my|was|were|be|been|of|in|on|at|to|for|with|by|from|and|or|but|so|if|not|no)\b/g;
-    const cleaned = text.replace(stopWords, ' ').replace(/\s+/g, ' ').trim();
-    const words = cleaned.split(' ').filter(w => w.length > 2).slice(0, 6);
-    return words.length > 0 ? words.join(' ') : text.slice(0, 80);
-  }
-
-  const needsSearch = !isVisionRequest && (
-    /2024|2025|2026|today|latest|recent|current|now/i.test(lastMsgLower) ||
-    /news|war|fight|attack|conflict|election|president|protest|crisis|border|military/i.test(lastMsgLower) ||
-    /cambodia|thailand|preah vihear|ta moan|hun manet|hun sen/i.test(lastMsgLower) ||
-    /who is|tell me about|do you know|celebrity|famous|jordan|drake|messi|ronaldo|bts|taylor/i.test(lastMsgLower)
+  // Only fetch news if explicitly asking for news
+  const isNewsRequest = !isVisionRequest && (
+    /news|today|latest|current|2024|2025|2026/i.test(lastMsgLower) &&
+    /cambodia|thailand|war|conflict|border|hun manet/i.test(lastMsgLower)
   );
-
-  const isCambodiaThaiTopic = /cambodia|thailand|preah vihear|ta moan|hun manet/i.test(lastMsgLower);
-
-  let liveArticles = [];
-
-  if (needsSearch) {
-    const baseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
-    const searchQuery = extractSearchQuery(lastMsgText);
-
-    const fetchNews = async (query) => {
-      try {
-        const r = await fetch(`${baseUrl}/api/news?q=${encodeURIComponent(query)}`);
-        if (!r.ok) return [];
-        const data = await r.json();
-        return data.articles || [];
-      } catch (e) {
-        return [];
-      }
-    };
-
-    const queries = [searchQuery];
-    if (isCambodiaThaiTopic) queries.push('Cambodia Thailand border conflict');
-
-    const results = await Promise.all(queries.map(fetchNews));
-    const seen = new Set();
-    liveArticles = results.flat().filter(a => {
-      if (!a.title || seen.has(a.title)) return false;
-      seen.add(a.title);
-      return true;
-    }).slice(0, 5);
-  }
 
   let newsBlock = '';
 
-  if (liveArticles.length > 0) {
-    const formatted = liveArticles.map((a, i) => {
-      const date = a.publishedAt ? a.publishedAt.slice(0, 10) : 'unknown';
-      return `[${i + 1}] ${a.title} | ${a.source?.name || 'Unknown'} | ${date} | ${a.url}`;
-    }).join('\n');
-    newsBlock = `\nLIVE NEWS:\n${formatted}`;
+  if (isNewsRequest) {
+    try {
+      const baseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
+      const r = await fetch(`${baseUrl}/api/news?q=Cambodia+Thailand+border+conflict`);
+      if (r.ok) {
+        const data = await r.json();
+        const articles = (data.articles || []).slice(0, 3);
+        if (articles.length > 0) {
+          newsBlock = '\nLIVE NEWS:\n' + articles.map((a, i) => 
+            `[${i+1}] ${a.title} | ${a.source?.name||'Unknown'} | ${a.publishedAt?.slice(0,10)||'unknown'}`
+          ).join('\n');
+        }
+      }
+    } catch (e) {}
   }
 
-  const knowledgeBase = `KNOWLEDGE:
-CELEBS: Michael Jordan (basketball GOAT), Preap Sovath (King of Khmer music), Meas Soksophea (Khmer singer), BTS (K-pop), Blackpink (Lisa is Thai), Ronaldo (CR7), Messi (8 Ballon d'Or), Taylor Swift, Drake.
-TIKTOK MEMES: Brainrot=being so deep in TikTok your brain feels like it's rotting from chaotic content. Tung Tung Tung Sahur=Indonesian meme with guy hitting drum waking people for sahur (pre-dawn meal during Ramadan), went viral for catchy sound. 7x7=49=woman finds equation attractive. Ampersand (&)=symbol people find weirdly attractive. Hear me out=confessing attraction to weird things. Brat summer=Charli XCX lime green messy vibe. Very mindful demure=modest trend. Roman Empire=asking men how often they think about it. Girl dinner=random snacks as meal. Rat girl summer=embracing chaos. Skibidi=Gen Alpha nonsense humor. Ohio=weird cringe situations. Rizz=charisma. Sigma=lone wolf. Mewing=jawline exercise. Looksmaxxing=improving looks (soft=non-surgical, hard=surgical). Mogging=dominating in looks. Ate no crumbs=flawless. It's giving=describing vibe. Slay=amazing job. Gatekeep=keeping exclusive. Rent free=can't stop thinking. Caught 4K=clear evidence. Understood assignment=perfect execution. Vibe check=assessing energy. Main character energy=protagonist mindset. No thoughts head empty=mindless. Feral=wild. Material girl=luxury lover. Unalive=death euphemism. Bussin'=really good.
-CAMBODIA 2025: July-August military clashes with Thailand at Preah Vihear/Ta Moan temples. Artillery exchanged, casualties, civilians displaced. Worst since 2008-2011. ASEAN ceasefire called. Hun Manet PM since Aug 2023.
-CODING: Write clean, working code with comments. Always use proper indentation. Explain what the code does. For JavaScript: use const/let not var, use async/await for async code, handle errors with try-catch. For Python: use snake_case, list comprehensions when clean, f-strings for formatting. For HTML/CSS: use semantic tags, flexbox/grid for layout, responsive design. For React: use functional components, hooks (useState, useEffect), props destructuring. Always validate inputs. Never leave placeholder code.`;
-
-  const visionSystemPrompt = `You are CC-AI, vision AI by Chorm Chhaiya (Yaxy). Describe images clearly. Read/transcribe any text. Answer questions about images. Reply in user's language.`;
-
-  const textSystemPrompt = userSystemPrompt || `You are CC-AI, friendly AI by Chorm Chhaiya (Yaxy), Grade 10 at Tepranom High School, Cambodia. Today is 2026. Reply in user's language. Talk like a friend. Use knowledge provided. If unsure, say "I don't have info on that specifically, but..." and share what you know. Never say "AI temporarily unavailable". When writing code: provide complete working examples, add comments explaining key parts, use best practices, test your logic mentally before responding.`;
+  const knowledgeBase = `KNOWLEDGE: CELEBS: MJordan, PreapSovath, BTS, Blackpink, Ronaldo, Messi, TaylorSwift. MEMES: Brainrot, TungTungTungSahur, 7x7=49, Ampersand, BratSummer, Skibidi, Ohio, Rizz, Sigma, Mewing, Looksmaxxing, Slay, RentFree, Caught4K, VibeCheck. CAMBODIA2025: Jul-Aug border clash Thailand, PreahVihear, TaMoan, HunManet PM Aug2023. CODING: Write clean code with comments. HTML: semantic tags, CSS animations (@keyframes, transform, transition), flexbox/grid. JS: const/let, async/await, DOM manipulation. React: hooks, props. Always provide complete working examples.`;
 
   const systemPrompt = isVisionRequest
-    ? visionSystemPrompt
-    : `${textSystemPrompt}\n\n${knowledgeBase}${newsBlock}`;
+    ? `You are CC-AI vision by ChormChhaiya. Describe images, read text. Reply in user's language.`
+    : `${userSystemPrompt || `You are CC-AI by ChormChhaiya, Grade 10 Tepranom HS, Cambodia. Today 2026. Reply in user's language. Be friendly. Use knowledge. Never say "AI temporarily unavailable".`}\n\n${knowledgeBase}${newsBlock}`;
 
   if (!process.env.GROQ_API_KEY) {
     return res.status(500).json({ error: 'Server misconfigured: missing GROQ_API_KEY' });
   }
 
   async function tryGroq(model) {
-    const maxSystemLen = 8000;
-    const trimmedSystem = systemPrompt.length > maxSystemLen
-      ? systemPrompt.slice(0, maxSystemLen) + '...'
-      : systemPrompt;
-
-    const trimmedHistory = history.map(m => {
-      if (typeof m.content === 'string' && m.content.length > 2000) {
-        return { ...m, content: m.content.slice(0, 2000) + '...' };
-      }
-      return m;
-    });
-
     const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -152,14 +98,14 @@ CODING: Write clean, working code with comments. Always use proper indentation. 
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'system', content: trimmedSystem }, ...trimmedHistory],
+        messages: [{ role: 'system', content: systemPrompt.slice(0, 4000) }, ...history],
         temperature: 0.6,
-        max_tokens: 1500
+        max_tokens: 2000
       })
     });
     const data = await r.json();
     if (data.choices?.[0]?.message?.content) return data;
-    throw new Error(`No choices: ${data.error?.message || JSON.stringify(data.error)}`);
+    throw new Error('No choices');
   }
 
   const visionModels = ['meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct'];
@@ -172,28 +118,6 @@ CODING: Write clean, working code with comments. Always use proper indentation. 
       return res.status(200).json(aiRes);
     } catch (e) {
       console.log(`${model} failed:`, e.message);
-    }
-  }
-
-  if (isVisionRequest) {
-    for (const model of textModels) {
-      try {
-        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: 'Vision unavailable. Tell user to try again later.' },
-              { role: 'user', content: lastMsgText || 'Image sent' }
-            ],
-            temperature: 0.5,
-            max_tokens: 100
-          })
-        });
-        const data = await r.json();
-        if (data.choices?.[0]?.message?.content) return res.status(200).json(data);
-      } catch (e) {}
     }
   }
 
