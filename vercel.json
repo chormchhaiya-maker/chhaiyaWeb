@@ -4,9 +4,9 @@
     { "source": "/api/(.*)", "destination": "/api/$1" }
   ],
   "functions": {
-    "api/*.js": {
+    "api/chat.js": {
       "memory": 1024,
-      "maxDuration": 30
+      "maxDuration": 60
     }
   }
 }
