@@ -1,6 +1,5 @@
 // api/chat.js
 export default async function handler(req, res) {
-  // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -57,7 +56,6 @@ export default async function handler(req, res) {
   })();
   const lastMsgLower = lastMsgText.toLowerCase();
 
-  // Only fetch news if explicitly asking for news
   const isNewsRequest = !isVisionRequest && (
     /news|today|latest|current|2024|2025|2026/i.test(lastMsgLower) &&
     /cambodia|thailand|war|conflict|border|hun manet/i.test(lastMsgLower)
@@ -85,16 +83,13 @@ export default async function handler(req, res) {
 
   const systemPrompt = isVisionRequest
     ? `You are CC-AI vision by ChormChhaiya. Describe images, read text. Reply in user's language.`
-    : `${userSystemPrompt || `You are CC-AI by ChormChhaiya, Grade 10 Tepranom HS, Cambodia. Today 2026. Reply in user's language. Be friendly. Use knowledge. Never say "AI temporarily unavailable".`}\n\n${knowledgeBase}${newsBlock}`;
+    : `${userSystemPrompt || `You are CC-AI by ChormChhaiya, Grade 10 Tepranom HS, Cambodia. Today 2026. Reply in user's language. Be friendly. Use knowledge. Never say "AI temporarily unavailable". When writing code, provide complete examples with comments.`}\n\n${knowledgeBase}${newsBlock}`;
 
-  // Check if API key exists
   if (!process.env.GROQ_API_KEY) {
-    console.error('ERROR: GROQ_API_KEY not set');
     return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
   }
 
   async function tryGroq(model) {
-    console.log(`Trying model: ${model}`);
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -104,50 +99,61 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model,
-          messages: [{ role: 'system', content: systemPrompt.slice(0, 4000) }, ...history],
+          messages: [{ role: 'system', content: systemPrompt }, ...history],  // REMOVED .slice(0, 4000)!
           temperature: 0.6,
-          max_tokens: 2000
+          max_tokens: 4000  // INCREASED from 2000!
         })
       });
       
-      console.log(`Response status: ${r.status}`);
-      
       if (!r.ok) {
-        const errorText = await r.text();
-        console.error(`Groq API error: ${r.status} - ${errorText}`);
-        throw new Error(`API error: ${r.status}`);
+        const error = await r.text();
+        throw new Error(`HTTP ${r.status}: ${error}`);
       }
       
       const data = await r.json();
       
       if (!data.choices?.[0]?.message?.content) {
-        console.error('No content in response:', JSON.stringify(data));
-        throw new Error('No content in response');
+        throw new Error('Empty response');
       }
       
       return data;
     } catch (e) {
-      console.error(`Model ${model} error:`, e.message);
-      throw e;
+      console.log(`${model} failed: ${e.message}`);
+      return null;
     }
   }
 
-  const visionModels = ['meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct'];
-  const textModels = ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama3-70b-8192', 'llama3-8b-8192', 'gemma2-9b-it'];
-  const modelsToTry = isVisionRequest ? visionModels : textModels;
-
-  for (const model of modelsToTry) {
-    try {
-      const aiRes = await tryGroq(model);
-      console.log(`Success with model: ${model}`);
-      return res.status(200).json(aiRes);
-    } catch (e) {
-      console.log(`Model ${model} failed, trying next...`);
+  if (isVisionRequest) {
+    const visionModels = [
+      'meta-llama/llama-4-scout-17b-16e-instruct',
+      'meta-llama/llama-4-maverick-17b-128e-instruct'
+    ];
+    
+    for (const model of visionModels) {
+      const result = await tryGroq(model);
+      if (result) return res.status(200).json(result);
     }
   }
 
-  console.error('All models failed');
-  return res.status(500).json({
-    error: 'All AI models failed. Check Vercel logs for details.'
+  const textModels = [
+    'llama-3.3-70b-versatile',
+    'llama-3.1-70b-versatile',
+    'llama3-70b-8192',
+    'llama3-8b-8192'
+  ];
+
+  for (const model of textModels) {
+    const result = await tryGroq(model);
+    if (result) {
+      console.log(`Success: ${model}`);
+      return res.status(200).json(result);
+    }
+  }
+
+  const fallback = await tryGroq('llama3-8b-8192');
+  if (fallback) return res.status(200).json(fallback);
+
+  return res.status(503).json({
+    error: 'All AI models are currently busy. Please try again in a few seconds.'
   });
 }
