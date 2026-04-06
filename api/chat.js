@@ -69,21 +69,20 @@ export default async function handler(req, res) {
       const r = await fetch(`${baseUrl}/api/news?q=Cambodia+Thailand+border+conflict`);
       if (r.ok) {
         const data = await r.json();
-        const articles = (data.articles || []).slice(0, 3);
+        const articles = (data.articles || []).slice(0, 2);
         if (articles.length > 0) {
-          newsBlock = '\nLIVE NEWS:\n' + articles.map((a, i) => 
-            `[${i+1}] ${a.title} | ${a.source?.name||'Unknown'} | ${a.publishedAt?.slice(0,10)||'unknown'}`
-          ).join('\n');
+          newsBlock = '\nNEWS:' + articles.map((a, i) => 
+            `[${i+1}]${a.title}|${a.source?.name||'?'}`
+          ).join('');
         }
       }
     } catch (e) {}
   }
 
-  const knowledgeBase = `KNOWLEDGE: CELEBS: MJordan, PreapSovath, BTS, Blackpink, Ronaldo, Messi, TaylorSwift. MEMES: Brainrot, TungTungTungSahur, 7x7=49, Ampersand, BratSummer, Skibidi, Ohio, Rizz, Sigma, Mewing, Looksmaxxing, Slay, RentFree, Caught4K, VibeCheck. CAMBODIA2025: Jul-Aug border clash Thailand, PreahVihear, TaMoan, HunManet PM Aug2023. CODING: Write clean code with comments. HTML: semantic tags, CSS animations (@keyframes, transform, transition), flexbox/grid. JS: const/let, async/await, DOM manipulation. React: hooks, props. Always provide complete working examples.`;
-
+  // ULTRA COMPACT system prompt - under 500 chars
   const systemPrompt = isVisionRequest
-    ? `You are CC-AI vision by ChormChhaiya. Describe images, read text. Reply in user's language.`
-    : `${userSystemPrompt || `You are CC-AI by ChormChhaiya, Grade 10 Tepranom HS, Cambodia. Today 2026. Reply in user's language. Be friendly. Use knowledge. Never say "AI temporarily unavailable". When writing code, provide complete examples with comments.`}\n\n${knowledgeBase}${newsBlock}`;
+    ? 'CC-AI vision by ChormChhaiya. Describe images, read text.'
+    : `${userSystemPrompt || 'CC-AI by ChormChhaiya, G10 Tepranom HS, Cambodia. 2026. Friendly, helpful. Never say unavailable.'} KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma,Mewing,Looksmaxxing,Slay.CAMBODIA:JulAug2025 border clash Thailand,PreahVihear,HunManetPM.CODE:clean,comments,HTML/CSS/JS,React,hooks,complete examples.${newsBlock}`;
 
   if (!process.env.GROQ_API_KEY) {
     return res.status(500).json({ error: 'GROQ_API_KEY not configured' });
@@ -99,15 +98,17 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model,
-          messages: [{ role: 'system', content: systemPrompt }, ...history],  // REMOVED .slice(0, 4000)!
+          messages: [{ role: 'system', content: systemPrompt }, ...history],
           temperature: 0.6,
-          max_tokens: 4000  // INCREASED from 2000!
+          max_completion_tokens: 4000,  // CHANGED from max_tokens
+          top_p: 0.9
         })
       });
       
       if (!r.ok) {
         const error = await r.text();
-        throw new Error(`HTTP ${r.status}: ${error}`);
+        console.error(`${model} HTTP ${r.status}: ${error}`);
+        throw new Error(`HTTP ${r.status}`);
       }
       
       const data = await r.json();
@@ -136,10 +137,9 @@ export default async function handler(req, res) {
   }
 
   const textModels = [
-    'llama-3.3-70b-versatile',
+    'llama-3.3-70b-versatile',  // 131K context, 32K output
     'llama-3.1-70b-versatile',
-    'llama3-70b-8192',
-    'llama3-8b-8192'
+    'llama3-70b-8192'
   ];
 
   for (const model of textModels) {
@@ -150,10 +150,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const fallback = await tryGroq('llama3-8b-8192');
-  if (fallback) return res.status(200).json(fallback);
-
   return res.status(503).json({
-    error: 'All AI models are currently busy. Please try again in a few seconds.'
+    error: 'All AI models busy. Try again.'
   });
 }
