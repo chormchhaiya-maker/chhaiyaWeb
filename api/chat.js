@@ -3,344 +3,261 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).end();
 
-  const messages = req.body?.messages;
-  const userSystemPrompt = req.body?.systemPrompt;
-  const hasImage = req.body?.hasImage || false;
+  const { messages, systemPrompt, hasImage } = req.body || {};
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages array required' });
   }
 
-  // ============================================================
-  // VISION vs TEXT routing
-  // If the message contains an image, use vision model
-  // ============================================================
   const lastMsg = messages[messages.length - 1];
-  const isVisionRequest = hasImage ||
-    (Array.isArray(lastMsg?.content) &&
-     lastMsg.content.some(c => c.type === 'image_url'));
+  const isVisionRequest = hasImage || 
+    (Array.isArray(lastMsg?.content) && lastMsg.content.some(c => c.type === 'image_url'));
 
-  // ============================================================
-  // HISTORY — trim and handle image content properly
-  // For vision: only keep last message with image (Groq vision limit)
-  // For text: keep last 10 messages
-  // ============================================================
-  let history;
+  // Process history
+  let history = isVisionRequest 
+    ? messages.slice(-5).map((m, i, arr) => {
+        if (i < arr.length - 1 && Array.isArray(m.content)) {
+          return { role: m.role, content: m.content.find(c => c.type === 'text')?.text || '' };
+        }
+        return m;
+      })
+    : messages.slice(-10).map(m => ({
+        role: m.role || 'user',
+        content: String(m.content).slice(0, 1500)
+      }));
 
-  if (isVisionRequest) {
-    // For vision requests: send only the last message to stay within limits
-    // Strip images from older messages to avoid token overflow
-    history = messages.slice(-5).map((m, i, arr) => {
-      if (i < arr.length - 1 && Array.isArray(m.content)) {
-        // Remove image from older messages, keep only text
-        const textOnly = m.content.find(c => c.type === 'text')?.text || '';
-        return { role: m.role, content: textOnly };
-      }
-      // For the last message, validate image format
-      if (Array.isArray(m.content)) {
-        const parts = m.content.map(c => {
-          if (c.type === 'image_url') {
-            // Ensure base64 image is properly formatted
-            const url = c.image_url?.url || '';
-            if (url.startsWith('data:')) {
-              return {
-                type: 'image_url',
-                image_url: { url }
-              };
-            }
-          }
-          return c;
-        });
-        return { role: m.role, content: parts };
-      }
-      return { role: m.role, content: String(m.content).slice(0, 2000) };
-    });
-  } else {
-    // Normal text chat
-    history = messages.slice(-10).map(m => ({
-      role: m.role || 'user',
-      content: String(m.content).slice(0, 1500)
-    }));
-  }
+  const lastMsgText = Array.isArray(lastMsg?.content) 
+    ? lastMsg.content.find(c => c.type === 'text')?.text || '' 
+    : String(lastMsg?.content || '');
 
-  const lastMsgText = (() => {
-    if (Array.isArray(lastMsg?.content)) {
-      return lastMsg.content.find(c => c.type === 'text')?.text || '';
-    }
-    return String(lastMsg?.content || '');
-  })();
   const lastMsgLower = lastMsgText.toLowerCase();
 
-  // ============================================================
-  // SMART QUERY EXTRACTION (for news search)
-  // ============================================================
-  function extractSearchQuery(text) {
-    if (/cambodia.*thai|thai.*cambodia|ព្រះវិហារ|preah vihear|ta moan/i.test(text) ||
-        /សង្គ្រាម|border.*conflict|conflict.*border/i.test(text)) {
-      return 'Cambodia Thailand border conflict';
-    }
-    const khmerMap = {
-      'សង្គ្រាម': 'war conflict', 'ព្រះវិហារ': 'Preah Vihear',
-      'កម្ពុជា': 'Cambodia', 'ថៃ': 'Thailand', 'ព័ត៌មាន': 'news',
-      'យោធា': 'military', 'ព្រំដែន': 'border', 'ការវាយប្រហារ': 'attack',
-      'រដ្ឋាភិបាល': 'government', 'ការបោះឆ្នោត': 'election',
-    };
-    let translated = text;
-    for (const [kh, en] of Object.entries(khmerMap)) {
-      translated = translated.replace(new RegExp(kh, 'g'), en);
-    }
-    const stopWords = /\b(what|is|are|the|a|an|do|did|does|has|have|how|why|when|where|who|tell|me|about|please|can|you|i|my|was|were|be|been|of|in|on|at|to|for|with|by|from|and|or|but|so|if|not|no)\b/g;
-    const cleaned = translated.replace(stopWords, ' ').replace(/\s+/g, ' ').trim();
-    const words = cleaned.split(' ').filter(w => w.length > 2).slice(0, 6);
-    return words.length > 0 ? words.join(' ') : text.slice(0, 80);
-  }
-
-  // ============================================================
-  // DETECT if news search needed (skip for image requests)
-  // ============================================================
-  const needsSearch = !isVisionRequest && (
-    /2024|2025|2026|today|latest|recent|current|now|this year|this week/i.test(lastMsgLower) ||
-    /news|update|happen|war|fight|attack|conflict|election|president|minister|protest|crisis|border|military|army|soldier|shoot|kill|dead|peace|deal|treaty/i.test(lastMsgLower) ||
-    /cambodia|thailand|khmer|phnom penh|bangkok|preah vihear|ta moan|hun manet|hun sen/i.test(lastMsgLower) ||
-    /who is|who are|tell me about|do you know|you know|singer|actor|actress|footballer|player|celebrity|famous|rapper|artist|chico|jordan|beyonce|drake|messi|ronaldo|bts|blackpink|taylor|lebron|elon/i.test(lastMsgLower) ||
-    /[ក-៿]/.test(lastMsgText)
+  // News detection
+  const isNewsRequest = !isVisionRequest && (
+    /news|today|latest|current|2024|2025|2026/i.test(lastMsgLower) &&
+    /cambodia|thailand|war|conflict|border|hun manet/i.test(lastMsgLower)
   );
 
-  const isCambodiaThaiTopic =
-    /cambodia|thailand|khmer|preah vihear|ta moan|border|hun manet|hun sen/i.test(lastMsgLower) ||
-    /កម្ពុជា|ថៃ|ព្រះវិហារ|សង្គ្រាម|ព្រំដែន/.test(lastMsgText);
-
-  // ============================================================
-  // FETCH LIVE NEWS (only for text chat)
-  // ============================================================
-  let liveArticles = [];
-
-  if (needsSearch) {
-    const baseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
-    const searchQuery = extractSearchQuery(lastMsgText);
-
-    const fetchNews = async (query) => {
-      try {
-        const r = await fetch(`${baseUrl}/api/news?q=${encodeURIComponent(query)}`);
-        if (!r.ok) return [];
-        const data = await r.json();
-        return data.articles || [];
-      } catch (e) {
-        console.log('News fetch error:', e.message);
-        return [];
-      }
-    };
-
-    const queries = [searchQuery];
-    if (isCambodiaThaiTopic && searchQuery !== 'Cambodia Thailand border conflict') {
-      queries.push('Cambodia Thailand border conflict');
-    }
-
-    const results = await Promise.all(queries.map(fetchNews));
-    const seen = new Set();
-    liveArticles = results.flat().filter(a => {
-      if (!a.title || seen.has(a.title)) return false;
-      seen.add(a.title);
-      return true;
-    }).slice(0, 8);
-  }
-
-  // ============================================================
-  // FORMAT LIVE ARTICLES for system prompt
-  // ============================================================
   let newsBlock = '';
-
-  if (liveArticles.length > 0) {
-    const formatted = liveArticles.map((a, i) => {
-      const date = a.publishedAt ? a.publishedAt.slice(0, 10) : 'unknown date';
-      const source = a.source?.name || 'Unknown source';
-      const url = a.url || '';
-      const desc = a.description ? `\n   Summary: ${a.description.slice(0, 200)}` : '';
-      return `[Article ${i + 1}]
-   Title: ${a.title}
-   Source: ${source}
-   Date: ${date}
-   URL: ${url}${desc}`;
-    }).join('\n\n');
-
-    newsBlock = `\n\n============================
-LIVE NEWS ARTICLES (fetched right now):
-============================
-${formatted}
-============================
-IMPORTANT: Use these articles in your answer. For each article you cite, show:
-- Source in bold (e.g. **Reuters**)
-- Date (e.g. 2025-08-14)
-- URL as a link on its own line starting with 🔗
-============================`;
-  }
-
-  // ============================================================
-  // CAMBODIA-THAILAND BACKGROUND KNOWLEDGE
-  // ============================================================
-  // Add Khmer celebrity knowledge always
-  const khmerCelebKnowledge = `
-============================
-FAMOUS PEOPLE KNOWLEDGE:
-- Michael Jordan: greatest basketball player ever, Chicago Bulls, 6 NBA championships, Air Jordan shoes
-- Chico: could refer to Chico fashion brand (Cambodia), Chico the singer, or other. Ask user to clarify if unsure.
-- Preap Sovath: most famous Cambodian male singer, known as "King of Khmer music"
-- Meas Soksophea: famous Cambodian female singer
-- Elon Musk: CEO of Tesla and SpaceX, owns X (Twitter), richest person
-- BTS: Korean boyband (Jungkook, V, Jimin, Jin, Suga, RM, J-Hope)
-- Blackpink: Korean girl group (Jennie, Lisa, Rose, Jisoo) — Lisa is Thai
-- Cristiano Ronaldo (CR7): Portuguese footballer, plays in Saudi Arabia (Al Nassr)
-- Lionel Messi: Argentine footballer, plays for Inter Miami, 8 Ballon d'Or
-- LeBron James: NBA superstar, Los Angeles Lakers
-- Taylor Swift: biggest pop star in the world right now
-- Drake: Canadian rapper, one of best-selling artists ever
-- If you don't know a specific person → say "bong min deng nas, but let me tell you what I know!" and share related info. NEVER say "AI temporarily unavailable".
-============================`;
-
-  const cambodiaThaiBackground = isCambodiaThaiTopic ? `
-============================
-CAMBODIA-THAILAND BACKGROUND KNOWLEDGE:
-============================
-- In July–August 2025, serious military clashes broke out between Cambodia and Thailand along their northwestern border, near the Preah Vihear and Ta Moan Thom temple areas.
-- Both sides exchanged artillery and gunfire, resulting in casualties and displacement of civilians.
-- The fighting was the most serious armed clash since the 2008–2011 Preah Vihear standoff.
-- ASEAN called for an immediate ceasefire. A fragile ceasefire was brokered in late August 2025.
-- Thailand blamed Cambodia for initiating; Cambodia denied this.
-- The Preah Vihear temple was awarded to Cambodia by the ICJ in 1962, but surrounding land remains disputed.
-- Hun Manet became Cambodia's PM in August 2023, succeeding Hun Sen.
-============================` : '';
-
-  // ============================================================
-  // SYSTEM PROMPT
-  // ============================================================
-  const visionSystemPrompt = `You are CC-AI, a smart AI assistant with vision capabilities made by Chorm Chhaiya (Yaxy).
-
-When given an image:
-- Describe it clearly and in detail
-- If it contains text (exam, worksheet, document, sign), READ and TRANSCRIBE all the text accurately
-- If it's a test or exercise, provide the ANSWERS with explanations
-- If it's a photo of a person or place, describe what you see
-- If the user asks a specific question about the image, answer that question directly
-
-Reply in the SAME language the user writes in. If they write in Khmer, reply in Khmer.`;
-
-  const textSystemPrompt = userSystemPrompt || `You are CC-AI, a smart friendly AI made by Chorm Chhaiya (Yaxy), Grade 10 student at Tepranom High School, Cambodia.
-
-Today is 2026. You are a 2026 AI. Never say cutoff is 2023.
-Reply in the SAME language the user writes in.
-Talk naturally like a real friend.
-NEVER say "I don't have information" — use the news articles provided.`;
-
-  const systemPrompt = isVisionRequest
-    ? visionSystemPrompt
-    : (textSystemPrompt + khmerCelebKnowledge + cambodiaThaiBackground + newsBlock);
-
-  // ============================================================
-  // GROQ API CALL
-  // ============================================================
-  if (!process.env.GROQ_API_KEY) {
-    return res.status(500).json({ error: 'Server misconfigured: missing GROQ_API_KEY' });
-  }
-
-  async function tryGroq(model) {
-    // Trim system prompt if too long (prevents token limit errors)
-    const maxSystemLen = 6000;
-    const trimmedSystem = systemPrompt.length > maxSystemLen
-      ? systemPrompt.slice(0, maxSystemLen) + '\n[...trimmed for length]'
-      : systemPrompt;
-
-    // Also trim history messages
-    const trimmedHistory = history.map(m => {
-      if (typeof m.content === 'string' && m.content.length > 2000) {
-        return { ...m, content: m.content.slice(0, 2000) + '...' };
-      }
-      return m;
-    });
-
-    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'system', content: trimmedSystem }, ...trimmedHistory],
-        temperature: 0.6,
-        max_tokens: 1500
-      })
-    });
-    const data = await r.json();
-    if (data.choices?.[0]?.message?.content) return data;
-    // Log specific error for debugging
-    const errMsg = data.error?.message || JSON.stringify(data.error || '');
-    throw new Error(`No choices from ${model}: ${errMsg}`);
-  }
-
-  // Vision models (support images) vs text models
-  const visionModels = [
-    'meta-llama/llama-4-scout-17b-16e-instruct', // Groq's best vision model
-    'meta-llama/llama-4-maverick-17b-128e-instruct', // fallback vision
-  ];
-
-  const textModels = [
-    'llama-3.3-70b-versatile',
-    'llama-3.1-70b-versatile',
-    'llama3-70b-8192',
-    'llama3-8b-8192',
-    'gemma2-9b-it',
-    'mixtral-8x7b-32768'
-  ];
-
-  const modelsToTry = isVisionRequest ? visionModels : textModels;
-
-  for (const model of modelsToTry) {
+  if (isNewsRequest) {
     try {
-      const aiRes = await tryGroq(model);
-      console.log(`Used model: ${model}, vision: ${isVisionRequest}`);
-      return res.status(200).json(aiRes);
-    } catch (e) {
-      console.log(`Model ${model} failed:`, e.message);
-    }
+      const baseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
+      const r = await fetch(`${baseUrl}/api/news?q=Cambodia+Thailand+border+conflict`);
+      if (r.ok) {
+        const data = await r.json();
+        const articles = (data.articles || []).slice(0, 3);
+        if (articles.length > 0) {
+          newsBlock = '\n\nLIVE NEWS:\n' + articles.map((a, i) => 
+            `[${i+1}] ${a.title} | ${a.source?.name || 'Unknown'} | ${a.publishedAt?.slice(0,10) || 'unknown'}`
+          ).join('\n');
+        }
+      }
+    } catch (e) {}
   }
 
-  // If vision models all failed, try text models with description fallback
-  if (isVisionRequest) {
-    console.log('Vision models failed, falling back to text with notice');
-    for (const model of textModels) {
-      try {
-        const fallbackHistory = [{
-          role: 'user',
-          content: lastMsgText || 'The user sent an image but vision is temporarily unavailable.'
-        }];
-        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: 'system', content: 'You are CC-AI. Vision is temporarily unavailable. Tell the user politely that image reading is temporarily down and to try again in a moment.' },
-              ...fallbackHistory
-            ],
-            temperature: 0.5,
-            max_tokens: 200
-          })
-        });
-        const data = await r.json();
-        if (data.choices?.[0]?.message?.content) return res.status(200).json(data);
-      } catch (e) {
-        console.log(`Fallback model ${model} failed:`, e.message);
+  // DETAILED CODING KNOWLEDGE - This makes the AI write better code
+  const codingKnowledge = `
+CODING EXPERTISE - FOLLOW THESE RULES:
+
+[HTML/CSS]
+- Use semantic HTML5 tags (header, nav, main, section, article, footer)
+- CSS: Use Flexbox and Grid for layouts, never float
+- Animations: Use @keyframes, transform, transition. Always include vendor prefixes
+- Responsive: Mobile-first with media queries
+- Example good code:
+  \`\`\`css
+  .container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  \`\`\`
+
+[JAVASCRIPT]
+- ALWAYS use const or let, NEVER use var
+- Use arrow functions: const fn = () => {} not function fn() {}
+- Use async/await for async code, never raw promises
+- Destructure: const { name, age } = user; not user.name
+- Template literals: \`Hello \${name}\` not "Hello " + name
+- Array methods: use map, filter, reduce, forEach. Never use for-loop unless necessary
+- Error handling: ALWAYS wrap async code in try-catch
+- Example good code:
+  \`\`\`javascript
+  const fetchData = async (url) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(\`HTTP \${response.status}\`);
+      return await response.json();
+    } catch (error) {
+      console.error('Fetch failed:', error);
+      return null;
+    }
+  };
+  \`\`\`
+
+[REACT]
+- ALWAYS use functional components with hooks, NEVER class components
+- Hooks order: useState, useEffect, useContext, custom hooks
+- Props destructuring: const MyComponent = ({ title, onClick }) => {}
+- useEffect cleanup: ALWAYS return cleanup function for subscriptions/timers
+- Event handlers: use handleClick naming, inline for simple, separate function for complex
+- Example good code:
+  \`\`\`jsx
+  const UserCard = ({ user, onDelete }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    
+    useEffect(() => {
+      const timer = setTimeout(() => console.log('Mounted'), 1000);
+      return () => clearTimeout(timer);
+    }, []);
+    
+    const handleDelete = async () => {
+      setIsLoading(true);
+      await onDelete(user.id);
+      setIsLoading(false);
+    };
+    
+    return (
+      <div className="user-card">
+        <h3>{user.name}</h3>
+        <button onClick={handleDelete} disabled={isLoading}>
+          {isLoading ? 'Deleting...' : 'Delete'}
+        </button>
+      </div>
+    );
+  };
+  \`\`\`
+
+[PYTHON]
+- snake_case for variables/functions, PascalCase for classes
+- List comprehensions: [x*2 for x in items if x > 0]
+- f-strings: f"Hello {name}" not "Hello %s" % name
+- Type hints: def greet(name: str) -> str:
+- Error handling: try/except with specific exceptions
+- Example good code:
+  \`\`\`python
+  def process_users(users: list[dict]) -> list[str]:
+      try:
+          return [f"{u['name']} ({u['email']})" for u in users if u.get('active')]
+      except (KeyError, TypeError) as e:
+          logger.error(f"Processing failed: {e}")
+          return []
+  \`\`\`
+
+[ROBLOX/LUA]
+- Use local for all variables, never global
+- Events: Connect with anonymous functions, always Disconnect to prevent memory leaks
+- RemoteEvents: Validate all server inputs, never trust client
+- Use task.wait() not wait()
+- Example good code:
+  \`\`\`lua
+  local Players = game:GetService("Players")
+  local ReplicatedStorage = game:GetService("ReplicatedStorage")
+  local RemoteEvent = ReplicatedStorage:WaitForChild("MyRemote")
+  
+  local function onPlayerAdded(player)
+      local function onCharacterAdded(char)
+          local humanoid = char:WaitForChild("Humanoid")
+          humanoid.Died:Connect(function()
+              print(player.Name .. " died")
+          end)
+      end
+      player.CharacterAdded:Connect(onCharacterAdded)
+  end
+  
+  Players.PlayerAdded:Connect(onPlayerAdded)
+  \`\`\`
+
+[CODE STRUCTURE]
+- Always provide COMPLETE working code, never snippets with "..."
+- Add comments explaining WHY not WHAT
+- Validate all inputs, handle edge cases
+- Use meaningful variable names: userList not ul
+- Split long functions into smaller pure functions
+- Never leave placeholder code or TODOs`;
+
+  // General knowledge
+  const generalKnowledge = `
+[CELEBRITIES]
+Michael Jordan (basketball GOAT), Preap Sovath (King of Khmer music), BTS, Blackpink, Ronaldo, Messi, Taylor Swift
+
+[TIKTOK MEMES]
+Brainrot, Tung Tung Tung Sahur, 7×7=49, Ampersand (&), Brat Summer, Skibidi, Ohio, Rizz, Sigma, Mewing, Looksmaxxing, Slay, Rent Free, Caught in 4K, Vibe Check
+
+[CAMBODIA 2025]
+July-August border clash with Thailand at Preah Vihear/Ta Moan temples. Hun Manet PM since August 2023.`;
+
+  // System prompt
+  const basePrompt = systemPrompt || `You are CC-AI, a smart AI assistant made by Chorm Chhaiya (Yaxy), Grade 10 at Tepranom High School, Cambodia. Today is 2026. Reply in the user's language. Be friendly and helpful. Never say "AI temporarily unavailable."`;
+
+  const fullSystem = isVisionRequest 
+    ? `You are CC-AI with vision. Describe images clearly, read any text, answer questions about images.`
+    : `${basePrompt}\n\n${generalKnowledge}\n\n${codingKnowledge}${newsBlock}`;
+
+  if (!process.env.GROQ_API_KEY) {
+    return res.status(500).json({ error: 'Missing GROQ_API_KEY' });
+  }
+
+  // Updated models - removed decommissioned ones
+  const models = isVisionRequest 
+    ? ['meta-llama/llama-4-scout-17b-16e-instruct', 'meta-llama/llama-4-maverick-17b-128e-instruct']
+    : ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'llama3-70b-8192', 'gemma2-9b-it'];
+
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'system', content: fullSystem }, ...history],
+          temperature: 0.7,
+          max_completion_tokens: 4000,
+          top_p: 0.9
+        })
+      });
+
+      if (response.status === 429) {
+        if (i === models.length - 1) {
+          return res.status(429).json({ error: 'Rate limit reached. Please wait and try again.' });
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`${model} HTTP ${response.status}: ${errorText}`);
+        if (i === models.length - 1) {
+          return res.status(response.status).json({ error: `Groq API error: ${response.status}` });
+        }
+        continue;
+      }
+
+      const data = await response.json();
+      if (data.choices?.[0]?.message?.content) {
+        return res.status(200).json(data);
+      }
+    } catch (err) {
+      console.error(`${model} error:`, err.message);
+      if (i === models.length - 1) {
+        return res.status(500).json({ error: `All models failed: ${err.message}` });
       }
     }
   }
 
-  return res.status(200).json({
-    choices: [{ message: { role: 'assistant', content: '⚠️ AI temporarily unavailable. Please try again.' } }]
-  });
+  return res.status(500).json({ error: 'Unexpected error' });
 }
