@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     ? messages.slice(-3).map(m => ({ role: m.role, content: String(m.content).slice(0, 1000) }))
     : messages.slice(-5).map(m => ({ role: m.role || 'user', content: String(m.content).slice(0, 1000) }));
   const myFriends = "Chhaiya's best friends are [Ah kang], [Ah reach], [Ah nak], [Ah rith]";
-  const basePrompt = (systemPrompt || 'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') + " " + myFriends + "[STRICT RULE: RESPONSE ONLY. NO THINKING TAGS. NO REASONING. START ANSWER IMMEDIATELY.]";
+  const basePrompt = (systemPrompt || 'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') + " " + myFriends + "[RULE: Keep responses very short. No extra line breaks. Write in a single paragraph only. Do NOT use <think> tags.]";
   const knowledge = 'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.CODE:const/let,arrow functions,async/await,React hooks,complete examples.';
   const fullSystem = isVisionRequest ? 'CC-AI vision. Describe images.' : `${basePrompt} ${knowledge}`;
 
