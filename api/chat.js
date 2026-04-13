@@ -27,7 +27,8 @@ export default async function handler(req, res) {
   const myFriends = "Chhaiya's best friends are [Ah nak], [Ah kang], and [Ah reach].";
   
   // This ensures your friends are included even if 'systemPrompt' comes from the frontend
-  const basePrompt = (systemPrompt || 'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') + " " + myFriends;
+// Change your basePrompt to this:
+const basePrompt = (systemPrompt || 'CC-AI by ChormChhaiya. G10. Be super friendly and respectful, like a chill human best friend. Use a bit of Gen Z slang but keep it polite and helpful. Talk like a real person, not a robot. Keep it concise (no yapping) and NEVER show <think> tags.') + " " + myFriends;
   
   const knowledge = 'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.CODE:const/let,arrow functions,async/await,React hooks,complete examples.';
   const fullSystem = isVisionRequest ? 'CC-AI vision. Describe images.' : `${basePrompt} ${knowledge}`;
