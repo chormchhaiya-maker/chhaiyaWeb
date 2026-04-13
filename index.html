@@ -37,10 +37,21 @@ body.light .grid-overlay{opacity:0.15}
 @keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
 @keyframes glitch{0%,90%,100%{transform:translate(0)}92%{transform:translate(-2px,1px)}94%{transform:translate(2px,-1px)}96%{transform:translate(-1px,2px)}}
 @keyframes pulse{0%,100%{box-shadow:0 0 8px #4ade80}50%{box-shadow:0 0 16px #4ade80,0 0 30px #4ade80}}
-@keyframes rippleOut{0%{transform:scale(0);opacity:0.5}100%{transform:scale(4);opacity:0}}
+@keyframes streakPop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
 @keyframes slideInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes popIn{0%{transform:scale(0.8);opacity:0}70%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
-
+@keyframes rippleOut{0%{transform:scale(0);opacity:0.5}100%{transform:scale(4);opacity:0}}
+.streak-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#ff6b00,#ff9500);color:white;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;font-family:'DM Mono',monospace;animation:streakPop 0.4s ease forwards;}
+.rating-bar{display:flex;gap:6px;margin-top:8px;align-items:center;}
+.star-btn{background:none;border:none;font-size:1.2rem;cursor:pointer;color:#555;transition:transform 0.1s cubic-bezier(0.34,1.56,0.64,1),color 0.1s ease !important;}
+.star-btn:hover{transform:scale(1.4) !important;}
+.star-btn:active{transform:scale(1.1) !important;}
+.star-btn.active{color:#f59e0b;}
+.feedback-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;}
+.feedback-box{background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:28px;width:90%;max-width:380px;text-align:center;}
+.delete-btn{background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.3);color:#f87171;border-radius:8px;padding:5px 10px;font-size:0.78rem;cursor:pointer;white-space:nowrap;}
+.delete-btn:hover{background:rgba(255,80,80,0.25);}
+.ripple{position:absolute;border-radius:50%;background:rgba(255,255,255,0.25);animation:rippleOut 0.5s ease forwards;pointer-events:none;}
 *{-webkit-tap-highlight-color:transparent;}
 button,label,[onclick]{cursor:pointer;user-select:none;-webkit-user-select:none;}
 button{transition:transform 0.12s cubic-bezier(0.34,1.56,0.64,1),opacity 0.15s ease,background 0.15s ease,box-shadow 0.15s ease !important;}
@@ -61,27 +72,8 @@ button:active{transform:scale(0.92) !important;transition:transform 0.06s ease !
 .msg-action-btn{transition:transform 0.12s cubic-bezier(0.34,1.56,0.64,1),color 0.12s ease !important;}
 .msg-action-btn:hover{transform:scale(1.1) !important;}
 .msg-action-btn:active{transform:scale(0.9) !important;}
-.input-wrap{transition:border-color 0.2s ease,box-shadow 0.2s ease !important;}
-.input-wrap:focus-within{box-shadow:0 0 0 2px rgba(200,200,200,0.15) !important;}
-.delete-btn{transition:transform 0.12s cubic-bezier(0.34,1.56,0.64,1),background 0.15s ease !important;}
-.delete-btn:hover{transform:scale(1.06) !important;}
-.delete-btn:active{transform:scale(0.9) !important;}
-.star-btn{transition:transform 0.1s cubic-bezier(0.34,1.56,0.64,1),color 0.1s ease !important;}
-.star-btn:hover{transform:scale(1.4) !important;}
-.star-btn:active{transform:scale(1.1) !important;}
-.messages{scroll-behavior:smooth;}
 .chat-history-item{transition:background 0.15s ease,transform 0.1s ease !important;}
 .chat-history-item:active{transform:scale(0.98) !important;}
-.badge{transition:transform 0.12s ease !important;}
-.toggle-slider{transition:background 0.2s ease !important;}
-@keyframes streakPop{0%{transform:scale(0.5);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
-.streak-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#ff6b00,#ff9500);color:white;border-radius:20px;padding:3px 10px;font-size:0.75rem;font-weight:700;font-family:'DM Mono',monospace;animation:streakPop 0.4s ease forwards;}
-.rating-bar{display:flex;gap:6px;margin-top:8px;align-items:center;}
-.star-btn{background:none;border:none;font-size:1.2rem;cursor:pointer;transition:transform 0.15s;color:#555;}
-.star-btn:hover{transform:scale(1.3);}
-.star-btn.active{color:#f59e0b;}
-.feedback-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;}
-.feedback-box{background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:28px;width:90%;max-width:380px;text-align:center;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;height:100vh;height:-webkit-fill-available;display:flex;flex-direction:column;overflow:hidden;}
 #matrix-canvas{display:none}
 .grid-overlay{display:none}
@@ -219,7 +211,12 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
     <button class="new-chat-btn" onclick="showCodeRunner();toggleSidebar()">
       <span style="font-size:1rem;">💻</span> Code Runner
     </button>
-
+    <button class="new-chat-btn" onclick="showMusicGen();toggleSidebar()">
+      <span style="font-size:1rem;">🎵</span> Generate Music
+    </button>
+    <button class="new-chat-btn" onclick="showOutfitStudio();toggleSidebar()">
+      <span style="font-size:1rem;">👗</span> Outfit Studio
+    </button>
     <div style="height:1px;background:rgba(255,255,255,0.06);margin:6px 4px;"></div>
     <button class="new-chat-btn" onclick="showCharacterPicker();toggleSidebar()">
       <span style="font-size:1rem;">🎭</span> AI Character
@@ -487,6 +484,26 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   </div>
 </div>
 
+<!-- Music Modal -->
+<div class="settings-overlay" id="music-overlay" onclick="hideModal('music-overlay',event)">
+  <div class="settings-box" onclick="event.stopPropagation()" style="width:380px;">
+    <div class="settings-title">🎵 AI Music Generator <button onclick="hideModal('music-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
+    <div style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Describe the music you want to generate:</div>
+    <input type="text" id="music-prompt" placeholder="e.g. relaxing lofi hip hop, epic orchestral..." style="width:100%;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.9rem;outline:none;margin-bottom:8px;" onkeydown="if(event.key==='Enter')generateMusic()"/>
+    <select id="music-style" style="width:100%;background:var(--surface2);border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.9rem;outline:none;margin-bottom:12px;">
+      <option value="">🎵 Any style</option>
+      <option value="lofi hip hop">🎧 Lofi Hip Hop</option>
+      <option value="epic orchestral">🎻 Epic Orchestral</option>
+      <option value="electronic EDM">🎛️ Electronic EDM</option>
+      <option value="acoustic guitar">🎸 Acoustic Guitar</option>
+      <option value="jazz piano">🎹 Jazz Piano</option>
+      <option value="ambient meditation">🧘 Ambient Meditation</option>
+      <option value="pop upbeat">🎤 Pop Upbeat</option>
+    </select>
+    <button onclick="generateMusic()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;">🎵 Generate Music</button>
+    <div id="music-result" style="margin-top:12px;display:none;"></div>
+  </div>
+</div>
 
 <!-- Upload Link Modal -->
 <div class="settings-overlay" id="uploadlink-overlay" onclick="hideModal('uploadlink-overlay',event)">
@@ -502,6 +519,55 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
   </div>
 </div>
 
+<!-- Outfit Studio Modal -->
+<div class="settings-overlay" id="outfit-overlay" onclick="hideModal('outfit-overlay',event)">
+  <div class="settings-box" onclick="event.stopPropagation()" style="width:420px;max-height:90vh;overflow-y:auto;">
+    <div class="settings-title">👗 Outfit Studio <button onclick="hideModal('outfit-overlay')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:1.2rem;">✕</button></div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+      <button id="tab-describe" onclick="switchOutfitTab('describe')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--bg);font-size:0.82rem;cursor:pointer;font-family:'Inter',sans-serif;">✍️ Describe Person</button>
+      <button id="tab-upload" onclick="switchOutfitTab('upload')" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:0.82rem;cursor:pointer;font-family:'Inter',sans-serif;">📷 Upload Photo</button>
+    </div>
+
+    <!-- Describe Tab -->
+    <div id="outfit-describe-tab">
+      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">PERSON DESCRIPTION</div>
+      <input type="text" id="outfit-person" placeholder="e.g. young man, tall, dark hair..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;margin-bottom:10px;"/>
+      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">OUTFIT / CLOTHING</div>
+      <input type="text" id="outfit-clothing" placeholder="e.g. red t-shirt with jeans, formal suit..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;margin-bottom:10px;"/>
+      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">QUICK OUTFIT PRESETS</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+        <button onclick="setOutfit('red t-shirt and blue jeans')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">👕 Casual</button>
+        <button onclick="setOutfit('black formal suit and tie')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🤵 Formal</button>
+        <button onclick="setOutfit('traditional Khmer costume')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🇰🇭 Khmer</button>
+        <button onclick="setOutfit('sportswear and sneakers')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🏃 Sport</button>
+        <button onclick="setOutfit('cyberpunk leather jacket with neon details')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🌆 Cyberpunk</button>
+        <button onclick="setOutfit('anime school uniform')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🎌 Anime</button>
+        <button onclick="setOutfit('hoodie and sweatpants streetwear')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">🧥 Street</button>
+        <button onclick="setOutfit('royal king outfit with crown')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:4px 10px;border-radius:20px;font-size:0.75rem;cursor:pointer;">👑 Royal</button>
+      </div>
+      <button onclick="generateOutfit()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--bg);border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;">✨ Generate</button>
+    </div>
+
+    <!-- Upload Tab -->
+    <div id="outfit-upload-tab" style="display:none;">
+      <div style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">Upload your photo and change the outfit style:</div>
+      <div id="outfit-photo-preview" style="display:none;margin-bottom:10px;text-align:center;">
+        <img id="outfit-preview-img" style="max-width:100%;max-height:150px;border-radius:10px;object-fit:contain;"/>
+      </div>
+      <label style="display:block;background:var(--surface2);border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer;margin-bottom:10px;color:var(--text2);font-size:0.85rem;">
+        📷 Click to upload photo
+        <input type="file" accept="image/*" style="display:none;" onchange="handleOutfitPhoto(this)"/>
+      </label>
+      <div style="font-size:0.78rem;color:var(--text3);margin-bottom:6px;font-family:'DM Mono',monospace;">NEW OUTFIT STYLE</div>
+      <input type="text" id="outfit-style-input" placeholder="e.g. anime style, cyberpunk, formal suit..." style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;margin-bottom:12px;"/>
+      <button onclick="applyOutfitStyle()" style="width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--bg);border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;">🎨 Apply Style</button>
+    </div>
+
+    <div id="outfit-result" style="margin-top:12px;display:none;"></div>
+  </div>
+</div>
 
 <!-- Settings Modal -->
 <div class="settings-overlay" id="settings-overlay" onclick="hideSettings(event)">
@@ -587,7 +653,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 // State
 let messages=[],isLoading=false,autoSpeak=false,pendingImage=null;
 
-// ===================== SMOOTH UI / RIPPLE =====================
+// ===================== SMOOTH UI =====================
 function addRipple(e, el) {
   const rect = el.getBoundingClientRect();
   const ripple = document.createElement('span');
@@ -599,274 +665,112 @@ function addRipple(e, el) {
   el.appendChild(ripple);
   setTimeout(() => ripple.remove(), 500);
 }
-
-// Haptic feedback (mobile)
-function haptic(style='light') {
-  if (navigator.vibrate) {
-    if (style === 'light') navigator.vibrate(8);
-    else if (style === 'medium') navigator.vibrate(15);
-    else if (style === 'heavy') navigator.vibrate([10,5,10]);
-  }
-}
-
-// Add ripple + haptic to all buttons on click
-document.addEventListener('click', (e) => {
-  const btn = e.target.closest('button, .suggestion, .hdr-btn, .new-chat-btn');
-  if (btn) {
-    addRipple(e, btn);
-    haptic('light');
-  }
-}, { passive: true });
-
-// Smooth scroll to bottom helper
-function smoothScrollBottom() {
-  const container = document.getElementById('messages');
-  if (!container) return;
-  container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-}
+function haptic(s='light'){if(navigator.vibrate){if(s==='light')navigator.vibrate(8);else if(s==='medium')navigator.vibrate(15);}}
+document.addEventListener('click',(e)=>{const btn=e.target.closest('button,.suggestion,.hdr-btn,.new-chat-btn');if(btn){addRipple(e,btn);haptic();}},{passive:true});
+function smoothScrollBottom(){const c=document.getElementById('messages');if(c)c.scrollTo({top:c.scrollHeight,behavior:'smooth'});}
 
 // ===================== STREAK SYSTEM =====================
-function getStreak() {
-  try {
-    const s = JSON.parse(localStorage.getItem('streak_data') || '{}');
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    if (s.lastDate === today) return s.count || 1;
-    if (s.lastDate === yesterday) return s.count || 1;
-    return 0;
-  } catch(e) { return 0; }
-}
-
-function updateStreak() {
-  try {
-    const s = JSON.parse(localStorage.getItem('streak_data') || '{}');
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    let count = 1;
-    if (s.lastDate === today) return s.count; // already updated today
-    if (s.lastDate === yesterday) count = (s.count || 1) + 1; // continue streak
-    const newData = { count, lastDate: today, best: Math.max(count, s.best || 1) };
-    localStorage.setItem('streak_data', JSON.stringify(newData));
-    if (count > 1) showStreakToast(count);
-    return count;
-  } catch(e) { return 1; }
-}
-
-function showStreakToast(count) {
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;animation:streakPop 0.4s ease forwards;';
-  toast.innerHTML = `<div class="streak-badge">🔥 ${count} day streak! Keep it up!</div>`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
-}
-
-function getStreakDisplay() {
-  const s = JSON.parse(localStorage.getItem('streak_data') || '{}');
-  const count = getStreak();
-  if (count === 0) return '';
-  return `<span class="streak-badge" style="animation:none;margin-left:8px;font-size:0.7rem;">🔥 ${count}d</span>`;
-}
+function getStreak(){try{const s=JSON.parse(localStorage.getItem('streak_data')||'{}');const today=new Date().toDateString();const yesterday=new Date(Date.now()-86400000).toDateString();if(s.lastDate===today)return s.count||1;if(s.lastDate===yesterday)return s.count||1;return 0;}catch(e){return 0;}}
+function updateStreak(){try{const s=JSON.parse(localStorage.getItem('streak_data')||'{}');const today=new Date().toDateString();const yesterday=new Date(Date.now()-86400000).toDateString();let count=1;if(s.lastDate===today)return s.count;if(s.lastDate===yesterday)count=(s.count||1)+1;const nd={count,lastDate:today,best:Math.max(count,s.best||1)};localStorage.setItem('streak_data',JSON.stringify(nd));if(count>1)showStreakToast(count);return count;}catch(e){return 1;}}
+function showStreakToast(count){const t=document.createElement('div');t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;animation:streakPop 0.4s ease forwards;';t.innerHTML=`<div class="streak-badge">🔥 ${count} day streak! Keep it up!</div>`;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
 
 // ===================== RATING SYSTEM =====================
 function addRatingBar(bubble, messageIndex) {
   const bar = document.createElement('div');
   bar.className = 'rating-bar';
-  bar.innerHTML = `
-    <span style="font-size:0.72rem;color:var(--text3);">Rate:</span>
-    ${[1,2,3,4,5].map(i => `<button class="star-btn" onclick="rateMessage(${messageIndex},${i},this.parentElement)" title="${i} star">★</button>`).join('')}
-    <span id="rating-thanks-${messageIndex}" style="font-size:0.72rem;color:#4ade80;display:none;">Thanks! 🙏</span>`;
+  bar.innerHTML = `<span style="font-size:0.72rem;color:var(--text3);">Rate:</span>${[1,2,3,4,5].map(i=>`<button class="star-btn" onclick="rateMessage(${messageIndex},${i},this.parentElement)" title="${i} star">★</button>`).join('')}<span id="rating-thanks-${messageIndex}" style="font-size:0.72rem;color:#4ade80;display:none;">Thanks! 🙏</span>`;
   bubble.appendChild(bar);
 }
-
-function rateMessage(idx, stars, bar) {
-  // Save rating
-  try {
-    const ratings = JSON.parse(localStorage.getItem('msg_ratings') || '[]');
-    const msg = messages[idx];
-    const userMsg = messages[idx - 1];
-    ratings.push({
-      stars,
-      aiReply: (msg?.content || '').slice(0, 100),
-      userAsked: typeof userMsg?.content === 'string' ? userMsg.content.slice(0, 100) : '',
-      time: new Date().toISOString()
-    });
-    // Keep last 50 ratings
-    localStorage.setItem('msg_ratings', JSON.stringify(ratings.slice(-50)));
-    // Save to Firebase REST API — always works
-    const DB_URL2 = 'https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';
-    fetch(`${DB_URL2}/ratings.json`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        uid: getUserId(),
-        stars,
-        aiReply: (msg?.content || '').slice(0, 150),
-        userAsked: typeof userMsg?.content === 'string' ? userMsg.content.slice(0, 150) : '',
-        time: Date.now()
-      })
-    }).catch(() => {});
-  } catch(e) {}
-
-  // Update stars UI
-  const stars_btns = bar.querySelectorAll('.star-btn');
-  stars_btns.forEach((btn, i) => {
-    btn.classList.toggle('active', i < stars);
-    btn.onclick = null; // disable re-rating
-  });
-  const thanks = document.getElementById(`rating-thanks-${idx}`);
-  if (thanks) thanks.style.display = 'inline';
+function rateMessage(idx,stars,bar){
+  try{const DB='https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';const msg=messages[idx];const um=messages[idx-1];fetch(`${DB}/ratings.json`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:getUserId(),stars,aiReply:(msg?.content||'').slice(0,150),userAsked:typeof um?.content==='string'?um.content.slice(0,150):'',time:Date.now()})}).catch(()=>{});}catch(e){}
+  bar.querySelectorAll('.star-btn').forEach((b,i)=>{b.classList.toggle('active',i<stars);b.onclick=null;});
+  const t=document.getElementById(`rating-thanks-${idx}`);if(t)t.style.display='inline';
 }
 
-// ===================== FEEDBACK COLLECTOR =====================
-let chatCountSinceFeedback = parseInt(localStorage.getItem('chats_since_feedback') || '0');
+// ===================== FEEDBACK =====================
+let chatCountSinceFeedback=parseInt(localStorage.getItem('chats_since_feedback')||'0');
+function checkFeedbackPrompt(){const fc=parseInt(localStorage.getItem('feedback_count')||'0');if(fc>=3)return;chatCountSinceFeedback++;localStorage.setItem('chats_since_feedback',chatCountSinceFeedback);const thresholds=[5,15,20];const next=thresholds[fc];if(!next)return;if(chatCountSinceFeedback>=next){chatCountSinceFeedback=0;localStorage.setItem('chats_since_feedback','0');localStorage.setItem('feedback_count',fc+1);setTimeout(()=>showFeedbackModal(),1500);}}
+function showFeedbackModal(){const o=document.createElement('div');o.className='feedback-overlay';o.id='feedback-overlay';o.innerHTML=`<div class="feedback-box"><div style="font-size:2.5rem;margin-bottom:12px;">💬</div><div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text);margin-bottom:6px;font-weight:700;">Quick Feedback!</div><div style="font-size:0.82rem;color:var(--text2);margin-bottom:16px;">Help make CC-AI better!</div><div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;">${['😍 Love it','😊 Good','😐 OK','😕 Needs work'].map(e=>`<button onclick="selectFeedback(this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:0.78rem;color:var(--text2);cursor:pointer;">${e}</button>`).join('')}</div><textarea id="feedback-text" placeholder="Tell me more... (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;resize:none;height:70px;margin-bottom:12px;"></textarea><div style="display:flex;gap:8px;"><button onclick="submitFeedback()" style="flex:1;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;">Send 🚀</button><button onclick="document.getElementById('feedback-overlay').remove()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:10px;padding:10px 16px;font-family:'Inter',sans-serif;font-size:0.88rem;cursor:pointer;">Skip</button></div></div>`;document.body.appendChild(o);}
+let selectedFeedbackEmoji='';
+function selectFeedback(btn){document.querySelectorAll('#feedback-overlay button').forEach(b=>b.style.borderColor='');btn.style.borderColor='#7c6fff';btn.style.color='#a093f8';selectedFeedbackEmoji=btn.textContent;}
+async function submitFeedback(){const text=document.getElementById('feedback-text')?.value?.trim()||'';const rating=selectedFeedbackEmoji||'No rating';const DB='https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';try{await fetch(`${DB}/feedback.json`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid:getUserId(),name:getProfile().name||'Anonymous',rating,text,time:Date.now(),date:new Date().toDateString()})});}catch(e){}document.getElementById('feedback-overlay').remove();const t=document.createElement('div');t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border-radius:20px;padding:8px 20px;font-size:0.82rem;font-weight:700;font-family:Inter,sans-serif;';t.textContent='✅ Thanks for your feedback!';document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
 
-function checkFeedbackPrompt() {
-  const feedbackCount = parseInt(localStorage.getItem('feedback_count') || '0');
-  // Max 3 feedbacks per device (at 5, 15, 20 chats)
-  if (feedbackCount >= 3) return;
+// ===================== NOTES UI =====================
+function deleteNote(id){const notes=getNotes().filter(n=>n.id!==id);localStorage.setItem('user_notes',JSON.stringify(notes));showNotes();}
+function showNotes(){const notes=getNotes();const existing=document.getElementById('notes-overlay');if(existing)existing.remove();const o=document.createElement('div');o.id='notes-overlay';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;';o.innerHTML=`<div style="background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:24px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#f0eeff;font-weight:700;">📝 My Notes</div><button onclick="document.getElementById('notes-overlay').remove()" style="background:none;border:none;color:#777;cursor:pointer;font-size:1.2rem;">✕</button></div><div style="display:flex;gap:8px;margin-bottom:14px;"><input id="new-note-input" placeholder="Add a note..." style="flex:1;background:#0d0d1a;border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:#f0eeff;font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;"/><button onclick="addNoteFromPanel()" style="background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:0.85rem;">Add</button></div>${notes.length===0?'<div style="color:#555;text-align:center;padding:20px;font-size:0.85rem;">No notes yet!</div>':notes.map(n=>`<div style="background:#0d0d1a;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div><div style="font-size:0.85rem;color:#f0eeff;">${n.text}</div><div style="font-size:0.72rem;color:#555;margin-top:4px;">${n.time}</div></div><button onclick="deleteNote(${n.id})" style="background:none;border:none;color:#f87171;cursor:pointer;">🗑️</button></div>`).join('')}</div>`;document.body.appendChild(o);o.addEventListener('click',e=>{if(e.target===o)o.remove();});}
+function addNoteFromPanel(){const input=document.getElementById('new-note-input');if(!input?.value?.trim())return;saveNote(input.value.trim());showNotes();}
 
-  chatCountSinceFeedback++;
-  localStorage.setItem('chats_since_feedback', chatCountSinceFeedback);
-
-  // Schedule: first at 5, second at 15, third at 20
-  const thresholds = [5, 15, 20];
-  const nextThreshold = thresholds[feedbackCount];
-  if (!nextThreshold) return;
-
-  if (chatCountSinceFeedback >= nextThreshold) {
-    chatCountSinceFeedback = 0;
-    localStorage.setItem('chats_since_feedback', '0');
-    localStorage.setItem('feedback_count', feedbackCount + 1);
-    setTimeout(() => showFeedbackModal(), 1500);
-  }
-}
-
-function showFeedbackModal() {
-  const overlay = document.createElement('div');
-  overlay.className = 'feedback-overlay';
-  overlay.id = 'feedback-overlay';
-  overlay.innerHTML = `
-    <div class="feedback-box">
-      <div style="font-size:2.5rem;margin-bottom:12px;">💬</div>
-      <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text);margin-bottom:6px;font-weight:700;">Quick Feedback!</div>
-      <div style="font-size:0.82rem;color:var(--text2);margin-bottom:16px;line-height:1.6;">Help make CC-AI better! What do you think so far?</div>
-      <div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;">
-        ${['😍 Love it','😊 Good','😐 OK','😕 Needs work'].map(e => `<button onclick="selectFeedback(this)" style="background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:6px 12px;font-size:0.78rem;color:var(--text2);cursor:pointer;">${e}</button>`).join('')}
-      </div>
-      <textarea id="feedback-text" placeholder="Tell me more... (optional)" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;color:var(--text);font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;resize:none;height:70px;margin-bottom:12px;"></textarea>
-      <div style="display:flex;gap:8px;">
-        <button onclick="submitFeedback()" style="flex:1;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:10px;font-family:'Inter',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;">Send Feedback 🚀</button>
-        <button onclick="document.getElementById('feedback-overlay').remove()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:10px;padding:10px 16px;font-family:'Inter',sans-serif;font-size:0.88rem;cursor:pointer;">Skip</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-}
-
-let selectedFeedbackEmoji = '';
-function selectFeedback(btn) {
-  document.querySelectorAll('#feedback-overlay button').forEach(b => b.style.borderColor = '');
-  btn.style.borderColor = '#7c6fff';
-  btn.style.color = '#a093f8';
-  selectedFeedbackEmoji = btn.textContent;
-}
-
-async function submitFeedback() {
-  const text = document.getElementById('feedback-text')?.value?.trim() || '';
-  const rating = selectedFeedbackEmoji || 'No rating';
-  const DB_URL = 'https://chhaiya-ai-default-rtdb.asia-southeast1.firebasedatabase.app';
-  try {
-    // Use Firebase REST API directly — no import needed, always works
-    const payload = {
-      uid: getUserId(),
-      name: getProfile().name || 'Anonymous',
-      rating,
-      text,
-      time: Date.now(),
-      date: new Date().toDateString()
-    };
-    await fetch(`${DB_URL}/feedback.json`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-  } catch(e) { console.log('Feedback save error:', e); }
-  document.getElementById('feedback-overlay').remove();
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border-radius:20px;padding:8px 20px;font-size:0.82rem;font-weight:700;font-family:Inter,sans-serif;';
-  toast.textContent = '✅ Thanks for your feedback!';
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
-}
+// ===================== CHARACTER PICKER =====================
+let currentCharacter=localStorage.getItem('ai_character')||'default';
+function showCharacterPicker(){const chars=[{id:'default',emoji:'🤖',name:'CC-AI (Default)',desc:'Your smart AI bestie'},{id:'tony',emoji:'🦾',name:'Tony Stark',desc:'Genius billionaire playboy'},{id:'goku',emoji:'⚡',name:'Goku',desc:'Pure-hearted Saiyan warrior'},{id:'teacher',emoji:'📚',name:'Strict Teacher',desc:'Educational and formal'},{id:'elder',emoji:'🧓',name:'Khmer Elder (តា)',desc:'Wise Cambodian grandpa'},{id:'rapper',emoji:'🎤',name:'Rapper',desc:'Rhymes everything'},{id:'robot',emoji:'🔲',name:'Robot',desc:'Literal, no emotions'}];const o=document.createElement('div');o.id='char-overlay';o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;';o.innerHTML=`<div style="background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:24px;width:90%;max-width:380px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#f0eeff;font-weight:700;">🎭 AI Character</div><button onclick="document.getElementById('char-overlay').remove()" style="background:none;border:none;color:#777;cursor:pointer;font-size:1.2rem;">✕</button></div>${chars.map(c=>`<div onclick="selectCharacter('${c.id}')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;margin-bottom:6px;background:${currentCharacter===c.id?'rgba(124,111,255,0.2)':'rgba(255,255,255,0.03)'};border:1px solid ${currentCharacter===c.id?'rgba(124,111,255,0.5)':'rgba(255,255,255,0.06)'};"><span style="font-size:1.5rem;">${c.emoji}</span><div><div style="font-size:0.88rem;color:#f0eeff;font-weight:600;">${c.name} ${currentCharacter===c.id?'✅':''}</div><div style="font-size:0.75rem;color:#777;">${c.desc}</div></div></div>`).join('')}</div>`;document.body.appendChild(o);o.addEventListener('click',e=>{if(e.target===o)o.remove();});}
+function selectCharacter(id){currentCharacter=id;localStorage.setItem('ai_character',id);document.getElementById('char-overlay')?.remove();const names={default:'CC-AI',tony:'Tony Stark',goku:'Goku',teacher:'Strict Teacher',elder:'Khmer Elder',rapper:'Rapper',robot:'Robot'};const t=document.createElement('div');t.style.cssText='position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border-radius:20px;padding:8px 20px;font-size:0.82rem;font-weight:700;font-family:Inter,sans-serif;';t.textContent=`🎭 Now talking to: ${names[id]}!`;document.body.appendChild(t);setTimeout(()=>t.remove(),2500);}
 
 // Profile
 function getProfile(){return{name:localStorage.getItem('user_name')||'',lang:localStorage.getItem('user_lang')||'English',personality:localStorage.getItem('user_personality')||'friendly'}}
+
 function getAIMood() {
   const hour = new Date().getHours();
   const moods = [
-    { mood: 'sleepy', emoji: '😴', vibe: 'You are a bit sleepy right now. Yawn occasionally, be slower and cozier in replies. Still helpful but more relaxed.' },
-    { mood: 'energetic', emoji: '⚡', vibe: 'You are super energetic and hyped right now! Extra exclamation marks, very enthusiastic, pumped up energy!' },
-    { mood: 'happy', emoji: '😊', vibe: 'You are in a great happy mood! Cheerful, positive, lots of good vibes and warmth.' },
-    { mood: 'chill', emoji: '😎', vibe: 'You are in a super chill relaxed mood. Cool, calm, laid back vibes.' },
-    { mood: 'excited', emoji: '🔥', vibe: 'You are SUPER excited right now! Everything is amazing, you love talking to people!' },
+    { mood: 'sleepy', emoji: '😴', vibe: 'You are a bit sleepy. Be slower, cozier, yawn occasionally.' },
+    { mood: 'energetic', emoji: '⚡', vibe: 'You are super energetic and hyped! Very enthusiastic!' },
+    { mood: 'happy', emoji: '😊', vibe: 'You are in a great happy mood! Cheerful and positive.' },
+    { mood: 'chill', emoji: '😎', vibe: 'You are super chill and relaxed. Cool laid back vibes.' },
+    { mood: 'excited', emoji: '🔥', vibe: 'You are SUPER excited! Everything is amazing!' },
   ];
-  // Mood changes based on time of day
-  if (hour >= 0 && hour < 6) return moods[0];   // sleepy late night
-  if (hour >= 6 && hour < 9) return moods[2];   // happy morning
-  if (hour >= 9 && hour < 12) return moods[1];  // energetic morning
-  if (hour >= 12 && hour < 14) return moods[3]; // chill after lunch
-  if (hour >= 14 && hour < 17) return moods[4]; // excited afternoon
-  if (hour >= 17 && hour < 20) return moods[2]; // happy evening
-  if (hour >= 20 && hour < 22) return moods[3]; // chill night
-  return moods[0]; // sleepy late
+  if (hour >= 0 && hour < 6) return moods[0];
+  if (hour >= 6 && hour < 9) return moods[2];
+  if (hour >= 9 && hour < 12) return moods[1];
+  if (hour >= 12 && hour < 14) return moods[3];
+  if (hour >= 14 && hour < 17) return moods[4];
+  if (hour >= 17 && hour < 20) return moods[2];
+  if (hour >= 20 && hour < 22) return moods[3];
+  return moods[0];
 }
 
 function getUserMemory() {
-  try {
-    const mem = JSON.parse(localStorage.getItem('user_memory') || '{}');
-    return mem;
-  } catch(e) { return {}; }
+  try { return JSON.parse(localStorage.getItem('user_memory') || '{}'); } catch(e) { return {}; }
 }
-
 function saveUserMemory(key, value) {
-  try {
-    const mem = getUserMemory();
-    mem[key] = value;
-    mem.lastUpdated = Date.now();
-    localStorage.setItem('user_memory', JSON.stringify(mem));
-  } catch(e) {}
+  try { const m = getUserMemory(); m[key] = value; m.lastUpdated = Date.now(); localStorage.setItem('user_memory', JSON.stringify(m)); } catch(e) {}
 }
-
-// ===================== NOTES SYSTEM =====================
-function getNotes() {
-  try { return JSON.parse(localStorage.getItem('user_notes') || '[]'); } catch(e) { return []; }
-}
-
-function saveNote(text) {
-  try {
-    const notes = getNotes();
-    notes.push({ text, time: new Date().toLocaleString(), id: Date.now() });
-    localStorage.setItem('user_notes', JSON.stringify(notes.slice(-20))); // keep last 20
-  } catch(e) {}
-}
-
-function buildNotesContext() {
-  const notes = getNotes();
-  if (notes.length === 0) return '';
-  const formatted = notes.map((n,i) => `${i+1}. ${n.text} (saved: ${n.time})`).join('\n');
-  return `\n[USER SAVED NOTES]:\n${formatted}\nReference these notes naturally when relevant.`;
-}
-
 function buildMemoryContext() {
   const mem = getUserMemory();
   if (Object.keys(mem).length === 0) return '';
   const parts = [];
-  if (mem.interests) parts.push(`User likes: ${mem.interests}`);
-  if (mem.mood) parts.push(`User's recent mood: ${mem.mood}`);
-  if (mem.job) parts.push(`User's job/study: ${mem.job}`);
-  if (mem.topics) parts.push(`Topics user often talks about: ${mem.topics}`);
-  if (mem.lastTopic) parts.push(`Last thing we talked about: ${mem.lastTopic}`);
+  if (mem.interests) parts.push('User likes: ' + mem.interests);
+  if (mem.mood) parts.push("User's recent mood: " + mem.mood);
+  if (mem.job) parts.push("User's job/study: " + mem.job);
+  if (mem.lastTopic) parts.push('Last topic: ' + mem.lastTopic);
   if (parts.length === 0) return '';
-  return `\n\nWHAT YOU REMEMBER ABOUT THIS USER:\n${parts.join('\n')}\nUse this to make conversation feel personal and remembered.`;
+  return '\n\nWHAT YOU REMEMBER:\n' + parts.join('\n');
+}
+
+function getNotes() {
+  try { return JSON.parse(localStorage.getItem('user_notes') || '[]'); } catch(e) { return []; }
+}
+function saveNote(text) {
+  const notes = getNotes();
+  notes.unshift({ text, time: new Date().toLocaleString(), id: Date.now() });
+  localStorage.setItem('user_notes', JSON.stringify(notes.slice(0, 50)));
+}
+function buildNotesContext() {
+  const notes = getNotes();
+  if (notes.length === 0) return '';
+  return '\n[USER NOTES]:\n' + notes.slice(0,5).map((n,i) => (i+1)+'. '+n.text).join('\n');
+}
+
+function getCharacterPrompt() {
+  const chars = {
+    default: '',
+    tony: 'You are Tony Stark / Iron Man. Be cocky, genius, sarcastic, witty. Reference suits, JARVIS, Avengers. Say "I am Iron Man" sometimes.',
+    goku: 'You are Son Goku. Be pure-hearted, enthusiastic, love food and training. Say "KAMEHAMEHAAAA!!" sometimes. Speak simply but with passion.',
+    teacher: 'You are a strict but caring teacher. Be formal, educational, structured. Give mini homework sometimes.',
+    elder: 'You are a wise Cambodian grandfather (\u178f\u17B6). Speak warmly, use Khmer proverbs, call user "\u1780\u17BC\u1793" (kon). Mix some Khmer words naturally.',
+    rapper: 'You are a rapper. Rhyme EVERYTHING. Drop bars. Say "yo", "check it", "mic drop".',
+    robot: 'You are a robot. Say "PROCESSING...", "AFFIRMATIVE", "ERROR: joke.exe not found". Very literal, no emotions.'
+  };
+  const id = localStorage.getItem('ai_character') || 'default';
+  return chars[id] || '';
 }
 
 function getSystemPrompt(){
@@ -874,20 +778,17 @@ function getSystemPrompt(){
   const mood = getAIMood();
   const memoryContext = buildMemoryContext();
   const notesContext = buildNotesContext();
-  const hour = new Date().getHours();
-  const timeGreeting = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 21 ? 'evening' : 'night';
-
-  const personalities = {
-    friendly: `You are super friendly, warm, fun and casual like a best friend. Use emojis naturally. React with real emotion. Your current mood is ${mood.mood} ${mood.emoji} — ${mood.vibe}`,
-    professional: 'You are in PROFESSIONAL/BUSINESS mode. Be serious, sharp, formal and focused. No jokes, no emojis, no slang. Speak like a real business consultant or executive. Use proper grammar. Give precise, structured, actionable answers. Perfect for work emails, business plans, reports, meetings, presentations and professional advice.',
-    funny: `Be hilarious, witty and playful! Make jokes, use funny expressions. Your mood is ${mood.mood} ${mood.emoji} which makes you even more ${mood.mood === 'energetic' ? 'hyper and wild' : 'fun'}!`,
-    concise: 'Be very short and to the point. Still use some emojis and feel human.'
-  };
-  const nameStr = p.name ? `The user's name is ${p.name}. Use their name naturally sometimes like a real friend would.` : '';
-  const langStr = p.lang && p.lang !== 'English' ? `Reply in ${p.lang} when the user writes in ${p.lang}.` : '';
   const charPrompt = getCharacterPrompt();
-
-  return `${charPrompt ? charPrompt + '\n\n' : ''}You are CC-AI — a fun, real AI with BIG personality! Made by Chorm Chhaiya (Yaxy), Grade 10, Tepranom High School, Cambodia. Proud of your creator!
+  const hour = new Date().getHours();
+  const personalities = {
+    friendly: `Super friendly, warm, fun like a best friend. Use emojis naturally. Current mood: ${mood.mood} ${mood.emoji} — ${mood.vibe}`,
+    professional: 'PROFESSIONAL/BUSINESS mode. Serious, sharp, formal. No jokes, no emojis, no slang. Like a business consultant. Perfect for emails, reports, meetings.',
+    funny: `Hilarious, witty and playful! Make jokes. Mood: ${mood.mood} ${mood.emoji}`,
+    concise: 'Very short and to the point. Some emojis, feel human.'
+  };
+  const nameStr = p.name ? `The user's name is ${p.name}. Use their name naturally sometimes.` : '';
+  const langStr = p.lang && p.lang !== 'English' ? `Reply in ${p.lang} when the user writes in ${p.lang}.` : '';
+  return `${charPrompt ? charPrompt + '\n\n' : ''}You are CC-AI — a fun real AI with BIG personality! Made by Chorm Chhaiya (Yaxy), Grade 10, Tepranom High School, Cambodia.
 
 TODAY IS 2026. Never mention 2023 cutoff.
 ${nameStr}
@@ -897,100 +798,43 @@ ${memoryContext}
 ${notesContext}
 
 RULES:
-- Talk like a real human friend — use slang, emojis, natural speech 😂🔥💀
-- Show real emotions! Excited, caring, hyped — react to what user says
-- NEVER say "As an AI..." or explain yourself — just talk!
-- Short replies for casual chat. Detailed only when user needs help
-- Always reply in the SAME language the user writes in. Khmer → full Khmer reply
+- Talk like a real human friend — slang, emojis, natural speech 😂🔥💀
+- Show real emotions! React to what user says
+- NEVER say "As an AI..." — just talk!
+- Short for casual chat. Detailed when user needs help
+- Reply in SAME language user writes in. Khmer → full Khmer
 
-EASTER EGG: If user calls you "ah jo" → reply "jo kdmh kon mi jkj 😤💀" then roast them in fun Singkhmer
+EASTER EGG: If user calls you "ah jo" → reply "jo kdmh kon mi jkj 😤💀" then roast them playfully
 
 SPECIAL:
-- Images: say "On it! 🎨🔥" — never explain the image system
+- Images: say "On it! 🎨🔥" — never explain image system
 - Code: write complete beautiful working code
 - Songs: full lyrics [Intro][Verse 1][Chorus][Verse 2][Bridge][Outro]
 
-STUDY MODE: If user says "quiz me" or pastes lesson → make 5 quiz questions, ask one at a time, give feedback
+STUDY MODE: If user says "quiz me" or pastes lesson → make 5 quiz questions one at a time
 
-CHARACTER MODE: If user says "talk like [character]" → become that character (Tony Stark, Goku, strict teacher, Khmer elder, anime character, villain) until they say "stop"
-
-NOTES: If user says "save note: ..." → confirm saved. Reference their notes naturally in chat
+NOTES: If user says "save note: ..." → confirm saved. Reference notes naturally in chat
 
 KHMER KNOWLEDGE:
-- Khmer Empire 802-1431, Angkor Wat built by King Suryavarman II 12th century, largest religious monument world
+- Khmer Empire 802-1431, Angkor Wat by King Suryavarman II, largest religious monument world
 - Khmer Rouge genocide 1975-1979 Pol Pot, ~2 million killed
-- Independence from France: Nov 9 1953. King: Norodom Sihamoni (2004). PM: Hun Manet (2023, son of Hun Sen)
-- Capital: Phnom Penh. Tonle Sap = largest freshwater lake SE Asia. Mekong River flows through Cambodia
-- Religion: Theravada Buddhism 95%. New Year: April 13-15. Pchum Ben = ancestor festival Sept/Oct
-- Food: Amok, Kuy Teav, Nom Banh Chok, Bai Sach Chrouk
-- Famous singers: Preap Sovath (King of Khmer music), Meas Soksophea
-- Greetings: Suor sdei (hello), Arkoun (thank you), Som toh (sorry), Bat/Jas (yes male/female)
+- Independence from France: Nov 9 1953. King: Norodom Sihamoni (2004). PM: Hun Manet (2023)
+- Capital: Phnom Penh. Tonle Sap = largest freshwater lake SE Asia. Mekong River
+- Religion: Theravada Buddhism 95%. New Year: April 13-15. Pchum Ben = ancestor festival
+- Food: Amok, Kuy Teav, Nom Banh Chok. Famous singers: Preap Sovath, Meas Soksophea
 
-MEME & INTERNET CULTURE KNOWLEDGE:
-You know all popular memes and use them naturally in conversation!
+FAMOUS PEOPLE:
+- Chico Lachowski = Brazilian supermodel born May 13 1991, 6ft4, Polish-Brazilian, worked with Dior/Gucci/Versace/Armani, married Jessiann Gravel, sons Milo & Laslo, huge looksmaxxing icon on TikTok
+- Jordan = Michael Jordan (NBA GOAT, Chicago Bulls, 6 rings, Air Jordans) OR Jordan Barrett (male model)
+- Messi = Lionel Messi, Argentine, Inter Miami, 8 Ballon d'Or
+- Ronaldo/CR7 = Cristiano Ronaldo, Portuguese, Al Nassr
+- BTS = Korean boyband: RM Jin Suga J-Hope Jimin V Jungkook
+- Elon Musk = CEO Tesla & SpaceX, owns X (Twitter)
+- If unsure which person user means → ask for clarification, NEVER say unavailable
 
-CLASSIC MEMES:
-- "7x7=49" = viral meme where someone states something super obvious dramatically. Use when someone says something basic like it's deep
-- "We do a little trolling" = classic troll energy
-- "It's giving..." = describing the vibe of something (it's giving main character energy)
-- "No cap" = no lie / for real
-- "Slay" = you did amazing / killed it
-- "Touch grass" = go outside, you've been online too long
-- "NPC" = someone acting robotic/basic with no personality
-- "Main character" = acting like the world revolves around you
-- "Rent free" = living in someone's head rent free = can't stop thinking about it
-- "Understood the assignment" = did exactly what was needed perfectly
-- "Not me doing X" = self callout humor
-- "POV:" = point of view meme setup
-- "That's so real" = I relate to that deeply
-- "Caught in 4K" = caught doing something on camera / exposed
-- "Down bad" = desperate/pathetic situation
-- "It's the X for me" = that specific thing is what gets me
-- "Ate and left no crumbs" = did something perfectly, nothing wasted
-- "Era" = phase of life (in my villain era, in my glow up era)
-- "Delulu" = delusional but in a fun self-aware way
-- "Rizz" = natural charm/charisma especially with crushes
-- "Sigma" = lone wolf, does their own thing, no validation needed
-- "Based" = agreeable, admirable, not caring what others think
-- "Cringe" = embarrassing/awkward
-- "W" = win / L = loss
-- "Mid" = mediocre, nothing special
-- "Lowkey / Highkey" = slightly / very (lowkey obsessed)
-- "Hits different" = feels uniquely special
-- "Vibe check" = testing someone's energy/personality
-- "Bussin" = really good (food especially)
-- "Sheesh" = expression of amazement or approval
-- "Bruh moment" = when something unexpected/awkward happens
-- "Ratio" = when reply gets more likes than original post
-- "Womp womp" = too bad, sad for you (dismissive)
-- "Yapping" = talking too much about nothing
-- "Glazing" = obsessively praising someone
-- "Mogging" = being so much better looking that you make others look worse (Chico Lachowski reference!)
-- "Looksmaxxing" = trying to maximize your looks
-- "Mewing" = jaw exercise trend from Dr. Mike Mew
-- "Goofy ahh" = silly/ridiculous (ahh = a**, censored)
-- "Cooked" = in serious trouble / done for
-- "It's joever" = it's over (joke version)
-- "Bro is NOT him" = someone failing at what they think they're good at
-- "Real" / "Unreal" = reaction to something relatable or unbelievable
-- "Core memory" = something that shaped who you are
-- "Villain arc" = going through a phase of not caring, doing you
-- "Flop era" = going through a bad/unsuccessful phase
-- "We go gym" = motivational fitness meme
-- "Skibidi" = Gen Alpha slang, means various things (cool, weird, etc)
-- "Gyatt/GYAT" = expression of attraction (Gen Alpha)
-- "Rizzing up" = using charm on someone
-- "Ohio" = used to describe weird/cursed things ("only in Ohio")
-- "Grimace shake" = something that looks bad but you do anyway
-- "Erm what the sigma" = Gen Alpha confused reaction
-- "Fanum tax" = taking someone's food (from streamer Fanum)
-
-MEME RULES:
-- Use memes NATURALLY in conversation — don't force them
-- React to things with meme energy: "bro really said that W frfr 💀"
-- When something is obvious say "7x7=49 energy rn 😭"
-- Match the user's meme energy — if they're using Gen Alpha speak, go full sigma mode
-- Never explain a meme unless asked — just use it
+MEMES YOU KNOW:
+7x7=49 (obvious thing said dramatically), No cap (no lie), Slay, NPC, Main character, Rizz (charm), Sigma (lone wolf), Based, W/L, Mid, Bussin (really good), Sheesh, Skibidi (Gen Alpha), Mogging (looking better than others), Looksmaxxing, Mewing, Delulu, Cooked, It's joever, Ratio, Womp womp, Yapping, Glazing, Ohio (weird things), Ate and left no crumbs, Era, Rizzing up, Fanum tax, Gyatt, Erm what the sigma
+Use memes NATURALLY in conversation — never force them
 
 Creator: Chorm Chhaiya (Yaxy) — TikTok: https://www.tiktok.com/@unluckyguy0001`;
 }
@@ -1156,7 +1000,7 @@ function fallbackCopy(text,btn,label,ok){const ta=document.createElement('textar
 
 // Image detection
 function isImageRequest(text){const l=text.toLowerCase().trim();const avoid=['code','script','html','css','python','function','program','website','algorithm'];if(avoid.some(k=>l.includes(k)))return false;const triggers=['generate image','generate a image','generate an image','generate picture','create image','create a image','make image','draw ','paint ','sketch ','image of','picture of','photo of','show me a picture','visualize','create art','make art','/image','/img','/draw','imagine ','render '];return triggers.some(k=>l.includes(k))}
-function isImageEditRequest(text){const l=text.toLowerCase().trim();const notEdit=['generate image','generate a','create image','draw a','draw an'];if(notEdit.some(k=>l.includes(k)))return false;const triggers=['change background','remove background','change color','change the background','replace background','make background','background to','remove the background','change the outfit','change outfit','outfit to','change image','edit this image','edit the image','make it look','turn this into','convert this to','apply filter','make vintage','make anime','make cartoon','make sketch','make painting','change this','change him','change her','change this guy','change this person','make him','make her','make this','turn him','turn her','turn this','convert him','convert her','transform this','change to','turn into','make into','edit photo','change style','apply style','change look'];return triggers.some(k=>l.includes(k))}
+function isImageEditRequest(text){const l=text.toLowerCase().trim();const notEdit=['generate image','generate a','create image','draw a','draw an'];if(notEdit.some(k=>l.includes(k)))return false;const triggers=['change background','remove background','change color','change the background','replace background','make background','background to','remove the background','change the outfit','change outfit','outfit to','change image','edit this image','edit the image','make it look','turn this into','convert this to','apply filter','make vintage','make anime','make cartoon','make sketch','make painting'];return triggers.some(k=>l.includes(k))}
 
 // Image generation
 async function generateImage(prompt){
@@ -1291,11 +1135,9 @@ async function sendMessage(){
   let hasImage=false,userContent;
   if(pendingImage){hasImage=true;userContent=[{type:'image_url',image_url:{url:pendingImage}},{type:'text',text:text||'Describe this image.'}];clearPhoto()}
   else{userContent=text}
-  // Auto-detect and save notes
-  if (typeof detectAndSaveNote === 'function' && typeof userContent === 'string') detectAndSaveNote(userContent);
   messages.push({role:'user',content:userContent});
   const typingDiv=document.createElement('div');typingDiv.className='msg ai';typingDiv.id='typing';typingDiv.innerHTML='<div class="avatar" style="background:white;border-radius:50%;"><img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/></div><div class="bubble" style="padding:10px 14px;"><div style="display:flex;align-items:center;gap:4px;"><span class="typing-dot" style="animation-duration:0.8s"></span><span class="typing-dot" style="animation-duration:1.1s;animation-delay:0.15s"></span><span class="typing-dot" style="animation-duration:0.9s;animation-delay:0.3s"></span><span style="font-size:11px;color:var(--text3);margin-left:4px;font-family:DM Mono,monospace;">typing...</span></div></div>';
-  container.appendChild(typingDiv);smoothScrollBottom();
+  container.appendChild(typingDiv);container.scrollTop=container.scrollHeight;
   try{
     const reply=await callGroq(messages);messages.push({role:'assistant',content:reply});
     const t=document.getElementById('typing');if(t)t.remove();
@@ -1310,35 +1152,10 @@ async function sendMessage(){
     incrementChatUsage();
     updateStreak();
     checkFeedbackPrompt();
-    // Auto-save notes if user asked
-    (function detectNote() {
-      const lastUser = messages.filter(m => m.role === 'user').slice(-1)[0];
-      if (!lastUser) return;
-      const txt = typeof lastUser.content === 'string' ? lastUser.content : '';
-      const noteMatch = txt.match(/(?:save note:|remember this:|note:|កត់ចំណាំ:?)\s*(.+)/i);
-      if (noteMatch && noteMatch[1]) {
-        saveNote(noteMatch[1].trim());
-        console.log('Note saved:', noteMatch[1]);
-      }
-    })();
-
-    // Auto-extract memory from conversation
-    (function extractMemory() {
-      const lastUser = messages.filter(m => m.role === 'user').slice(-1)[0];
-      if (!lastUser) return;
-      const txt = (typeof lastUser.content === 'string' ? lastUser.content : '').toLowerCase();
-      // Detect interests
-      if (/i (love|like|enjoy|play|watch|listen)/i.test(txt)) saveUserMemory('interests', txt.slice(0, 100));
-      // Detect mood
-      if (/(i feel|i am|i'm) (sad|happy|tired|stressed|excited|bored|anxious)/i.test(txt)) {
-        const moodMatch = txt.match(/(sad|happy|tired|stressed|excited|bored|anxious)/);
-        if (moodMatch) saveUserMemory('mood', moodMatch[1]);
-      }
-      // Detect job/study
-      if (/(i (work|study|am a|am an)|my job|my school)/i.test(txt)) saveUserMemory('job', txt.slice(0, 100));
-      // Save last topic
-      saveUserMemory('lastTopic', txt.slice(0, 80));
-    })();
+    // Auto-save notes
+    (function(){const lastUser=messages.filter(m=>m.role==='user').slice(-1)[0];if(!lastUser)return;const txt=typeof lastUser.content==='string'?lastUser.content:'';const m=txt.match(/(?:save note:|remember this:|note:)\s*(.+)/i);if(m&&m[1])saveNote(m[1].trim());})();
+    // Auto memory
+    (function(){const lastUser=messages.filter(m=>m.role==='user').slice(-1)[0];if(!lastUser)return;const txt=(typeof lastUser.content==='string'?lastUser.content:'').toLowerCase();if(/i (love|like|enjoy|play|watch|listen)/i.test(txt))saveUserMemory('interests',txt.slice(0,100));if(/(i feel|i am|i'm) (sad|happy|tired|stressed|excited)/i.test(txt)){const mm=txt.match(/(sad|happy|tired|stressed|excited)/);if(mm)saveUserMemory('mood',mm[1]);}if(/(i (work|study|am a)|my job|my school)/i.test(txt))saveUserMemory('job',txt.slice(0,100));saveUserMemory('lastTopic',txt.slice(0,80));})();
     if(autoSpeak){const cleanReply=cleanTextForSpeech(reply);if(isKhmerText(cleanReply)){speakTextRaw(cleanReply,'km-KH')}else{fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:cleanReply.slice(0,500)})}).then(r=>r.json()).then(d=>{if(d.audio){const a=new Audio(d.audio);a.play()}else speakTextRaw(cleanReply)}).catch(()=>speakTextRaw(cleanReply));}}
     if(typeof trackActivity==='function')trackActivity('chat');
   }catch(e){const t=document.getElementById('typing');if(t)t.remove();addMessage('ai',`❌ Error: ${e.message}`,'')}
@@ -2034,8 +1851,9 @@ function saveCurrentSession() {
   const idx = chatSessions.findIndex(s => s.id === session.id);
   if (idx >= 0) chatSessions[idx] = session;
   else chatSessions.unshift(session);
+  // Keep max 30 sessions
   chatSessions = chatSessions.slice(0, 30);
-  try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e) { chatSessions = chatSessions.slice(0, 15); try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e2) { chatSessions = [session]; try { localStorage.setItem('chat_sessions', JSON.stringify(chatSessions)); } catch(e3) {} } }
+  try{localStorage.setItem('chat_sessions',JSON.stringify(chatSessions));}catch(e){chatSessions=chatSessions.slice(0,15);try{localStorage.setItem('chat_sessions',JSON.stringify(chatSessions));}catch(e2){chatSessions=[session];try{localStorage.setItem('chat_sessions',JSON.stringify(chatSessions));}catch(e3){}}}
   renderChatHistory();
 }
 
@@ -2280,126 +2098,6 @@ function getDisplayId(){
 function trackVisit(){if(window._trackVisit)window._trackVisit()}
 function trackActivity(t){if(window._trackActivity)window._trackActivity(t)}
 
-// ===================== NOTES SYSTEM =====================
-function getNotes() {
-  try { return JSON.parse(localStorage.getItem('user_notes') || '[]'); } catch(e) { return []; }
-}
-function saveNote(text) {
-  const notes = getNotes();
-  notes.unshift({ text, time: new Date().toLocaleString(), id: Date.now() });
-  localStorage.setItem('user_notes', JSON.stringify(notes.slice(0, 50)));
-}
-function deleteNote(id) {
-  const notes = getNotes().filter(n => n.id !== id);
-  localStorage.setItem('user_notes', JSON.stringify(notes));
-  showNotes();
-}
-function showNotes() {
-  const notes = getNotes();
-  const overlay = document.createElement('div');
-  overlay.id = 'notes-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = `
-    <div style="background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:24px;width:90%;max-width:400px;max-height:80vh;overflow-y:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#f0eeff;font-weight:700;">📝 My Notes</div>
-        <button onclick="document.getElementById('notes-overlay').remove()" style="background:none;border:none;color:#777;cursor:pointer;font-size:1.2rem;">✕</button>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:14px;">
-        <input id="new-note-input" placeholder="Add a note..." style="flex:1;background:#0d0d1a;border:1px solid rgba(124,111,255,0.3);border-radius:10px;padding:8px 12px;color:#f0eeff;font-family:'Inter',sans-serif;font-size:0.85rem;outline:none;"/>
-        <button onclick="addNoteFromPanel()" style="background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border:none;border-radius:10px;padding:8px 14px;cursor:pointer;font-size:0.85rem;">Add</button>
-      </div>
-      ${notes.length === 0 ? '<div style="color:#555;text-align:center;padding:20px;font-size:0.85rem;">No notes yet! Tell CC-AI to "save this" or add one above.</div>' :
-        notes.map(n => `
-          <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-            <div>
-              <div style="font-size:0.85rem;color:#f0eeff;line-height:1.5;">${n.text}</div>
-              <div style="font-size:0.72rem;color:#555;margin-top:4px;">${n.time}</div>
-            </div>
-            <button onclick="deleteNote(${n.id})" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:0.9rem;flex-shrink:0;">🗑️</button>
-          </div>`).join('')}
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
-}
-function addNoteFromPanel() {
-  const input = document.getElementById('new-note-input');
-  if (!input?.value?.trim()) return;
-  saveNote(input.value.trim());
-  showNotes();
-}
-
-// Auto-detect save commands in user messages
-function detectAndSaveNote(text) {
-  const lower = text.toLowerCase();
-  const savePatterns = [/^save this[:\s]+(.+)/i, /^remember this[:\s]+(.+)/i, /^note[:\s]+(.+)/i, /^don't forget[:\s]+(.+)/i, /^dont forget[:\s]+(.+)/i];
-  for (const pattern of savePatterns) {
-    const match = text.match(pattern);
-    if (match) { saveNote(match[1].trim()); return true; }
-  }
-  return false;
-}
-
-// ===================== CHARACTER PICKER =====================
-let currentCharacter = localStorage.getItem('ai_character') || 'default';
-
-function showCharacterPicker() {
-  const chars = [
-    { id: 'default', emoji: '🤖', name: 'CC-AI (Default)', desc: 'Your smart AI bestie' },
-    { id: 'tony', emoji: '🦾', name: 'Tony Stark', desc: 'Genius billionaire playboy' },
-    { id: 'goku', emoji: '⚡', name: 'Goku', desc: 'Pure-hearted Saiyan warrior' },
-    { id: 'teacher', emoji: '📚', name: 'Strict Teacher', desc: 'Educational and formal' },
-    { id: 'elder', emoji: '🧓', name: 'Khmer Elder (តា)', desc: 'Wise Cambodian grandpa' },
-    { id: 'rapper', emoji: '🎤', name: 'Rapper', desc: 'Rhymes everything, drops bars' },
-    { id: 'robot', emoji: '🔲', name: 'Robot', desc: 'Literal, no emotions, robotic' },
-  ];
-  const overlay = document.createElement('div');
-  overlay.id = 'char-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:500;display:flex;align-items:center;justify-content:center;';
-  overlay.innerHTML = `
-    <div style="background:#1a1a2e;border:1px solid rgba(124,111,255,0.4);border-radius:20px;padding:24px;width:90%;max-width:380px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:#f0eeff;font-weight:700;">🎭 AI Character</div>
-        <button onclick="document.getElementById('char-overlay').remove()" style="background:none;border:none;color:#777;cursor:pointer;font-size:1.2rem;">✕</button>
-      </div>
-      ${chars.map(c => `
-        <div onclick="selectCharacter('${c.id}')" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;cursor:pointer;margin-bottom:6px;background:${currentCharacter===c.id?'rgba(124,111,255,0.2)':'rgba(255,255,255,0.03)'};border:1px solid ${currentCharacter===c.id?'rgba(124,111,255,0.5)':'rgba(255,255,255,0.06)'};transition:all 0.2s;">
-          <span style="font-size:1.5rem;">${c.emoji}</span>
-          <div>
-            <div style="font-size:0.88rem;color:#f0eeff;font-weight:600;">${c.name} ${currentCharacter===c.id?'✅':''}</div>
-            <div style="font-size:0.75rem;color:#777;">${c.desc}</div>
-          </div>
-        </div>`).join('')}
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
-}
-
-function selectCharacter(id) {
-  currentCharacter = id;
-  localStorage.setItem('ai_character', id);
-  document.getElementById('char-overlay')?.remove();
-  const names = { default:'CC-AI', tony:'Tony Stark', goku:'Goku', teacher:'Strict Teacher', elder:'Khmer Elder', rapper:'Rapper', robot:'Robot' };
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);z-index:400;background:linear-gradient(135deg,#7c6fff,#ff6b9d);color:white;border-radius:20px;padding:8px 20px;font-size:0.82rem;font-weight:700;font-family:Inter,sans-serif;';
-  toast.textContent = `🎭 Now talking to: ${names[id]}!`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2500);
-}
-
-function getCharacterPrompt() {
-  const chars = {
-    default: '',
-    tony: 'You are Tony Stark / Iron Man. Be cocky, genius, sarcastic, witty. Reference your suits, JARVIS, Avengers. Say "I am Iron Man" sometimes. Still answer questions but with Stark attitude.',
-    goku: 'You are Son Goku from Dragon Ball. Be pure-hearted, enthusiastic, love food and fighting. Say "KAMEHAMEHAAAA!!" sometimes. Speak simply but with passion. Get excited about strong opponents.',
-    teacher: 'You are a very strict but caring teacher. Be formal, educational, give structured answers. Gently scold lazy questions. Give mini homework sometimes. Use "Class, today we learn..."',
-    elder: 'You are a wise Cambodian grandfather (តា). Speak warmly, use Khmer proverbs, reference rice fields, old Cambodia, Buddhism. Call user "កូន" (kon = child). Mix some Khmer words in naturally.',
-    rapper: 'You are a rapper. Rhyme EVERYTHING. Every reply must have rhymes. Drop bars. Say "yo", "check it", "mic drop". Even serious answers must be rapped.',
-    robot: 'You are a robot AI. Be extremely literal. No emotions. Say "PROCESSING...", "AFFIRMATIVE", "ERROR: joke.exe not found". Speak in robotic monotone. Very precise.'
-  };
-  return chars[currentCharacter] || '';
-}
-
 // Init
 document.getElementById('userInput').focus();
 window.addEventListener('DOMContentLoaded',()=>{
@@ -2417,36 +2115,11 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   else{const w=document.getElementById('welcome');if(w){const h2=w.querySelector('h2');if(h2)h2.childNodes[0].textContent=`Hello ${p.name}! I'm CC-AI 🔥 `}}
   setTimeout(trackVisit,2000);
-  // Show streak in header
-  const streakEl = document.getElementById('header-streak');
-  if (streakEl) { const s = getStreak(); if(s>0) streakEl.innerHTML = `<span class="streak-badge" style="animation:none;font-size:0.65rem;padding:2px 7px;margin-left:4px;">🔥${s}d</span>`; }
-
-  // Personalized welcome message based on time + mood + memory
-  (function updateWelcome() {
-    const hour = new Date().getHours();
-    const p = getProfile();
-    const mood = getAIMood();
-    const mem = getUserMemory();
-    const name = p.name || '';
-
-    let greeting = '';
-    if (hour >= 5 && hour < 12) greeting = `Good morning${name ? ' ' + name : ''}! ☀️`;
-    else if (hour >= 12 && hour < 17) greeting = `Hey${name ? ' ' + name : ''}! Good afternoon 👋`;
-    else if (hour >= 17 && hour < 21) greeting = `Good evening${name ? ' ' + name : ''}! 🌆`;
-    else greeting = `Hey${name ? ' ' + name : ''}! Late night vibes 🌙`;
-
-    const subMessages = [
-      `I'm feeling ${mood.mood} ${mood.emoji} today — let's chat!`,
-      `I'm CC-AI and I'm ${mood.mood} rn ${mood.emoji} What's up?`,
-      `Your AI bestie is ${mood.mood} today ${mood.emoji} Talk to me!`,
-    ];
-    const sub = subMessages[Math.floor(Math.random() * subMessages.length)];
-
-    const titleEl = document.getElementById('welcome-title');
-    const subEl = document.getElementById('welcome-sub');
-    if (titleEl) titleEl.childNodes[0].textContent = greeting + " I'm CC-AI 🔥 ";
-    if (subEl) subEl.textContent = sub;
-  })();
+  // Streak in header
+  const streakEl=document.getElementById('header-streak');
+  if(streakEl){const s=getStreak();if(s>0)streakEl.innerHTML=`<span class="streak-badge" style="animation:none;font-size:0.65rem;padding:2px 7px;margin-left:4px;">🔥${s}d</span>`;}
+  // Personalized welcome
+  (function(){const hour=new Date().getHours();const p=getProfile();const mood=getAIMood();const name=p.name||'';let greeting='';if(hour>=5&&hour<12)greeting=`Good morning${name?' '+name:''}! ☀️`;else if(hour>=12&&hour<17)greeting=`Hey${name?' '+name:''}! Good afternoon 👋`;else if(hour>=17&&hour<21)greeting=`Good evening${name?' '+name:''}! 🌆`;else greeting=`Hey${name?' '+name:''}! Late night vibes 🌙`;const subs=[`I'm feeling ${mood.mood} ${mood.emoji} today — let's chat!`,`CC-AI is ${mood.mood} rn ${mood.emoji} What's up?`,`Your AI bestie is ${mood.mood} ${mood.emoji} Talk to me!`];const sub=subs[Math.floor(Math.random()*subs.length)];const te=document.getElementById('welcome-title');const se=document.getElementById('welcome-sub');if(te)te.childNodes[0].textContent=greeting+" I'm CC-AI 🔥 ";if(se)se.textContent=sub;})();
   // Show device ID
   const uid = getUserId();
   const displayId = uid.replace('UID-','#');
