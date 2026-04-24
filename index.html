@@ -1202,11 +1202,7 @@ async function sendMessage(){
 function addMessage(role,html,raw){
   const container=document.getElementById('messages');
   const div=document.createElement('div');div.className=`msg ${role}`;
-  const bubble=document.createElement('div');bubble.className='bubble';if (role === 'ai') {
-  typeText(bubble, html);
-} else {
-  bubble.innerHTML = html;
-}
+  const bubble=document.createElement('div');bubble.className='bubble';bubble.innerHTML=html;
   if(role==='ai'&&raw){const actions=document.createElement('div');actions.className='msg-actions';const safe=raw.replace(/"/g,'&quot;');actions.innerHTML=`<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button><button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;bubble.appendChild(actions);addRatingBar(bubble,messages.length-1);}
   div.innerHTML=`<div class="avatar" style="background:white;border-radius:50%;">${role==='user'?'👤':'<img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/>'}</div>`;div.appendChild(bubble);container.appendChild(div);container.scrollTop=container.scrollHeight;
 }
