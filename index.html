@@ -2214,14 +2214,6 @@ window._trackVisit=async()=>{if(!rtdb)return;try{const uid=getUserId();const p=t
 const imgData=JSON.parse(localStorage.getItem('img_usage')||'{}');const existing=(await get(ref(rtdb,'users/'+uid))).val()||{};const chats=existing.chats||0;await set(ref(rtdb,'users/'+uid),{name:p.name,lastSeen:Date.now(),date:new Date().toDateString(),images:imgData.count||0,chats,lang:p.lang||'English',firstVisit:existing.firstVisit||Date.now()})}catch(e){console.log('Track:',e)}};
 window._trackActivity=async(type)=>{if(!rtdb)return;try{const uid=getUserId();const key=type==='image'?'images':'chats';const cur=(await get(ref(rtdb,'users/'+uid+'/'+key))).val()||0;await set(ref(rtdb,'users/'+uid+'/'+key),cur+1);await set(ref(rtdb,'users/'+uid+'/lastSeen'),Date.now());await set(ref(rtdb,'users/'+uid+'/date'),new Date().toDateString())}catch(e){console.log('Activity:',e)}};
 setTimeout(()=>{if(window._trackVisit)window._trackVisit()},3000);
-  async function typeText(element, text, speed = 20) {
-  element.innerHTML = "";
-  
-  for (let i = 0; i < text.length; i++) {
-    element.innerHTML += text[i];
-    await new Promise(r => setTimeout(r, speed));
-  }
-}
 </script>
 
 
