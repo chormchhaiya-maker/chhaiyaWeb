@@ -1569,7 +1569,7 @@ function loadChatHistory() {
     // Render messages
     history.forEach(msg => {
       if (msg.role === 'user') {
-      **async** function addMessage(role, htmlContent, rawText) {
+     async function addMessage(role, htmlContent, rawText) {
     const container = document.getElementById('messages');
     if (!container) return;
     
@@ -1581,10 +1581,30 @@ function loadChatHistory() {
     container.appendChild(div);
 
     if (role === 'ai') {
-        // Show "thinking" dots
+        // 1. Show the thinking dots
         bubble.innerHTML = '<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>';
         
-        setTimeout(async () => {
+        // 2. Wait 1.5 seconds for "Thinking" (No setTimeout!)
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // 3. Clear dots and start typing
+        bubble.innerHTML = ''; 
+        for (let i = 0; i < rawText.length; i++) {
+            bubble.innerHTML += rawText.charAt(i);
+            // Human typing speed
+            await new Promise(r => setTimeout(r, Math.floor(Math.random() * 40) + 20));
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // 4. Final update to show bold/links
+        bubble.innerHTML = htmlContent;
+    } else {
+        // User is instant
+        bubble.innerHTML = htmlContent;
+    }
+
+    container.scrollTop = container.scrollHeight;
+}
             bubble.innerHTML = ''; 
             for (let i = 0; i < rawText.length; i++) {
                 bubble.innerHTML += rawText.charAt(i);
