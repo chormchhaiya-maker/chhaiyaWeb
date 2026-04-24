@@ -1173,7 +1173,7 @@ async function sendMessage(){
   if(pendingImage){hasImage=true;userContent=[{type:'image_url',image_url:{url:pendingImage}},{type:'text',text:text||'Describe this image.'}];clearPhoto()}
   else{userContent=text}
   messages.push({role:'user',content:userContent});
-  const typingDiv=document.createElement('div');typingDiv.className='msg ai';typingDiv.id='typing';typingDiv.innerHTML='<div class="avatar" style="background:white;border-radius:50%;"><img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/></div><div class="bubble" style="padding:10px 14px;"><div style="display:flex;align-items:center;gap:4px;"><span class="typing-dot" style="animation-duration:0.8s"></span><span class="typing-dot" style="animation-duration:1.1s;animation-delay:0.15s"></span><span class="typing-dot" style="animation-duration:0.9s;animation-delay:0.3s"></span><span style="font-size:11px;color:var(--text3);margin-left:4px;font-family:DM Mono,monospace;">Thinking Hard...</span></div></div>';
+  const typingDiv=document.createElement('div');typingDiv.className='msg ai';typingDiv.id='typing';typingDiv.innerHTML='<div class="avatar" style="background:white;border-radius:50%;"><img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/></div><div class="bubble" style="padding:10px 14px;"><div style="display:flex;align-items:center;gap:4px;"><span class="typing-dot" style="animation-duration:0.8s"></span><span class="typing-dot" style="animation-duration:1.1s;animation-delay:0.15s"></span><span class="typing-dot" style="animation-duration:0.9s;animation-delay:0.3s"></span><span style="font-size:11px;color:var(--text3);margin-left:4px;font-family:DM Mono,monospace;">typing...</span></div></div>';
   container.appendChild(typingDiv);container.scrollTop=container.scrollHeight;
   try{
     const reply=await callGroq(messages);messages.push({role:'assistant',content:reply});
@@ -1568,8 +1568,7 @@ function loadChatHistory() {
     container.appendChild(banner);
     // Render messages
     history.forEach(msg => {
-      if (msg.role === 'user') {
-     async function addMessage(role, htmlContent, rawText) {
+async function addMessage(role, htmlContent, rawText) {
     const container = document.getElementById('messages');
     if (!container) return;
     
@@ -1605,20 +1604,9 @@ function loadChatHistory() {
 
     container.scrollTop = container.scrollHeight;
 }
-            bubble.innerHTML = ''; 
-            for (let i = 0; i < rawText.length; i++) {
-                bubble.innerHTML += rawText.charAt(i);
-                await new Promise(r => setTimeout(r, Math.floor(Math.random() * 40) + 20));
-                container.scrollTop = container.scrollHeight;
-            }
-            bubble.innerHTML = htmlContent;
-        }, 1000);
-    } else {
-        bubble.innerHTML = htmlContent;
-    }
 
-    container.scrollTop = container.scrollHeight;
-}
+function exportChat() {
+  if (messages.length === 0) { alert('No chat to save yet!'); return; }
   saveChatToStorage();
   alert('✅ Chat saved! It will be restored next time you open the app.');
 }
