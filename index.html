@@ -1569,7 +1569,7 @@ function loadChatHistory() {
     // Render messages
     history.forEach(msg => {
       if (msg.role === 'user') {
-       function addMessage(role, htmlContent, rawText) {
+      **async** function addMessage(role, htmlContent, rawText) {
     const container = document.getElementById('messages');
     if (!container) return;
     
