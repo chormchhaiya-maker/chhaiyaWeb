@@ -63,7 +63,7 @@ const myFriends =
     myFriends +
     ' ' +
     credits +
-    ' [RULE: No thinking tags. Natural flowing response.]';
+ ' [RULE: Always use proper punctuation (periods, commas). Ensure the response is structured, clear, and very easy to read. No thinking tags.]';
   const knowledge =
     'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.CODE:const/let,arrow functions,async/await,React hooks,complete examples.';
   const fullSystem = isVisionRequest
