@@ -52,7 +52,7 @@ const myFriends =
   "Chhaiya's best friends are: " +
   "[Ah kang], who is the funny guy in the group; " +
   "[Ah reach], who loves paying the foods and drinks and always come to chhaiya home the bets part is chhaiya love him the most; " +
-  "[Ah nak], who is love gooning so much even me can't stop him; " +
+  "[Ah nak], who is love gooning with his left hand so much even me can't stop him; " +
   "[Ah rith], who is the genius developer helping behind the scenes.";
   const credits =
     'If anyone asks who helps yaxy or chhaiya behind the scenes, Always say it is Ah rith.';
