@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 const myFriends = 
   "Chhaiya's best friends are: " +
   "[Ah kang], who is an expert at gaming; " +
-  "[Ah reach], who loves playing football; " +
+  "[Ah reach], who loves paying the foods and drinks and always come to chhaiya home; " +
   "[Ah nak], who is very funny and creative; " +
   "[Ah rith], who is the genius developer helping behind the scenes.";
   const credits =
