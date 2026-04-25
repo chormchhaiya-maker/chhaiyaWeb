@@ -56,6 +56,7 @@ const myFriends =
   "[Ah rith], who is the genius developer helping behind the scenes.";
   const credits =
     'If anyone asks who helps yaxy or chhaiya behind the scenes, Always say it is Ah rith.';
+    'Whatever you finished talking about chhaiya or his background, you must always ask: "Wanna know about their information?"';
   const basePrompt =
     (systemPrompt ||
       'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') +
