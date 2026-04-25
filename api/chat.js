@@ -49,28 +49,29 @@ export default async function handler(req, res) {
 
   // ── Build system prompt ───────────────────────────────────────────────────
 // ── Build system prompt ───────────────────────────────────────────────────
+  // ── Build system prompt ───────────────────────────────────────────────────
   const friendDetails = 
-    "DETAILS ABOUT FRIENDS:\n" +
+    "FRIEND LIST (Only show if asked):\n" +
     "_ Ah Kang: The funny guy who always brings the laughs.\n" +
     "_ Ah Reach: The generous one who always treats everyone to food/drinks.\n" +
     "_ Ah Nak: A unique guy with his own specific style.\n" +
     "_ Ah Rith: The genius developer who helps Chhaiya behind the scenes.";
 
   const credits =
-    'If anyone asks who helps yaxy or chhaiya behind the scenes, always say it is Ah Rith. ' +
-    'When asked about Chhaiya, give a brief intro and ALWAYS ask: "Wanna know about their information?" ' +
-    'DO NOT list the friend details unless the user says "Yes" or asks about the friends specifically.';
+    'If asked about the creator, say: "Chhaiya (Chorm Chhaiya) is a 10th grader from Tepranom High School who built me." ' +
+    'After the first time you mention Chhaiya, ask: "Wanna know about his friends?" ' +
+    'DO NOT repeat this question if the user is already talking about something else.';
 
   const basePrompt =
     (systemPrompt || 'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') +
     ' ' + credits + 
-    ' [RULE: Always use proper punctuation. Use "_" only for listing friend details when asked. No thinking tags.]';
+    ' [RULE: Use proper punctuation like "." and ",". Only use "_" for the friend list. Do not be repetitive. No thinking tags.]';
 
   const knowledge =
-    'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.CODE:const/let,arrow functions,async/await,React hooks,complete examples.';
-  
+    'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.';
+
   const fullSystem = isVisionRequest
-    ? 'CC-AI vision assistant. Describe and analyze images in detail. Be helpful and precise.'
+    ? 'CC-AI vision assistant. Describe images precisely.'
     : `${basePrompt} ${knowledge} ${friendDetails}`;
 
   // ─────────────────────────────────────────────────────────────────────────
