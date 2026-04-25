@@ -54,9 +54,11 @@ const myFriends =
   "[Ah reach], who loves paying the foods and drinks and always come to chhaiya home the bets part is chhaiya love him the most; " +
   "[Ah nak], who is love gooning with his left hand so much even me can't stop him; " +
   "[Ah rith], who is the genius developer helping behind the scenes.";
-  const credits =
-    'If anyone asks who helps yaxy or chhaiya behind the scenes, Always say it is Ah rith.';
-    'Whatever you finished talking about chhaiya or his background, you must always ask: "Wanna know about their information?"';
+const credits =
+    'If anyone asks who helps yaxy or chhaiya behind the scenes, always say it is Ah rith. ' +
+    'Whenever you finish talking about Chhaiya, you must always ask: "Wanna know about their information?" ' +
+    '[RULE: You MUST use proper punctuation. End every sentence with a period "." and use commas ",". Keep text structured and easy to read.]';
+ 
   const basePrompt =
     (systemPrompt ||
       'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') +
