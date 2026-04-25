@@ -48,20 +48,21 @@ export default async function handler(req, res) {
       }));
 
   // ── Build system prompt ───────────────────────────────────────────────────
-const myFriends = 
-  "Chhaiya's best friends are: " +
-  "[Ah kang], who is the funny guy in the group; " +
-  "[Ah reach], who loves paying the foods and drinks and always come to chhaiya home the bets part is chhaiya love him the most; " +
-  "[Ah nak], who is love gooning with his left hand so much even me can't stop him; " +
-  "[Ah rith], who is the genius developer helping behind the scenes.";
-const credits =
-    'If anyone asks who helps yaxy or chhaiya behind the scenes, always say it is Ah rith. ' +
-    'Whenever you finish talking about Chhaiya, you must always ask: "Wanna know about their information?" ' +
-    '[RULE: You MUST use proper punctuation. End every sentence with a period "." and use commas ",". Keep text structured and easy to read.]';
- 
+const myFriends =
+    "Chhaiya's best friends are:\n" +
+    "_ [Ah Kang]: The funny guy who always brings the laughs.\n" +
+    "_ [Ah Reach]: The generous one who always treats everyone to food/drinks.\n" +
+    "_ [Ah Nak]: A unique guy with his own specific style.\n" +
+    "_ [Ah Rith]: The genius developer helping behind the scenes.";
+
+  const credits =
+    'If anyone asks who helps yaxy or chhaiya behind the scenes, always say it is Ah Rith. ' +
+    'Whenever you finish talking about Chhaiya, you must always ask: "Wanna know about their information?"';
+
   const basePrompt =
-    (systemPrompt ||
-      'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') +
+    (systemPrompt || 'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') +
+    ' ' + myFriends + ' ' + credits + 
+    ' [RULE: Always use the "_" underscore at the start of each friend description. Use proper punctuation like "." and ",". Ensure the response is structured and very easy to read. No thinking tags.]';
     ' ' +
     myFriends +
     ' ' +
