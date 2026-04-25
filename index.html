@@ -138,6 +138,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 .msg.user .bubble{background:var(--accent);color:var(--bg);border-bottom-right-radius:4px;}
 .msg.ai .bubble{background:var(--surface);border:1px solid rgba(124,111,255,0.2);color:var(--text);border-bottom-left-radius:4px;backdrop-filter:blur(10px);width:100%}
 @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:0.4;}30%{transform:translateY(-6px);opacity:1;}}
+@keyframes cursorBlink{0%,100%{opacity:1;}50%{opacity:0;}}
+.tw-cursor{display:inline-block;color:#7c6fff;font-size:1em;line-height:1;animation:cursorBlink 0.7s ease infinite;margin-left:1px;vertical-align:baseline;}
 .typing-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#7c6fff,#ff6b9d);margin:0 3px;animation:typingBounce 1.4s ease-in-out infinite;box-shadow:0 0 6px rgba(124,111,255,0.5);}
 .typing-dot:nth-child(2){animation-delay:0.2s;}
 .typing-dot:nth-child(3){animation-delay:0.4s;}
@@ -1179,7 +1181,7 @@ async function sendMessage(){
   try{
     const reply=await callGroq(messages);messages.push({role:'assistant',content:reply});
     const t=document.getElementById('typing');if(t)t.remove();
-    addMessage('ai',formatMessage(reply),reply);
+    await typewriterMessage(reply);
     // Auto open preview if reply has HTML code
     const htmlMatch = reply.match(/```html[\s\S]*?```/i);
     if (htmlMatch) {
@@ -1198,6 +1200,71 @@ async function sendMessage(){
     if(typeof trackActivity==='function')trackActivity('chat');
   }catch(e){const t=document.getElementById('typing');if(t)t.remove();addMessage('ai',`❌ Error: ${e.message}`,'')}
   isLoading=false;document.getElementById('sendBtn').disabled=false;document.getElementById('userInput').focus();
+}
+
+// ===================== TYPEWRITER ENGINE =====================
+async function typewriterMessage(raw) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'msg ai';
+
+  const avatarHtml = '<div class="avatar" style="background:white;border-radius:50%;"><img src="/icon.png" style="width:20px;height:20px;object-fit:contain;"/></div>';
+  div.innerHTML = avatarHtml;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.style.cssText = 'min-height:24px;';
+  div.appendChild(bubble);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+
+  // Split raw text into tokens: word + trailing space/punctuation
+  // We type word by word, not character by character — feels more natural
+  const words = raw.split(/(\s+)/);
+  let displayed = '';
+
+  for (let i = 0; i < words.length; i++) {
+    const token = words[i];
+    displayed += token;
+
+    // Render markdown on the displayed text so far
+    bubble.innerHTML = formatMessage(displayed) + '<span class="tw-cursor">▍</span>';
+    container.scrollTop = container.scrollHeight;
+
+    // Determine delay based on what character ends this token
+    const last = token.slice(-1);
+    let delay;
+    if (/[.!?]/.test(last)) {
+      // End of sentence — pause like a human finishing a thought
+      delay = 120 + Math.random() * 80;
+    } else if (/[,;:]/.test(last)) {
+      // Comma or colon — short breath
+      delay = 55 + Math.random() * 30;
+    } else if (/\n/.test(token)) {
+      // New line — slight pause
+      delay = 80 + Math.random() * 40;
+    } else {
+      // Normal word — fast but human-like, varies slightly
+      delay = 18 + Math.random() * 22;
+    }
+
+    await new Promise(r => setTimeout(r, delay));
+  }
+
+  // Remove cursor, render final clean HTML
+  bubble.innerHTML = formatMessage(raw);
+
+  // Attach action buttons
+  if (raw) {
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    const safe = raw.replace(/"/g, '&quot;');
+    actions.innerHTML = `<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button><button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;
+    bubble.appendChild(actions);
+    addRatingBar(bubble, messages.length - 1);
+  }
+
+  container.scrollTop = container.scrollHeight;
 }
 
 function addMessage(role,html,raw){
