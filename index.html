@@ -140,6 +140,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;heigh
 @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:0.4;}30%{transform:translateY(-6px);opacity:1;}}
 @keyframes cursorBlink{0%,100%{opacity:1;}50%{opacity:0;}}
 .tw-cursor{display:inline-block;color:#7c6fff;font-size:1em;line-height:1;animation:cursorBlink 0.7s ease infinite;margin-left:1px;vertical-align:baseline;}
+@keyframes stopPulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,0.5);}50%{box-shadow:0 0 0 8px rgba(248,113,113,0);}}
+.send-btn.stop-mode{background:linear-gradient(135deg,#f87171,#ef4444)!important;animation:stopPulse 1.4s ease infinite;font-size:1rem;}
 .typing-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,#7c6fff,#ff6b9d);margin:0 3px;animation:typingBounce 1.4s ease-in-out infinite;box-shadow:0 0 6px rgba(124,111,255,0.5);}
 .typing-dot:nth-child(2){animation-delay:0.2s;}
 .typing-dot:nth-child(3){animation-delay:0.4s;}
@@ -376,7 +378,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
           <option value="vi-VN">🇻🇳 Vietnamese</option>
         </select>
       </div>
-      <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+      <button class="send-btn" id="sendBtn" onclick="isLoading?stopGeneration():sendMessage()">➤</button>
     </div>
       <input type="file" id="camera-upload" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)"/>
       <input type="file" id="gallery-upload" accept="image/*" style="display:none" onchange="handlePhoto(this)"/>
@@ -691,7 +693,7 @@ img.ai-image{max-width:100%;border-radius:12px;display:block;box-shadow:0 0 25px
 <script>
 
 // State
-let messages=[],isLoading=false,autoSpeak=false,pendingImage=null;
+let messages=[],isLoading=false,autoSpeak=false,pendingImage=null,isStopped=false;
 
 // ===================== SMOOTH UI =====================
 function addRipple(e, el) {
@@ -1021,7 +1023,7 @@ async function quickEdit(prompt,mode){if(!pendingImage)return;const img=pendingI
 
 // Input
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
-function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage()}}
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();if(isLoading){stopGeneration();}else{sendMessage();}}}
 function sendSuggestion(text){document.getElementById('userInput').value=text;sendMessage()}
 function removeWelcome(){const w=document.getElementById('welcome');if(w)w.remove()}
 
@@ -1124,7 +1126,12 @@ async function sendMessage(){
   if(pendingImage){userDiv.innerHTML=`<div class="avatar">👤</div><div class="bubble" style="padding:8px;"><img src="${pendingImage}" style="max-width:180px;border-radius:8px;display:block;margin-bottom:${text?'6px':'0'}"/>${text?`<div>${text.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`:''}</div>`}
   else{userDiv.innerHTML=`<div class="avatar">👤</div><div class="bubble">${text.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`}
   container.appendChild(userDiv);container.scrollTop=container.scrollHeight;
-  input.value='';input.style.height='auto';isLoading=true;document.getElementById('sendBtn').disabled=true;
+  input.value='';input.style.height='auto';isLoading=true;isStopped=false;
+  const sendBtn=document.getElementById('sendBtn');
+  sendBtn.disabled=false;
+  sendBtn.innerHTML='⏹';
+  sendBtn.title='Stop generating (or press Enter)';
+  sendBtn.classList.add('stop-mode');
 
   // Background change detection
   const bgTriggers = ['change background','background to','set background','make background','switch background','change the background','background color'];
@@ -1151,7 +1158,8 @@ async function sendMessage(){
       document.getElementById('messages').appendChild(d);
       addMessage('ai', `✅ Background changed to <strong>${matched}</strong>! 🎨`, '');
       document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-      isLoading=false; document.getElementById('sendBtn').disabled=false;
+      isLoading=false;isStopped=false;
+      const _sb=document.getElementById('sendBtn');_sb.disabled=false;_sb.innerHTML='➤';_sb.title='';_sb.classList.remove('stop-mode');
       input.value=''; input.style.height='auto';
       return;
     }
@@ -1199,7 +1207,25 @@ async function sendMessage(){
     if(autoSpeak){const cleanReply=cleanTextForSpeech(reply);if(isKhmerText(cleanReply)){speakTextRaw(cleanReply,'km-KH')}else{fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:cleanReply.slice(0,500)})}).then(r=>r.json()).then(d=>{if(d.audio){const a=new Audio(d.audio);a.play()}else speakTextRaw(cleanReply)}).catch(()=>speakTextRaw(cleanReply));}}
     if(typeof trackActivity==='function')trackActivity('chat');
   }catch(e){const t=document.getElementById('typing');if(t)t.remove();addMessage('ai',`❌ Error: ${e.message}`,'')}
-  isLoading=false;document.getElementById('sendBtn').disabled=false;document.getElementById('userInput').focus();
+  isLoading=false;
+  isStopped=false;
+  const sb=document.getElementById('sendBtn');
+  sb.disabled=false;
+  sb.innerHTML='➤';
+  sb.title='';
+  sb.classList.remove('stop-mode');
+  document.getElementById('userInput').focus();
+}
+
+// ===================== STOP GENERATION =====================
+function stopGeneration(){
+  if(!isLoading)return;
+  isStopped=true;
+  const t=document.getElementById('typing');if(t)t.remove();
+  isLoading=false;
+  const sb=document.getElementById('sendBtn');
+  sb.disabled=false;sb.innerHTML='➤';sb.title='';sb.classList.remove('stop-mode');
+  document.getElementById('userInput').focus();
 }
 
 // ===================== TYPEWRITER ENGINE =====================
@@ -1224,6 +1250,19 @@ async function typewriterMessage(raw) {
   let displayed = '';
 
   for (let i = 0; i < words.length; i++) {
+    // If user pressed stop, freeze the text where it is and clean up
+    if (isStopped) {
+      bubble.innerHTML = formatMessage(displayed) + '<span style="font-size:0.75rem;color:var(--text3);margin-left:6px;font-family:DM Mono,monospace;"> · stopped</span>';
+      if (displayed.trim()) {
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+        const safe = displayed.trim().replace(/"/g, '&quot;');
+        actions.innerHTML = `<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button>`;
+        bubble.appendChild(actions);
+      }
+      return;
+    }
+
     const token = words[i];
     displayed += token;
 
