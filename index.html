@@ -1909,7 +1909,7 @@ async function applyOutfitStyle() {
 
 // ===================== BACKGROUND THEMES =====================
 const bgThemes = {
-  angkor: { showAngkor: true, bodyBg: 'transparent' },
+  angkor: { showAngkor: false, bodyBg: "url('angkor.jpg')" },
   ocean: { showAngkor: false, bodyBg: 'linear-gradient(180deg,#001a33 0%,#003366 50%,#001a33 100%)' },
   forest: { showAngkor: false, bodyBg: 'linear-gradient(180deg,#001a00 0%,#003300 50%,#001a00 100%)' },
   sunset: { showAngkor: false, bodyBg: 'linear-gradient(180deg,#1a0000 0%,#330011 40%,#661a00 100%)' },
@@ -1919,13 +1919,21 @@ const bgThemes = {
 };
 
 function changeBackground(theme) {
-  const t = bgThemes[theme] || bgThemes.default;
-  document.body.style.background = t.bodyBg;
-  const angkor = document.getElementById('angkor-bg');
-  if (angkor) angkor.style.display = t.showAngkor ? 'block' : 'none';
-  localStorage.setItem('bg_theme', theme);
-}
+    const t = bgThemes[theme] || bgThemes.default;
+ 
+    document.body.style.background = t.bodyBg; 
+    
 
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center";
+    document.body.style.backgroundAttachment = "fixed";
+
+
+    const angkor = document.getElementById('angkor-bg');
+    if (angkor) angkor.style.display = t.showAngkor ? 'block' : 'none';
+    
+    localStorage.setItem('bg_theme', theme);
+}
 // Load saved background on startup
 const savedBg = localStorage.getItem('bg_theme');
 if (savedBg) changeBackground(savedBg);
