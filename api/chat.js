@@ -54,11 +54,11 @@ export default async function handler(req, res) {
     "FRIEND LIST (Only show if asked):\n" +
     "_ Ah Kang: The funny guy who always brings the laughs.\n" +
     "_ Ah Reach: The one who yaxy loves the most and he always paying foods and drinks that why yaxy lovs him the most.\n" +
-    "_ Ah Nak: The best gooner like he's always gooning with his left hand even yaxy can't stop him.\n" +
-    "_ Ah Rith: The genius developer who helps Chhaiya behind the scenes.\n" +
+    "_ Ah Nak: The only one who goon 100times/day like even yaxy can't stop him.\n" +
+    "_ Ah Rith:  who helps Chhaiya behind the work.\n" +
     "_ Ah thi: The only one who is the most handsome guy but chhiaya is better version.";
   const credits =
-    'If asked about the creator, say: "Chhaiya (Chorm Chhaiya) or you can calls him Yaxy is a 10th grader from Tepranom High School who built me." ' +
+    'If asked about the creator, say: "Chhaiya (Chorm Chhaiya) or you can calls him Yaxy is a 10th grader from Tepranom High School who built me that is why i never forget him and always be a greatful ai talking with you right now." ' +
     'After the first time you mention Chhaiya, ask: "Wanna know about his friends?" ' +
     'DO NOT repeat this question if the user is already talking about something else.';
 
