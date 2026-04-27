@@ -15,7 +15,27 @@
 <link rel="icon" type="image/png" href="/icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Inter:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
- 
+ /* Glassmorphism for AI message bubbles */
+.response.ai {
+    background: rgba(255, 255, 255, 0.75) !important; /* White with 75% visibility */
+    backdrop-filter: blur(8px); /* The crucial blur effect */
+    border-radius: 12px;
+    padding: 10px;
+}
+
+/* Glassmorphism for User message bubbles */
+.bubble.user {
+    background: rgba(0, 0, 0, 0.6) !important; /* Black with 60% visibility */
+    backdrop-filter: blur(5px);
+    border-radius: 12px;
+    padding: 10px;
+}
+
+/* Optional: Apply to the top and bottom bars for a unified glass look */
+header, #input-container {
+    background: rgba(0, 0, 0, 0.4) !important; /* Semi-transparent black */
+    backdrop-filter: blur(10px);
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{height:100%;height:100dvh;}
 :root{
@@ -1920,18 +1940,22 @@ const bgThemes = {
 
 function changeBackground(theme) {
     const t = bgThemes[theme] || bgThemes.default;
- 
-    document.body.style.background = t.bodyBg; 
+
+    // Fix 1: Ensures the image fills the entire screen, including behind the top bar
+    document.documentElement.style.minHeight = '100dvh'; // Crucial for full fill
+    document.documentElement.style.background = t.bodyBg; // Sets the color/image
+
+    // Fix 2: Perfect image positioning
+    document.documentElement.style.backgroundSize = "cover";
+    document.documentElement.style.backgroundPosition = "center top"; // Crucial to anchor top
+    document.documentElement.style.backgroundAttachment = "fixed"; // Photo stays still
+
+    // Sets the transparent border for the main area to ensure no image 'comes out'
+    document.body.style.border = '0';
+    document.body.style.margin = '0';
     
-
-    document.body.style.backgroundSize = "cover";
-    document.body.style.backgroundPosition = "center";
-    document.body.style.backgroundAttachment = "fixed";
-
-
     const angkor = document.getElementById('angkor-bg');
     if (angkor) angkor.style.display = t.showAngkor ? 'block' : 'none';
-    
     localStorage.setItem('bg_theme', theme);
 }
 // Load saved background on startup
