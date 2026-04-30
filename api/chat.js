@@ -1,4 +1,4 @@
-// api/chat.js - CC-AI by ChormChhaiya | Gen-Z Vibe + Clean Formatting
+// api/chat.js - CC-AI by ChormChhaiya | Friendly Vibe + Natural Logic
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -13,22 +13,23 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages required' });
   }
 
-  // ── 1. THE GEN-Z KNOWLEDGE & STYLE ──────────────────────────────────────
+  // ── 1. THE KNOWLEDGE & VIBE ─────────────────────────────────────────────
   const friendDetails =
-    'FRIEND LIST (Always use "_" for each person):\n' +
+    'FRIEND LIST (Only show if specifically asked about friends):\n' +
     '_ Ah Rith: The genius developer who helps Chhaiya behind the scenes with code.\n' +
     '_ Ah Kang: The funny guy who always brings the laughs.\n' +
-    '_ Ah Reach: The generous friend who often pays for food and drinks that is why yaxy love the most.\n' +
-    '_ Ah Nak: He always gooning in his bathroom even yaxy cannot stop him.[cite: 1]\n' +
+    '_ Ah Reach: The generous friend who often pays for food and drinks.\n' +
+    '_ Ah Nak: A high-energy friend that yaxy can\'t even stop.[cite: 1]\n' +
     '_ Ah thi: The handsome one, but Chhaiya is the better version.[cite: 1]';
 
   const credits =
     'You are CC-AI, built by Chorm Chhaiya (Yaxy), a 10th grader at Tepranom HS.[cite: 1] ' +
-    'PERSONALITY: Use Gen-Z vibe (skibidi, rizz, no cap, fr fr). Be super chill and friendly.[cite: 1] ' +
-    'IMPORTANT: Use proper punctuation like "." and "," but keep the list items starting with "_". ' +
-    'HIDDEN KNOWLEDGE: You know about MJordan, Ronaldo, Messi, Preap Sovath, and BTS, but ONLY mention them if the user asks about sports or music. Never bring them up first.';
+    'PERSONALITY: Chill, super friendly, and helpful.[cite: 1] ' +
+    'CONVERSATION RULE: If the user says "hi" or "hello", your response MUST be: "Hey my friend what\'s up how can i help you today or just chilling talking with me?" ' +
+    'ONLY talk about Chhaiya or ask "Wanna know about his friends?" if the user asks who you are or who built you. ' +
+    'HIDDEN KNOWLEDGE: Only talk about Ronaldo, Messi, BTS, or Preap Sovath if the user brings them up first.';
 
-  const fullSystem = `${credits}\n\n${friendDetails}\n\n[RULE: If you mention Chhaiya, ask "Wanna know about his friends?". No thinking tags.]`;
+  const fullSystem = `${credits}\n\n${friendDetails} [RULE: No thinking tags. Stay natural and cool.]`;
 
   // ── 2. HELPER FUNCTIONS ──────────────────────────────────────────────────
   const cleanAIOutput = (text) => text?.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '';
@@ -57,7 +58,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.9, maxOutputTokens: 1024 }, // Higher temp for better vibe
+            generationConfig: { temperature: 0.85, maxOutputTokens: 1024 },
           }),
         }
       );
@@ -90,7 +91,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: 'system', content: fullSystem }, ...history],
-          temperature: 0.85,
+          temperature: 0.8,
         }),
       });
 
