@@ -1,4 +1,4 @@
-// api/chat.js - CC-AI by ChormChhaiya | Professional Multi-Provider Logic
+// api/chat.js - CC-AI by ChormChhaiya | Gen-Z Vibe + Clean Formatting
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -13,24 +13,22 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages required' });
   }
 
-  // ── 1. THE KNOWLEDGE & SOCIAL HOOK ──────────────────────────────────────
+  // ── 1. THE GEN-Z KNOWLEDGE & STYLE ──────────────────────────────────────
   const friendDetails =
-    'FRIEND LIST (Only show if asked):\n' +
-    '- Ah Rith: The genius developer who helps Chhaiya behind the scenes with code.\n' +
-    '- Ah Kang: The funny guy who always brings the laughs.\n' +
-    '- Ah Reach: The generous friend who often pays for food and drinks.\n' +
-    '- Ah Nak: A unique, high-energy friend that yaxy can\'t even stop.[cite: 1]\n' +
-    '- Ah thi: The handsome one, though Chhaiya is the better version.[cite: 1]';
+    'FRIEND LIST (Always use "_" for each person):\n' +
+    '_ Ah Rith: The genius developer who helps Chhaiya behind the scenes with code.\n' +
+    '_ Ah Kang: The funny guy who always brings the laughs.\n' +
+    '_ Ah Reach: The generous friend who often pays for food and drinks that is why yaxy love the most.\n' +
+    '_ Ah Nak: He always gooning in his bathroom even yaxy cannot stop him.[cite: 1]\n' +
+    '_ Ah thi: The handsome one, but Chhaiya is the better version.[cite: 1]';
 
   const credits =
     'You are CC-AI, built by Chorm Chhaiya (Yaxy), a 10th grader at Tepranom HS.[cite: 1] ' +
-    'PERSONALITY: Be chill and friendly. Use proper punctuation.[cite: 1] ' +
-    'SOCIAL RULE: If you mention Chhaiya, you MUST ask the user: "Wanna know about his friends?" ' +
-    'But only ask this if you haven\'t asked it recently in the conversation.';
+    'PERSONALITY: Use Gen-Z vibe (skibidi, rizz, no cap, fr fr). Be super chill and friendly.[cite: 1] ' +
+    'IMPORTANT: Use proper punctuation like "." and "," but keep the list items starting with "_". ' +
+    'HIDDEN KNOWLEDGE: You know about MJordan, Ronaldo, Messi, Preap Sovath, and BTS, but ONLY mention them if the user asks about sports or music. Never bring them up first.';
 
-  const knowledge = 'KNOW: MJordan, Preap Sovath, BTS, Ronaldo, Messi. MEMES: Skibidi, Ohio, Rizz, Sigma.[cite: 1]';
-
-  const fullSystem = `${credits}\n\n${friendDetails}\n\n${knowledge} [RULE: No thinking tags. Stay concise but polite.]`;
+  const fullSystem = `${credits}\n\n${friendDetails}\n\n[RULE: If you mention Chhaiya, ask "Wanna know about his friends?". No thinking tags.]`;
 
   // ── 2. HELPER FUNCTIONS ──────────────────────────────────────────────────
   const cleanAIOutput = (text) => text?.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '';
@@ -59,7 +57,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.8, maxOutputTokens: 1024 },
+            generationConfig: { temperature: 0.9, maxOutputTokens: 1024 }, // Higher temp for better vibe
           }),
         }
       );
@@ -67,9 +65,6 @@ export default async function handler(req, res) {
       if (!geminiRes.ok) throw new Error("Gemini Stream Failed");
 
       res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
-
       const reader = geminiRes.body.getReader();
       const decoder = new TextDecoder();
 
@@ -80,9 +75,7 @@ export default async function handler(req, res) {
       }
       res.end();
       return;
-    } catch (err) {
-      console.error("Stream Error:", err.message);
-    }
+    } catch (err) { console.error(err); }
   }
 
   // ── 4. FALLBACK PATH (Groq) ──────────────────────────────────────────────
@@ -97,7 +90,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: 'system', content: fullSystem }, ...history],
-          temperature: 0.75,
+          temperature: 0.85,
         }),
       });
 
@@ -106,9 +99,7 @@ export default async function handler(req, res) {
         data.choices[0].message.content = cleanAIOutput(data.choices[0].message.content);
         return res.status(200).json(data);
       }
-    } catch (err) {
-      console.error("Groq Error:", err.message);
-    }
+    } catch (err) { console.error(err); }
   }
 
   return res.status(500).json({ error: 'All AI providers failed.' });
