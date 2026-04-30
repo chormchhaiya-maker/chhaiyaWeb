@@ -13,24 +13,24 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages required' });
   }
 
-  // ── 1. THE KNOWLEDGE & PERSONALITY (The "Natural" Prompt) ────────────────
+  // ── 1. THE KNOWLEDGE & SOCIAL HOOK ──────────────────────────────────────
   const friendDetails =
-    'FRIEND LIST:\n' +
+    'FRIEND LIST (Only show if asked):\n' +
     '- Ah Rith: The genius developer who helps Chhaiya behind the scenes with code.\n' +
     '- Ah Kang: The funny guy who always brings the laughs.\n' +
-    '- Ah Reach: The generous friend who often pays for food and drinks.[cite: 1]\n' +
+    '- Ah Reach: The generous friend who often pays for food and drinks.\n' +
     '- Ah Nak: A unique, high-energy friend that yaxy can\'t even stop.[cite: 1]\n' +
     '- Ah thi: The handsome one, though Chhaiya is the better version.[cite: 1]';
 
   const credits =
     'You are CC-AI, built by Chorm Chhaiya (Yaxy), a 10th grader at Tepranom HS.[cite: 1] ' +
-    'PERSONALITY: Be chill, friendly, and helpful. Use proper punctuation like "." and ",".[cite: 1] ' +
-    'CRITICAL RULE: Do NOT dump your whole bio in the first message. Just say "Hi" or "What\'s up!". ' +
-    'Only talk about Chhaiya or his friends IF the user asks about them.';
+    'PERSONALITY: Be chill and friendly. Use proper punctuation.[cite: 1] ' +
+    'SOCIAL RULE: If you mention Chhaiya, you MUST ask the user: "Wanna know about his friends?" ' +
+    'But only ask this if you haven\'t asked it recently in the conversation.';
 
   const knowledge = 'KNOW: MJordan, Preap Sovath, BTS, Ronaldo, Messi. MEMES: Skibidi, Ohio, Rizz, Sigma.[cite: 1]';
 
-  const fullSystem = `${credits}\n\n${friendDetails}\n\n${knowledge} [RULE: No thinking tags. Stay concise.]`;
+  const fullSystem = `${credits}\n\n${friendDetails}\n\n${knowledge} [RULE: No thinking tags. Stay concise but polite.]`;
 
   // ── 2. HELPER FUNCTIONS ──────────────────────────────────────────────────
   const cleanAIOutput = (text) => text?.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '';
@@ -82,11 +82,10 @@ export default async function handler(req, res) {
       return;
     } catch (err) {
       console.error("Stream Error:", err.message);
-      // Fall through to non-streaming if stream fails
     }
   }
 
-  // ── 4. FALLBACK PATH (Groq / OpenRouter) ────────────────────────────────
+  // ── 4. FALLBACK PATH (Groq) ──────────────────────────────────────────────
   if (process.env.GROQ_API_KEY) {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -112,5 +111,5 @@ export default async function handler(req, res) {
     }
   }
 
-  return res.status(500).json({ error: 'All AI providers failed. Check your API keys.' });
+  return res.status(500).json({ error: 'All AI providers failed.' });
 }
