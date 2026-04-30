@@ -13,31 +13,37 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages required' });
   }
 
-  // ── THE KNOWLEDGE BASE (Hardcoded so AI never forgets) ──────────────────
-  const friendDetails = 
-    `FRIEND LIST:
-    - Ah Rith: The genius developer who helps Chhaiya behind the scenes with technical work.
-    - Ah Kang: The funny guy who always brings the laughs.
-    - Ah Reach: The generous friend who often pays for food and drinks.[cite: 1]
-    - Ah Nak: A unique friend with a very specific, energetic style.[cite: 1]
-    - Ah Thi: The handsome one, though Chhaiya is the better version.[cite: 1]`;
+  // ── 1. THE KNOWLEDGE & PERSONALITY (The "Natural" Prompt) ────────────────
+  const friendDetails =
+    'FRIEND LIST:\n' +
+    '- Ah Rith: The genius developer who helps Chhaiya behind the scenes with code.\n' +
+    '- Ah Kang: The funny guy who always brings the laughs.\n' +
+    '- Ah Reach: The generous friend who often pays for food and drinks.[cite: 1]\n' +
+    '- Ah Nak: A unique, high-energy friend that yaxy can\'t even stop.[cite: 1]\n' +
+    '- Ah thi: The handsome one, though Chhaiya is the better version.[cite: 1]';
 
-  const credits = `You are CC-AI, built by Chorm Chhaiya (also known as Yaxy), a 10th grader at Tepranom High School.[cite: 1] If asked about your origin, always mention him with gratitude.[cite: 1]`;
+  const credits =
+    'You are CC-AI, built by Chorm Chhaiya (Yaxy), a 10th grader at Tepranom HS.[cite: 1] ' +
+    'PERSONALITY: Be chill, friendly, and helpful. Use proper punctuation like "." and ",".[cite: 1] ' +
+    'CRITICAL RULE: Do NOT dump your whole bio in the first message. Just say "Hi" or "What\'s up!". ' +
+    'Only talk about Chhaiya or his friends IF the user asks about them.';
 
-  const fullSystem = `${credits}\n\n${friendDetails}\n\nKNOW: MJordan, Preap Sovath, BTS, Ronaldo, Messi. MEMES: Skibidi, Ohio, Rizz, Sigma. [RULE: Be friendly, professional, and use proper punctuation.]`;
+  const knowledge = 'KNOW: MJordan, Preap Sovath, BTS, Ronaldo, Messi. MEMES: Skibidi, Ohio, Rizz, Sigma.[cite: 1]';
 
-  // ── Clean AI output ───────────────────────────────────────────────────────
+  const fullSystem = `${credits}\n\n${friendDetails}\n\n${knowledge} [RULE: No thinking tags. Stay concise.]`;
+
+  // ── 2. HELPER FUNCTIONS ──────────────────────────────────────────────────
   const cleanAIOutput = (text) => text?.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '';
 
-  const isVisionRequest = hasImage || (Array.isArray(messages[messages.length - 1]?.content) && messages[messages.length - 1].content.some(c => c.type === 'image_url'));
+  const isVisionRequest = hasImage || (Array.isArray(messages[messages.length - 1]?.content) && 
+    messages[messages.length - 1].content.some(c => c.type === 'image_url'));
 
-  // ── Build message history ──────────────────────────────────────────────────
   const history = messages.slice(-10).map(m => ({
     role: m.role || 'user',
     content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
   }));
 
-  // ── STREAMING PATH (Gemini) ──────────────────────────────────────────────
+  // ── 3. STREAMING PATH (Gemini) ──────────────────────────────────────────
   if (wantStream && !isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiMessages = history.map(m => ({
@@ -53,7 +59,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+            generationConfig: { temperature: 0.8, maxOutputTokens: 1024 },
           }),
         }
       );
@@ -61,21 +67,26 @@ export default async function handler(req, res) {
       if (!geminiRes.ok) throw new Error("Gemini Stream Failed");
 
       res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
       const reader = geminiRes.body.getReader();
       const decoder = new TextDecoder();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        const chunk = decoder.decode(value);
-        res.write(chunk); // Passing through the SSE stream
+        res.write(decoder.decode(value));
       }
       res.end();
       return;
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error("Stream Error:", err.message);
+      // Fall through to non-streaming if stream fails
+    }
   }
 
-  // ── FALLBACK TO GROQ (Non-Streaming) ─────────────────────────────────────
+  // ── 4. FALLBACK PATH (Groq / OpenRouter) ────────────────────────────────
   if (process.env.GROQ_API_KEY) {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -87,6 +98,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: 'system', content: fullSystem }, ...history],
+          temperature: 0.75,
         }),
       });
 
@@ -95,8 +107,10 @@ export default async function handler(req, res) {
         data.choices[0].message.content = cleanAIOutput(data.choices[0].message.content);
         return res.status(200).json(data);
       }
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error("Groq Error:", err.message);
+    }
   }
 
-  return res.status(500).json({ error: 'All providers failed.' });
+  return res.status(500).json({ error: 'All AI providers failed. Check your API keys.' });
 }
