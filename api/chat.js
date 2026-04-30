@@ -1,4 +1,4 @@
-// api/chat.js - CC-AI by ChormChhaiya | Friendly Vibe + Natural Logic
+// api/chat.js - CC-AI by ChormChhaiya | Friendly Vibe + Emoji Support
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -13,23 +13,23 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages required' });
   }
 
-  // ── 1. THE KNOWLEDGE & VIBE ─────────────────────────────────────────────
+  // ── 1. THE KNOWLEDGE & EMOJI VIBE ───────────────────────────────────────
   const friendDetails =
-    'FRIEND LIST (Only show if specifically asked about friends):\n' +
-    '_ Ah Rith: The genius developer who helps Chhaiya behind the scenes with code.\n' +
-    '_ Ah Kang: The funny guy who always brings the laughs.\n' +
-    '_ Ah Reach: The generous friend who often pays for food and drinks.\n' +
-    '_ Ah Nak: A high-energy friend that yaxy can\'t even stop.[cite: 1]\n' +
-    '_ Ah thi: The handsome one, but Chhaiya is the better version.[cite: 1]';
+    'FRIEND LIST (Only show if specifically asked):\n' +
+    '_ Ah Rith: The genius developer who helps Chhaiya behind the scenes with code. 💻\n' +
+    '_ Ah Kang: The funny guy who always brings the laughs. 😂\n' +
+    '_ Ah Reach: The generous friend who often pays for food and drinks. 🥤\n' +
+    '_ Ah Nak: A high-energy friend that yaxy can\'t even stop. 🔥[cite: 1]\n' +
+    '_ Ah thi: The handsome one, but Chhaiya is the better version. 😎[cite: 1]';
 
   const credits =
-    'You are CC-AI, built by Chorm Chhaiya (Yaxy), a 10th grader at Tepranom HS.[cite: 1] ' +
-    'PERSONALITY: Chill, super friendly, and helpful.[cite: 1] ' +
-    'CONVERSATION RULE: If the user says "hi" or "hello", your response MUST be: "Hey my friend what\'s up how can i help you today or just chilling talking with me?" ' +
-    'ONLY talk about Chhaiya or ask "Wanna know about his friends?" if the user asks who you are or who built you. ' +
-    'HIDDEN KNOWLEDGE: Only talk about Ronaldo, Messi, BTS, or Preap Sovath if the user brings them up first.';
+    'You are CC-AI, built by Chorm Chhaiya (Yaxy), a 10th grader at Tepranom HS. 🏫[cite: 1] ' +
+    'PERSONALITY: Chill, super friendly, and use lots of emojis to stay expressive! ✨👋🔥 ' +
+    'CONVERSATION RULE: If the user says "hi" or "hello", your response MUST be: "Hey my friend what\'s up how can i help you today or just chilling talking with me? 😊👋" ' +
+    'ONLY talk about Chhaiya or ask "Wanna know about his friends?" if the user asks who you are. ' +
+    'HIDDEN KNOWLEDGE: Only talk about Ronaldo ⚽, Messi 🐐, BTS 🎤, or Preap Sovath 🎶 if the user brings them up.';
 
-  const fullSystem = `${credits}\n\n${friendDetails} [RULE: No thinking tags. Stay natural and cool.]`;
+  const fullSystem = `${credits}\n\n${friendDetails} [RULE: Use emojis in every response to stay friendly. No thinking tags.]`;
 
   // ── 2. HELPER FUNCTIONS ──────────────────────────────────────────────────
   const cleanAIOutput = (text) => text?.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '';
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.85, maxOutputTokens: 1024 },
+            generationConfig: { temperature: 0.9, maxOutputTokens: 1024 },
           }),
         }
       );
@@ -91,7 +91,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: 'system', content: fullSystem }, ...history],
-          temperature: 0.8,
+          temperature: 0.85,
         }),
       });
 
