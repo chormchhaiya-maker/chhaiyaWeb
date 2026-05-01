@@ -1,4 +1,4 @@
-// 1. Helper Functions (Placed at the very top)
+// 1. Helper Functions (Keep these at the top)
 async function generateHFImage(prompt) {
   const response = await fetch(
     "https://api-inference.huggingface.co/models/stablediffusionapi/dark-sushi-mix",
@@ -8,7 +8,7 @@ async function generateHFImage(prompt) {
       body: JSON.stringify({ inputs: prompt }),
     }
   );
-  if (!response.ok) throw new Error("HF Busy or Error");
+  if (!response.ok) throw new Error("HF Busy");
   return await response.blob();
 }
 
@@ -21,10 +21,66 @@ async function generateCFImage(prompt) {
       body: JSON.stringify({ prompt: prompt }),
     }
   );
-  if (!response.ok) throw new Error("CF Failed");
   return await response.blob();
 }
 
+// 2. THE ONLY HANDLER YOU NEED
+export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  
+  const { messages, systemPrompt } = req.body || {};
+  if (!messages) return res.status(400).send("No messages");
+
+  const lastMessageText = String(messages[messages.length - 1].content || "").toLowerCase();
+
+  // --- IMAGE GENERATION LOGIC ---
+  if (lastMessageText.startsWith("generate image") || lastMessageText.startsWith("draw")) {
+    try {
+      const blob = await generateHFImage(lastMessageText);
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.status(200).send(Buffer.from(await blob.arrayBuffer())); 
+    } catch (error) {
+      // If HF fails, it uses CF, which is why you see "CF response"
+      const blob = await generateCFImage(lastMessageText);
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.status(200).send(Buffer.from(await blob.arrayBuffer()));
+    }
+  }
+
+  // --- YOUR IDENTITY & FRIEND LIST (Merged here so it's always active) ---
+  const myIdentity = 'I am CC-AI. I was built by Chhaiya (Chorm Chhaiya), a 10th grader from Tepranom High School. He is my creator and I am grateful to him! ✨';
+  
+  const friendDetails = 
+    'FRIEND LIST:\n' +
+    '_ Ah Kang: The funny guy.\n' +
+    '_ Ah Reach: The one Chhaiya loves most because he pays for food.\n' +
+    '_ Ah Nak: The one who goons 100 times/day.\n' +
+    '_ Ah Rith: Helps Chhaiya behind the scenes.\n' +
+    '_ Ah thi: Handsome, but Chhaiya is better.';
+
+  const fullPersonality = `${myIdentity} ${friendDetails} Stay chill and use emojis!`;
+
+  // --- GEMINI TEXT RESPONSE ---
+  const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: fullPersonality }] },
+      contents: messages.map(m => ({ 
+        role: m.role === 'assistant' ? 'model' : 'user', 
+        parts: [{ text: String(m.content) }] 
+      })),
+    }),
+  });
+
+  const data = await geminiRes.json();
+  const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm confused!";
+  return res.status(200).json({ choices: [{ message: { role: 'assistant', content: aiText } }] });
+}
 // 2. Main Handler
 export default async function handler(req, res) {
   // CORS Headers
@@ -73,36 +129,6 @@ export default async function handler(req, res) {
 
   // ... (Keep the rest of your original uploadToCloudflare and Provider logic here) ...
   // [I've condensed this for the response, but keep your existing vision/streaming code below this line]
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).end();
-
-  const { messages, systemPrompt, hasImage, stream: wantStream } = req.body || {};
-
-// ... the rest of your Gemini/Groq logic continues here ...
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'messages required' });
-  }
-
-  // ── Clean AI output ───────────────────────────────────────────────────────
-  const cleanAIOutput = (text) => {
-    if (!text) return '';
-    return text
-      .replace(/<think>[\s\S]*?<\/think>/g, '')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  };
-
-  // ── Detect vision request ─────────────────────────────────────────────────
-  const lastMsg = messages[messages.length - 1];
-  const isVisionRequest =
-    hasImage ||
-    (Array.isArray(lastMsg?.content) &&
-      lastMsg.content.some((c) => c.type === 'image_url'));
 
   // ── Upload image to Cloudflare Images (if base64 present) ────────────────
   // Returns a public URL string, or null if not applicable / fails
