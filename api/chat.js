@@ -132,7 +132,7 @@ export default async function handler(req, res) {
     'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.';
 
   const fullSystem = isVisionRequest
-    ? 'CC-AI vision assistant. Describe images precisely and helpfully.'
+    ? `${basePrompt} ${friendDetails} Describe images precisely but stay chill and use emojis! ✨`
     : `${basePrompt} ${knowledge} ${friendDetails}`;
 
   // ─────────────────────────────────────────────────────────────────────────
