@@ -1,4 +1,31 @@
-// api/chat.js - CC-AI by ChormChhaiya | Groq → Gemini → OpenRouter + Cloudflare Images
+async function generateHFImage(prompt) {
+  const response = await fetch(
+    "https://api-inference.huggingface.co/models/stablediffusionapi/dark-sushi-mix",
+    {
+      headers: { Authorization: `Bearer ${process.env.HF_TOKEN}` },
+      method: "POST",
+      body: JSON.stringify({ inputs: prompt }),
+    }
+  );
+  if (!response.ok) throw new Error("HF Busy");
+  return await response.blob();
+}
+
+async function generateCFImage(prompt) {
+  const response = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning`,
+    {
+      headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_IMAGES_TOKEN}` },
+      method: "POST",
+      body: JSON.stringify({ prompt: prompt }),
+    }
+  );
+  if (!response.ok) throw new Error("CF Failed");
+  return await response.blob();
+}
+
+export default async function handler(req, res) {
+  // ... rest of your code ...
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -8,7 +35,30 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const { messages, systemPrompt, hasImage, stream: wantStream } = req.body || {};
+// ... lines 2 through 9 ...
+const { messages, systemPrompt, hasImage, stream: wantStream } = req.body || {};
 
+// --- INSERT HERE (Starting at Line 11) ---
+const lastMessage = messages[messages.length - 1].content.toLowerCase();
+
+if (lastMessage.startsWith("generate image") || lastMessage.startsWith("draw")) {
+  try {
+    console.log("🎨 Attempting Hugging Face...");
+    const blob = await generateHFImage(lastMessage);
+    return res.status(200).send(blob); 
+  } catch (error) {
+    console.log("⚠️ Hugging Face failed, switching to Cloudflare...");
+    try {
+      const blob = await generateCFImage(lastMessage);
+      return res.status(200).send(blob);
+    } catch (cfError) {
+      return res.status(500).json({ error: "Both image providers are down! 😭" });
+    }
+  }
+}
+// --- END OF IMAGE LOGIC ---
+
+// ... the rest of your Gemini/Groq logic continues here ...
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages required' });
   }
