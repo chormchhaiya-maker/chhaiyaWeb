@@ -82,35 +82,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const { messages, systemPrompt, hasImage, stream: wantStream } = req.body || {};
-// ... (Lines 1-9: CORS headers and method checks) ...
 
-const { messages, systemPrompt, hasImage, stream: wantStream } = req.body || {}; // Line 10
-
-// --- INSERT STARTING AT LINE 11 ---
-const lastMessageObj = messages[messages.length - 1];
-const lastMessageText = String(lastMessageObj.content || "").toLowerCase();
-
-if (lastMessageText.startsWith("generate image") || lastMessageText.startsWith("draw")) {
-  try {
-    console.log("🎨 Attempting Hugging Face...");
-    const blob = await generateHFImage(lastMessageText);
-    res.setHeader('Content-Type', 'image/jpeg');
-    // Convert blob to Buffer for Vercel/Node.js compatibility
-    return res.status(200).send(Buffer.from(await blob.arrayBuffer())); 
-  } catch (error) {
-    console.log("⚠️ Hugging Face failed, switching to Cloudflare...");
-    try {
-      const blob = await generateCFImage(lastMessageText);
-      res.setHeader('Content-Type', 'image/jpeg');
-      return res.status(200).send(Buffer.from(await blob.arrayBuffer()));
-    } catch (cfError) {
-      return res.status(500).json({ error: "Both image providers are down! 😭" });
-    }
-  }
-}
-// --- END OF IMAGE LOGIC ---
-
-// ... (Rest of the file: cleanAIOutput, Gemini, and Groq logic continues) ...
 // ... the rest of your Gemini/Groq logic continues here ...
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'messages required' });
