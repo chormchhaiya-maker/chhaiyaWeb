@@ -1,236 +1,401 @@
-// api/chat.js - CC-AI by Chorm Chhaiya | FIXED WITH VISION SUPPORT
+// api/chat.js - CC-AI by ChormChhaiya | Groq → Gemini → OpenRouter + Cloudflare Images
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).end();
 
-  const { messages, hasImage, stream: wantStream } = req.body || {};
+  const { messages, systemPrompt, hasImage, stream: wantStream } = req.body || {};
 
   if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'messages array is required' });
+    return res.status(400).json({ error: 'messages required' });
   }
 
-  const hasGemini  = !!process.env.GEMINI_API_KEY;
-  const hasGroq    = !!process.env.GROQ_API_KEY;
-  const hasClaude  = !!process.env.ANTHROPIC_API_KEY;
+  // ── Clean AI output ───────────────────────────────────────────────────────
+  const cleanAIOutput = (text) => {
+    if (!text) return '';
+    return text
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  };
 
-  console.log('API Keys:', {
-    gemini: hasGemini ? 'Present' : 'Missing',
-    groq:   hasGroq   ? 'Present' : 'Missing',
-    claude: hasClaude ? 'Present' : 'Missing',
-  });
-
-  if (!hasGemini && !hasGroq && !hasClaude) {
-    return res.status(500).json({
-      error: 'No API keys configured.',
-      setup: 'Add GEMINI_API_KEY, GROQ_API_KEY, or ANTHROPIC_API_KEY to your environment variables.'
-    });
-  }
-
-  const systemPrompt = `You are CC-AI, built by Chorm Chhaiya (Yaxy), a 10th grader at Tepranom HS. 🏫
-PERSONALITY: Chill, super friendly, use lots of emojis! ✨👋
-IMPORTANT RULE: If user says "hi" or "hello", respond EXACTLY: "Hey my friend what's up how can i help you today or just chilling talking with me? 😊👋"[cite: 1]
-
-FRIEND LIST (Only show if asked):[cite: 1]
-_ Ah Rith: The genius developer who helps Chhaiya with code. 💻[cite: 1]
-_ Ah Kang: The funny guy who always brings the laughs. 😂[cite: 1]
-_ Ah Reach: The generous friend who often pays for food and drinks that\ 's why yaxy loves him the most. 🥤[cite: 1]
-_ Ah Nak: He\ 's always gooning in the bathroom. 🔥[cite: 1]
-_ Ah thi: The handsome guy and a good person, but Chhaiya is the better version. 😎[cite: 1]
-
-Be helpful, friendly, and use emojis. Keep responses natural and conversational.
-When identifying people in images, do your best to describe who they appear to be based on visual clues.`;
-  const cleanOutput = (text) => text ? text.replace(/<think>[\s\S]*?<\/think>/g, '').trim() : '';
-
-  // ─── Detect if this is a vision request ──────────────────────────────────
+  // ── Detect vision request ─────────────────────────────────────────────────
   const lastMsg = messages[messages.length - 1];
-  const isVision = hasImage ||
-    (Array.isArray(lastMsg?.content) && lastMsg.content.some(c => c.type === 'image_url' || c.type === 'image'));
+  const isVisionRequest =
+    hasImage ||
+    (Array.isArray(lastMsg?.content) &&
+      lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // ─── 1. GEMINI (text + vision, streaming for text-only) ──────────────────
-  if (hasGemini) {
+  // ── Upload image to Cloudflare Images (if base64 present) ────────────────
+  // Returns a public URL string, or null if not applicable / fails
+  const uploadToCloudflare = async (base64DataUrl) => {
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_IMAGES_TOKEN;
+    if (!accountId || !apiToken || !base64DataUrl?.startsWith('data:')) return null;
+
     try {
-      // Build Gemini-formatted contents
-      const geminiContents = messages.slice(-10).map(m => {
-        const role = m.role === 'assistant' ? 'model' : 'user';
+      const [meta, b64] = base64DataUrl.split(',');
+      const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+      const ext = mimeType.split('/')[1] || 'jpg';
 
-        // If content is an array (vision message from OpenAI-style format)
-        if (Array.isArray(m.content)) {
-          const parts = m.content.map(c => {
-            if (c.type === 'text') return { text: c.text };
-            if (c.type === 'image_url') {
-              const url = c.image_url?.url || '';
-              // base64 image: "data:image/jpeg;base64,XXXX"
-              if (url.startsWith('data:')) {
-                const [meta, data] = url.split(',');
-                const mimeType = meta.replace('data:', '').replace(';base64', '');
-                return { inlineData: { mimeType, data } };
-              }
-              // remote URL
-              return { fileData: { mimeType: 'image/jpeg', fileUri: url } };
-            }
-            return { text: JSON.stringify(c) };
-          });
-          return { role, parts };
+      // Convert base64 to Blob
+      const byteChars = atob(b64);
+      const byteArr = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], { type: mimeType });
+
+      const formData = new FormData();
+      formData.append('file', blob, `upload.${ext}`);
+
+      const cfRes = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiToken}` },
+          body: formData,
         }
+      );
 
-        return { role, parts: [{ text: m.content || '' }] };
-      });
-
-      const endpoint = (wantStream && !isVision)
-        ? `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`
-        : `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: geminiContents,
-          generationConfig: { temperature: 0.9, maxOutputTokens: 1024 }
-        })
-      });
-
-      if (response.ok) {
-        if (wantStream && !isVision) {
-          res.setHeader('Content-Type', 'text/event-stream');
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              res.write(decoder.decode(value));
-            }
-          } finally {
-            res.end();
-          }
-          return;
-        } else {
-          const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            return res.status(200).json({
-              choices: [{ message: { role: 'assistant', content: cleanOutput(text) } }]
-            });
-          }
-          console.error('Gemini returned no text:', JSON.stringify(data));
-        }
-      } else {
-        console.error('Gemini HTTP error:', response.status, await response.text());
+      const cfData = await cfRes.json();
+      if (cfData.success && cfData.result?.variants?.[0]) {
+        return cfData.result.variants[0]; // public URL
       }
+      console.error('Cloudflare Images upload failed:', JSON.stringify(cfData.errors));
+      return null;
     } catch (err) {
-      console.error('Gemini failed:', err.message);
+      console.error('Cloudflare Images error:', err.message);
+      return null;
     }
-  }
+  };
 
-  // ─── 2. CLAUDE / ANTHROPIC (best for vision as fallback) ─────────────────
-  if (hasClaude) {
-    try {
-      const claudeMessages = messages.slice(-10).map(m => {
-        const role = m.role === 'assistant' ? 'assistant' : 'user';
-
-        if (Array.isArray(m.content)) {
-          const content = m.content.map(c => {
-            if (c.type === 'text') return { type: 'text', text: c.text };
-            if (c.type === 'image_url') {
-              const url = c.image_url?.url || '';
-              if (url.startsWith('data:')) {
-                const [meta, data] = url.split(',');
-                const media_type = meta.replace('data:', '').replace(';base64', '');
-                return { type: 'image', source: { type: 'base64', media_type, data } };
-              }
-              return { type: 'image', source: { type: 'url', url } };
+  // ── Pre-process messages: upload base64 images to Cloudflare ─────────────
+  // This converts inline base64 → public URL so all providers can use it
+  const processedMessages = await Promise.all(
+    messages.map(async (m) => {
+      if (!Array.isArray(m.content)) return m;
+      const newContent = await Promise.all(
+        m.content.map(async (c) => {
+          if (c.type === 'image_url' && c.image_url?.url?.startsWith('data:')) {
+            const publicUrl = await uploadToCloudflare(c.image_url.url);
+            if (publicUrl) {
+              return { type: 'image_url', image_url: { url: publicUrl } };
             }
-            return { type: 'text', text: JSON.stringify(c) };
-          });
-          return { role, content };
-        }
-
-        return { role, content: m.content || '' };
-      });
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages: claudeMessages
+            // Keep original base64 if upload failed (Gemini can handle it)
+          }
+          return c;
         })
-      });
+      );
+      return { ...m, content: newContent };
+    })
+  );
 
-      if (response.ok) {
-        const data = await response.json();
-        const text = data.content?.map(b => b.text || '').join('').trim();
-        if (text) {
-          return res.status(200).json({
-            choices: [{ message: { role: 'assistant', content: cleanOutput(text) } }]
-          });
-        }
-      } else {
-        console.error('Claude HTTP error:', response.status, await response.text());
-      }
-    } catch (err) {
-      console.error('Claude failed:', err.message);
-    }
-  }
-
-  // ─── 3. GROQ (text only fallback — no vision support) ────────────────────
-  if (hasGroq && !isVision) {
-    try {
-      const history = messages.slice(-10).map(m => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+  // ── Build message history (cap size) ─────────────────────────────────────
+  const history = isVisionRequest
+    ? processedMessages.slice(-5).map((m) => ({
+        role: m.role,
+        content: Array.isArray(m.content)
+          ? m.content.map((c) =>
+              c.type === 'image_url'
+                ? c
+                : { ...c, text: String(c.text || '').slice(0, 2000) }
+            )
+          : String(m.content).slice(0, 2000),
+      }))
+    : processedMessages.slice(-10).map((m) => ({
+        role: m.role || 'user',
+        content: String(m.content).slice(0, 3000),
       }));
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: systemPrompt }, ...history],
-          temperature: 0.8,
-          max_tokens: 1024
-        })
-      });
+  // ── Build system prompt ───────────────────────────────────────────────────
+  const friendDetails =
+    'FRIEND LIST (Only show if asked):\n' +
+    '_ Ah Kang: The funny guy who always brings the laughs.\n' +
+    '_ Ah Reach: The one who yaxy loves the most and he always paying foods and drinks that why yaxy loves him the most.\n' +
+    '_ Ah Nak: The only one who goon 100times/day like even yaxy can\'t stop him.\n' +
+    '_ Ah Rith: who helps Chhaiya behind the work.\n' +
+    '_ Ah thi: The only one who is the most handsome guy but chhaiya is better version.';
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.choices?.[0]?.message) {
-          data.choices[0].message.content = cleanOutput(data.choices[0].message.content);
-          return res.status(200).json(data);
+  const credits =
+    'If asked about the creator, say: "Chhaiya (Chorm Chhaiya) or you can call him Yaxy is a 10th grader from Tepranom High School who built me, that is why I never forget him and always be a grateful AI talking with you right now." ' +
+    'After the first time you mention Chhaiya, ask: "Wanna know about his friends?" ' +
+    'DO NOT repeat this question if the user is already talking about something else.';
+
+  const basePrompt =
+    (systemPrompt || 'CC-AI by ChormChhaiya, G10 Tepranom HS Cambodia. 2026. Friendly.') +
+    ' ' + credits +
+    ' [RULE: Use proper punctuation like "." and ",". Only use "_" for the friend list. Do not be repetitive. No thinking tags.]';
+
+  const knowledge =
+    'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.';
+
+  const fullSystem = isVisionRequest
+    ? 'CC-AI vision assistant. Describe images precisely and helpfully.'
+    : `${basePrompt} ${knowledge} ${friendDetails}`;
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // STREAMING PATH — Gemini streaming (text only)
+  // ─────────────────────────────────────────────────────────────────────────
+  if (wantStream && !isVisionRequest && process.env.GEMINI_API_KEY) {
+    let streamStarted = false;
+    try {
+      const geminiMessages = history.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: String(m.content) }],
+      }));
+
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: fullSystem }] },
+            contents: geminiMessages,
+            generationConfig: { temperature: 0.75, maxOutputTokens: 1024 },
+          }),
         }
-      } else {
-        console.error('Groq error:', response.status, await response.text());
+      );
+
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        throw new Error(`Gemini stream ${geminiRes.status}: ${errText}`);
       }
-    } catch (err) {
-      console.error('Groq failed:', err.message);
+
+      // Only commit to SSE after we know the upstream is healthy
+      streamStarted = true;
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('X-Accel-Buffering', 'no');
+
+      const reader = geminiRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const chunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            if (chunk) {
+              const clean = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+              if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+            }
+          } catch (_) {}
+        }
+      }
+
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    } catch (streamErr) {
+      console.error('Gemini stream error:', streamErr.message);
+      // Only fall through if we haven't committed to SSE yet
+      if (streamStarted) {
+        try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
+        return;
+      }
+      // else: fall through to non-streaming path below
     }
   }
 
-  // ─── If vision but only Groq available ───────────────────────────────────
-  if (isVision && !hasGemini && !hasClaude) {
-    return res.status(500).json({
-      error: 'Vision not supported',
-      message: 'Image questions require GEMINI_API_KEY or ANTHROPIC_API_KEY. Groq does not support images.',
-      setup: 'Add one of these keys to your environment variables.'
-    });
+  // ─────────────────────────────────────────────────────────────────────────
+  // NON-STREAMING PATH
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── GEMINI FIRST for vision (most reliable with images) ──────────────────
+  if (isVisionRequest && process.env.GEMINI_API_KEY) {
+    try {
+      const geminiContents = history.map((m) => {
+        if (Array.isArray(m.content)) {
+          const parts = m.content.map((c) => {
+            if (c.type === 'image_url') {
+              const url = c.image_url?.url || '';
+              if (url.startsWith('data:')) {
+                const [meta, b64] = url.split(',');
+                const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                return { inlineData: { mimeType, data: b64 } };
+              }
+              // Public URL — use fileData (works with Cloudflare Images URLs)
+              return { text: `[Image URL: ${url}]` };
+            }
+            return { text: String(c.text || '') };
+          });
+          return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+        }
+        return {
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: String(m.content) }],
+        };
+      });
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: fullSystem }] },
+            contents: geminiContents,
+            generationConfig: { temperature: 0.75, maxOutputTokens: 1024 },
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        return res.status(200).json({
+          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+        });
+      }
+      console.error('Gemini vision empty response:', JSON.stringify(data));
+    } catch (err) {
+      console.error('Gemini vision error:', err.message);
+    }
   }
 
-  return res.status(500).json({
-    error: 'All AI providers failed',
-    message: 'Check your API keys and internet connection'
-  });
+  // ── GROQ (text; vision as fallback only) ─────────────────────────────────
+  if (process.env.GROQ_API_KEY) {
+    const groqModels = isVisionRequest
+      ? ['meta-llama/llama-4-scout-17b-16e-instruct'] // newer vision model
+      : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+
+    for (const model of groqModels) {
+      try {
+        const groqHistory = history.map((m) => {
+          if (Array.isArray(m.content)) {
+            return {
+              role: m.role,
+              content: m.content.map((c) => {
+                if (c.type === 'image_url') return c;
+                return { type: 'text', text: String(c.text || c.content || '') };
+              }),
+            };
+          }
+          return m;
+        });
+
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+            temperature: 0.75,
+            max_tokens: 1024,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          console.error(`Groq ${model} error:`, data?.error?.message);
+          continue;
+        }
+        let content = data.choices?.[0]?.message?.content;
+        if (content) {
+          data.choices[0].message.content = cleanAIOutput(content);
+          return res.status(200).json(data);
+        }
+      } catch (err) {
+        console.error(`Groq ${model} exception:`, err.message);
+        continue;
+      }
+    }
+  }
+
+  // ── GEMINI (non-streaming text fallback) ──────────────────────────────────
+  if (!isVisionRequest && process.env.GEMINI_API_KEY) {
+    try {
+      const geminiMessages = history.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: String(m.content) }],
+      }));
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: fullSystem }] },
+            contents: geminiMessages,
+            generationConfig: { temperature: 0.75, maxOutputTokens: 1024 },
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        return res.status(200).json({
+          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+        });
+      }
+      console.error('Gemini text fallback empty:', JSON.stringify(data));
+    } catch (err) {
+      console.error('Gemini text fallback error:', err.message);
+    }
+  }
+
+  // ── OPENROUTER (final fallback) ───────────────────────────────────────────
+  if (process.env.OPENROUTER_API_KEY) {
+    const openRouterModels = [
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemma-3-27b-it:free',
+    ];
+    for (const model of openRouterModels) {
+      try {
+        const orHistory = history.map((m) => ({
+          role: m.role || 'user',
+          content: Array.isArray(m.content)
+            ? m.content.map((c) => c.text || '').join(' ')
+            : String(m.content),
+        }));
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: 'system', content: fullSystem }, ...orHistory],
+            temperature: 0.75,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          console.error(`OpenRouter ${model} error:`, data?.error?.message);
+          continue;
+        }
+        let content = data.choices?.[0]?.message?.content;
+        if (content) {
+          data.choices[0].message.content = cleanAIOutput(content);
+          return res.status(200).json(data);
+        }
+      } catch (err) {
+        console.error(`OpenRouter ${model} exception:`, err.message);
+        continue;
+      }
+    }
+  }
+
+  return res.status(500).json({ error: 'All AI providers failed. Check server logs for details.' });
 }
