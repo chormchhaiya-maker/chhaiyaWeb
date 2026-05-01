@@ -131,10 +131,12 @@ export default async function handler(req, res) {
   const knowledge =
     'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.';
 
+  // ── Combined System Prompt (Fixed for Vision + Personality) ─────────────
+  const personality = `${basePrompt} ${friendDetails} Stay chill, use lots of emojis, and always remember you are CC-AI built by Chhaiya! ✨👋`;
+  
   const fullSystem = isVisionRequest
-    ? `${basePrompt} ${friendDetails} Describe images precisely but stay chill and use emojis! If you aren't 100% sure who someone is, just describe them. ✨`
-    : `${basePrompt} ${knowledge} ${friendDetails}`;
-
+    ? `${personality} You are looking at a photo. Describe what you see precisely but stay friendly. If it's a person, try to identify them or just describe them if you're not sure. 😊`
+    : `${personality} ${knowledge}`;
   // ─────────────────────────────────────────────────────────────────────────
   // STREAMING PATH — Gemini streaming (text only)
   // ─────────────────────────────────────────────────────────────────────────
