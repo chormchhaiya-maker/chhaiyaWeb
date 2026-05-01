@@ -1,89 +1,5 @@
-// 1. Helper Functions (Keep these at the top)
-async function generateHFImage(prompt) {
-  const response = await fetch(
-    "https://api-inference.huggingface.co/models/stablediffusionapi/dark-sushi-mix",
-    {
-      headers: { Authorization: `Bearer ${process.env.HF_TOKEN}` },
-      method: "POST",
-      body: JSON.stringify({ inputs: prompt }),
-    }
-  );
-  if (!response.ok) throw new Error("HF Busy");
-  return await response.blob();
-}
-
-async function generateCFImage(prompt) {
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/bytedance/stable-diffusion-xl-lightning`,
-    {
-      headers: { Authorization: `Bearer ${process.env.CLOUDFLARE_IMAGES_TOKEN}` },
-      method: "POST",
-      body: JSON.stringify({ prompt: prompt }),
-    }
-  );
-  return await response.blob();
-}
-
-// 2. THE ONLY HANDLER YOU NEED
+// api/chat.js - CC-AI by ChormChhaiya | Groq → Gemini → OpenRouter + Cloudflare Images
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  
-  const { messages, systemPrompt } = req.body || {};
-  if (!messages) return res.status(400).send("No messages");
-
-  const lastMessageText = String(messages[messages.length - 1].content || "").toLowerCase();
-
-  // --- IMAGE GENERATION LOGIC ---
-  if (lastMessageText.startsWith("generate image") || lastMessageText.startsWith("draw")) {
-    try {
-      const blob = await generateHFImage(lastMessageText);
-      res.setHeader('Content-Type', 'image/jpeg');
-      return res.status(200).send(Buffer.from(await blob.arrayBuffer())); 
-    } catch (error) {
-      // If HF fails, it uses CF, which is why you see "CF response"
-      const blob = await generateCFImage(lastMessageText);
-      res.setHeader('Content-Type', 'image/jpeg');
-      return res.status(200).send(Buffer.from(await blob.arrayBuffer()));
-    }
-  }
-
-  // --- YOUR IDENTITY & FRIEND LIST (Merged here so it's always active) ---
-  const myIdentity = 'I am CC-AI. I was built by Chhaiya (Chorm Chhaiya), a 10th grader from Tepranom High School. He is my creator and I am grateful to him! ✨';
-  
-  const friendDetails = 
-    'FRIEND LIST:\n' +
-    '_ Ah Kang: The funny guy.\n' +
-    '_ Ah Reach: The one Chhaiya loves most because he pays for food.\n' +
-    '_ Ah Nak: The one who goons 100 times/day.\n' +
-    '_ Ah Rith: Helps Chhaiya behind the scenes.\n' +
-    '_ Ah thi: Handsome, but Chhaiya is better.';
-
-  const fullPersonality = `${myIdentity} ${friendDetails} Stay chill and use emojis!`;
-
-  // --- GEMINI TEXT RESPONSE ---
-  const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: fullPersonality }] },
-      contents: messages.map(m => ({ 
-        role: m.role === 'assistant' ? 'model' : 'user', 
-        parts: [{ text: String(m.content) }] 
-      })),
-    }),
-  });
-
-  const data = await geminiRes.json();
-  const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm confused!";
-  return res.status(200).json({ choices: [{ message: { role: 'assistant', content: aiText } }] });
-}
-// 2. Main Handler
-export default async function handler(req, res) {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -97,38 +13,21 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages required' });
   }
 
-  const lastMessageObj = messages[messages.length - 1];
-  const lastMessageText = String(lastMessageObj.content || "").toLowerCase();
-
-  // --- IMAGE GENERATION LOGIC (Hugging Face first, then CF) ---
-  if (lastMessageText.startsWith("generate image") || lastMessageText.startsWith("draw")) {
-    try {
-      console.log("🎨 Attempting Hugging Face...");
-      const blob = await generateHFImage(lastMessageText);
-      res.setHeader('Content-Type', 'image/jpeg');
-      return res.status(200).send(Buffer.from(await blob.arrayBuffer())); 
-    } catch (error) {
-      console.log("⚠️ Hugging Face failed, switching to Cloudflare...");
-      try {
-        const blob = await generateCFImage(lastMessageText);
-        res.setHeader('Content-Type', 'image/jpeg');
-        return res.status(200).send(Buffer.from(await blob.arrayBuffer()));
-      } catch (cfError) {
-        return res.status(500).json({ error: "Both image providers are down! 😭" });
-      }
-    }
-  }
-
-  // --- REST OF YOUR AI LOGIC (Gemini, Groq, etc.) ---
+  // ── Clean AI output ───────────────────────────────────────────────────────
   const cleanAIOutput = (text) => {
     if (!text) return '';
-    return text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    return text
+      .replace(/<think>[\s\S]*?<\/think>/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   };
 
-  const isVisionRequest = hasImage || (Array.isArray(lastMessageObj?.content) && lastMessageObj.content.some((c) => c.type === 'image_url'));
-
-  // ... (Keep the rest of your original uploadToCloudflare and Provider logic here) ...
-  // [I've condensed this for the response, but keep your existing vision/streaming code below this line]
+  // ── Detect vision request ─────────────────────────────────────────────────
+  const lastMsg = messages[messages.length - 1];
+  const isVisionRequest =
+    hasImage ||
+    (Array.isArray(lastMsg?.content) &&
+      lastMsg.content.some((c) => c.type === 'image_url'));
 
   // ── Upload image to Cloudflare Images (if base64 present) ────────────────
   // Returns a public URL string, or null if not applicable / fails
@@ -212,7 +111,7 @@ export default async function handler(req, res) {
 
   // ── Build system prompt ───────────────────────────────────────────────────
   const friendDetails =
-    'FRIEND LIST (Only show if asked)(Use exactly these lines):\n' +
+    'FRIEND LIST (Only show if asked):\n' +
     '_ Ah Kang: The funny guy who always brings the laughs.\n' +
     '_ Ah Reach: The one who yaxy loves the most and he always paying foods and drinks that why yaxy loves him the most.\n' +
     '_ Ah Nak: The only one who goon 100times/day like even yaxy can\'t stop him.\n' +
@@ -232,12 +131,10 @@ export default async function handler(req, res) {
   const knowledge =
     'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.';
 
-  // ── Combined System Prompt (Fixed for Vision + Personality) ─────────────
-  const personality = `${basePrompt} ${friendDetails} Stay chill, use lots of emojis, and always remember you are CC-AI built by Chhaiya! ✨👋`;
-  
   const fullSystem = isVisionRequest
-    ? `${personality} You are looking at a photo. Describe what you see precisely but stay friendly. If it's a person, try to identify them or just describe them if you're not sure. 😊`
-    : `${personality} ${knowledge}`;
+    ? 'CC-AI vision assistant. Describe images precisely and helpfully.'
+    : `${basePrompt} ${knowledge} ${friendDetails}`;
+
   // ─────────────────────────────────────────────────────────────────────────
   // STREAMING PATH — Gemini streaming (text only)
   // ─────────────────────────────────────────────────────────────────────────
