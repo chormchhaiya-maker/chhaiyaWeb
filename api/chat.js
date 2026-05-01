@@ -1,3 +1,4 @@
+// 1. Helper Functions (Placed at the very top)
 async function generateHFImage(prompt) {
   const response = await fetch(
     "https://api-inference.huggingface.co/models/stablediffusionapi/dark-sushi-mix",
@@ -7,7 +8,7 @@ async function generateHFImage(prompt) {
       body: JSON.stringify({ inputs: prompt }),
     }
   );
-  if (!response.ok) throw new Error("HF Busy");
+  if (!response.ok) throw new Error("HF Busy or Error");
   return await response.blob();
 }
 
@@ -24,8 +25,54 @@ async function generateCFImage(prompt) {
   return await response.blob();
 }
 
+// 2. Main Handler
 export default async function handler(req, res) {
-  // ... rest of your code ...
+  // CORS Headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).end();
+
+  const { messages, systemPrompt, hasImage, stream: wantStream } = req.body || {};
+
+  if (!messages || !Array.isArray(messages)) {
+    return res.status(400).json({ error: 'messages required' });
+  }
+
+  const lastMessageObj = messages[messages.length - 1];
+  const lastMessageText = String(lastMessageObj.content || "").toLowerCase();
+
+  // --- IMAGE GENERATION LOGIC (Hugging Face first, then CF) ---
+  if (lastMessageText.startsWith("generate image") || lastMessageText.startsWith("draw")) {
+    try {
+      console.log("🎨 Attempting Hugging Face...");
+      const blob = await generateHFImage(lastMessageText);
+      res.setHeader('Content-Type', 'image/jpeg');
+      return res.status(200).send(Buffer.from(await blob.arrayBuffer())); 
+    } catch (error) {
+      console.log("⚠️ Hugging Face failed, switching to Cloudflare...");
+      try {
+        const blob = await generateCFImage(lastMessageText);
+        res.setHeader('Content-Type', 'image/jpeg');
+        return res.status(200).send(Buffer.from(await blob.arrayBuffer()));
+      } catch (cfError) {
+        return res.status(500).json({ error: "Both image providers are down! 😭" });
+      }
+    }
+  }
+
+  // --- REST OF YOUR AI LOGIC (Gemini, Groq, etc.) ---
+  const cleanAIOutput = (text) => {
+    if (!text) return '';
+    return text.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  };
+
+  const isVisionRequest = hasImage || (Array.isArray(lastMessageObj?.content) && lastMessageObj.content.some((c) => c.type === 'image_url'));
+
+  // ... (Keep the rest of your original uploadToCloudflare and Provider logic here) ...
+  // [I've condensed this for the response, but keep your existing vision/streaming code below this line]
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
