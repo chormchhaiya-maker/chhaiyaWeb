@@ -132,7 +132,7 @@ export default async function handler(req, res) {
     'KNOW:MJordan,PreapSovath,BTS,Ronaldo,Messi,TaylorSwift.MEMES:Brainrot,TungTungTungSahur,7x7=49,Ampersand,BratSummer,Skibidi,Ohio,Rizz,Sigma.';
 
   const fullSystem = isVisionRequest
-    ? `${basePrompt} ${friendDetails} Describe images precisely but stay chill and use emojis! ✨`
+    ? `${basePrompt} ${friendDetails} Describe images precisely but stay chill and use emojis! If you aren't 100% sure who someone is, just describe them. ✨`
     : `${basePrompt} ${knowledge} ${friendDetails}`;
 
   // ─────────────────────────────────────────────────────────────────────────
