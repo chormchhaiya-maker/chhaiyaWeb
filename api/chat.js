@@ -111,7 +111,7 @@ export default async function handler(req, res) {
 
   // ── Build system prompt ───────────────────────────────────────────────────
   const friendDetails =
-    'FRIEND LIST (Only show if asked):\n' +
+    'FRIEND LIST (Only show if asked)(Use exactly these lines):\n' +
     '_ Ah Kang: The funny guy who always brings the laughs.\n' +
     '_ Ah Reach: The one who yaxy loves the most and he always paying foods and drinks that why yaxy loves him the most.\n' +
     '_ Ah Nak: The only one who goon 100times/day like even yaxy can\'t stop him.\n' +
