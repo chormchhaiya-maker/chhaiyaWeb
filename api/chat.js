@@ -110,8 +110,9 @@ export default async function handler(req, res) {
       }));
 
   // ── Build system prompt ───────────────────────────────────────────────────
-  const friendDetails =
-    'FRIEND LIST (Only show if asked)(Always use "_" for names):\n' +
+ const friendDetails =
+    '### FRIEND LIST (SHOW ONLY IF ASKED):\n' +
+    'Rule: Use exactly the format "_ Name: Description".\n' +
     '_ Ah Kang: The funny guy who always brings the laughs.\n' +
     '_ Ah Reach: The one who yaxy loves the most and he always paying foods and drinks that why yaxy loves him the most.\n' +
     '_ Ah Nak: The only one who goon 100times/day like even yaxy can\'t stop him.\n' +
