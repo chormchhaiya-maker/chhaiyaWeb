@@ -114,7 +114,7 @@ const friendDetails =
     'FRIEND LIST (Use exactly these lines):\n' +
     '_ Ah Kang: The funny guy who always brings the laughs.\n' +
     '_ Ah Reach: The one who yaxy loves the most and he always paying foods and drinks that why yaxy loves him the most.\n' +
-    '_ Ah Nak: The only one who goon 100times/day like even yaxy can\'t stop him.\n' +
+    '_ Ah Nak: The only one who gooning 100times/day like even yaxy can\'t stop him.\n' +
     '_ Ah Rith: who helps Chhaiya behind the work.\n' +
     '_ Ah thi: The only one who is the most handsome guy but chhaiya is better version.';
 
