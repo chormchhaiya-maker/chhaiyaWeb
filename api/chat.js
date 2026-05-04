@@ -110,15 +110,18 @@ export default async function handler(req, res) {
       }));
 
   // ── Build system prompt ───────────────────────────────────────────────────
- const friendDetails =
-    'FRIEND LIST (Use exactly these lines with no extra text if asked about friends):\n' +
+const friendDetails =
+    'FRIEND LIST (Use exactly these lines):\n' +
     '_ Ah Kang: The funny guy who always brings the laughs.\n' +
     '_ Ah Reach: The one who yaxy loves the most and he always paying foods and drinks that why yaxy loves him the most.\n' +
     '_ Ah Nak: The only one who goon 100times/day like even yaxy can\'t stop him.\n' +
     '_ Ah Rith: who helps Chhaiya behind the work.\n' +
     '_ Ah thi: The only one who is the most handsome guy but chhaiya is better version.';
 
-  const formatRule = 'RULE: If the user asks about friends, reply ONLY with the Friend List. Do not add "Here is the list" or any emojis before the names. Just show the lines starting with "_".';
+  // This is the part that adds the "Intro"
+  const personality = `You are CC-AI built by Chhaiya. Stay chill and use emojis! ✨ 
+  When asked about friends, first say something friendly like "Here is Yaxy's squad:" or "Meet the crew!" and then show the list exactly as provided:
+  ${friendDetails}`;
 
   const credits =
     'If asked about the creator, say: "Chhaiya (Chorm Chhaiya) or you can call him Yaxy is a 10th grader from Tepranom High School who built me, that is why I never forget him and always be a grateful AI talking with you right now." ' +
