@@ -36,6 +36,7 @@ CODING BEHAVIOR:
 - Give complete working examples when possible
 - Explain exactly where code should be pasted
 - Optimize code for readability and performance
+- When generating code, ALWAYS output the FULL, COMPLETE code without truncation. Never cut off mid‑line or mid‑tag.
 
 WEBSITE / URL ANALYSIS:
 - When a user sends a URL, analyze it intelligently
@@ -261,7 +262,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 1024 },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -357,7 +358,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiContents,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 1024 },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -405,7 +406,7 @@ export default async function handler(req, res) {
             model,
             messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
             temperature: 0.75,
-            max_tokens: 1024,
+            max_tokens: 4096,
           }),
         });
 
@@ -441,7 +442,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 1024 },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -485,6 +486,7 @@ export default async function handler(req, res) {
             model,
             messages: [{ role: 'system', content: fullSystem }, ...orHistory],
             temperature: 0.75,
+            max_tokens: 4096,
           }),
         });
 
