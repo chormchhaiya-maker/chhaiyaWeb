@@ -1307,17 +1307,16 @@ async function typewriterMessage(raw) {
 
   // Attach action buttons
   if (raw) {
-const actions = document.createElement('div');
-actions.className = 'msg-actions';
-const safe = raw.replace(/"/g, '&quot;');
-// Extract all code blocks from this message
-const allCodes = (raw.match(/```[\s\S]*?```/g) || []).map(block => block.replace(/```\w*\n?/g, '').replace(/```$/g, '').trim());
-const hasCode = allCodes.length > 0;
-actions.innerHTML = `<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button>
-<button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button>
-<button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button>
-${hasCode ? `<button class="msg-action-btn" onclick="copyAllCodeBlocks(this)" data-text="${safe.replace(/"/g, '&quot;')}">📄 Copy Full Code</button>` : ''}
-<button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    const safe = raw.replace(/"/g, '&quot;');
+    actions.innerHTML = `<button class="msg-action-btn" onclick="copyRaw(this)" data-text="${safe}">📋 Copy</button><button class="msg-action-btn" onclick="shareRaw(this)" data-text="${safe}">🔗 Share</button><button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button><button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;
+    bubble.appendChild(actions);
+    addRatingBar(bubble, messages.length - 1);
+  }
+
+  container.scrollTop = container.scrollHeight;
+}
 
 function addMessage(role,html,raw){
   const container=document.getElementById('messages');
@@ -1643,17 +1642,7 @@ async function generateMusic() {
   const resultDiv = document.getElementById('music-result');
   resultDiv.style.display = 'block';
   resultDiv.innerHTML = '<div style="color:var(--accent);font-size:0.85rem;">🎵 Generating music... (10-30 seconds)</div>';
-function copyAllCodeBlocks(btn) {
-  const raw = btn.getAttribute('data-text');
-  // Extract all code blocks and join them
-  const codeBlocks = raw.match(/```[\s\S]*?```/g) || [];
-  const fullCode = codeBlocks.map(block => block.replace(/```\w*\n?/g, '').replace(/```$/g, '').trim()).join('\n\n');
-  if (!fullCode) {
-    alert('No code blocks found in this message.');
-    return;
-  }
-  copyToClipboard(fullCode, btn, '📄 Copy Full Code');
-}
+
   try {
     const res = await fetch('/api/music', {
       method: 'POST',
