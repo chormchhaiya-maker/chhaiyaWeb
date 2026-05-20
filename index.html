@@ -1318,12 +1318,6 @@ actions.innerHTML = `<button class="msg-action-btn" onclick="copyRaw(this)" data
 <button class="msg-action-btn" onclick="speakRaw(this)" data-text="${safe}">🔊 Listen</button>
 ${hasCode ? `<button class="msg-action-btn" onclick="copyAllCodeBlocks(this)" data-text="${safe.replace(/"/g, '&quot;')}">📄 Copy Full Code</button>` : ''}
 <button class="msg-action-btn" onclick="stopSpeaking()" style="display:none" id="stop-btn-${Date.now()}">⏹ Stop</button>`;
-    bubble.appendChild(actions);
-    addRatingBar(bubble, messages.length - 1);
-  }
-
-  container.scrollTop = container.scrollHeight;
-}
 
 function addMessage(role,html,raw){
   const container=document.getElementById('messages');
