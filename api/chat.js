@@ -91,6 +91,19 @@ const cleanAIOutput = (text) => {
     .trim();
 };
 
+/** Extract plain text from a message (works for string or array content) */
+const getMessageText = (msg) => {
+  if (!msg) return '';
+  if (typeof msg.content === 'string') return msg.content;
+  if (Array.isArray(msg.content)) {
+    return msg.content
+      .filter(c => c.type === 'text')
+      .map(c => c.text || '')
+      .join(' ');
+  }
+  return '';
+};
+
 /** Extract URLs from the last user message */
 const extractURLs = (text) => {
   if (typeof text !== 'string') return [];
@@ -174,10 +187,10 @@ export default async function handler(req, res) {
     (Array.isArray(lastMsg?.content) &&
       lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // ── Detect URL in last message ───────────────────────────────────────────────
-  const lastMsgText  = typeof lastMsg?.content === 'string' ? lastMsg.content : '';
-  const detectedURLs = extractURLs(lastMsgText);
-  let urlContext     = '';
+  // ── Detect URL in last message (works for both string and array content) ──────
+  const lastMsgText    = getMessageText(lastMsg);
+  const detectedURLs   = extractURLs(lastMsgText);
+  let urlContext       = '';
 
   if (detectedURLs.length > 0) {
     const fetched = await Promise.all(detectedURLs.map(fetchURLContent));
@@ -226,10 +239,8 @@ export default async function handler(req, res) {
 
   // ── Build full system prompt ─────────────────────────────────────────────────
   const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
-
-  const fullSystem = isVisionRequest
-    ? 'CC-AI vision assistant. Describe images precisely and helpfully.'
-    : `${resolvedSystem}${urlContext}`;
+  // Always keep full personality + URL context, even for vision
+  const fullSystem = `${resolvedSystem}${urlContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING PATH — Gemini SSE (text only)
@@ -315,10 +326,19 @@ export default async function handler(req, res) {
           const parts = m.content.map((c) => {
             if (c.type === 'image_url') {
               const url = c.image_url?.url || '';
+              // Handle base64 inline data
               if (url.startsWith('data:')) {
                 const [meta, b64] = url.split(',');
-                const mimeType   = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
                 return { inlineData: { mimeType, data: b64 } };
+              }
+              // Handle public URL via fileData
+              if (url.startsWith('http://') || url.startsWith('https://')) {
+                let mimeType = 'image/jpeg'; // fallback
+                if (url.match(/\.png/i)) mimeType = 'image/png';
+                else if (url.match(/\.webp/i)) mimeType = 'image/webp';
+                else if (url.match(/\.gif/i)) mimeType = 'image/gif';
+                return { fileData: { mimeType, fileUri: url } };
               }
               return { text: `[Image URL: ${url}]` };
             }
