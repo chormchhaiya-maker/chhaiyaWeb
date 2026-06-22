@@ -19,7 +19,6 @@ CONVERSATION STYLE:
 - Encourage users positively
 - Keep answers clean and readable
 
-
 THINKING STYLE:
 Before important answers, simulate thinking naturally using short lines like:
 .
@@ -163,7 +162,6 @@ const uploadToCloudflare = async (base64DataUrl) => {
     const cfData = await cfRes.json();
 
     if (cfData.success && cfData.result?.variants?.[0]) return cfData.result.variants[0];
-    console.error('Cloudflare Images upload failed:', JSON.stringify(cfData.errors));
   } catch (err) {
     console.error('Cloudflare Images error:', err.message);
   }
@@ -226,7 +224,7 @@ export default async function handler(req, res) {
     urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
   }
 
-  // ── NEW: Detect Realtime Search / Video Request ──────────────────────────────
+  // ── Detect Realtime Search / Video Request ──────────────────────────────
   const lowerMsgText = lastMsgText.toLowerCase();
   const isSearchRequest = 
     lowerMsgText.includes('search') || 
@@ -241,6 +239,10 @@ export default async function handler(req, res) {
 
   let searchContext = '';
   if (isSearchRequest && detectedURLs.length === 0) {
+    // Clean search terms to make clean query strings
+    const cleanSearchQuery = lastMsgText.replace(/search youtube for|search youtube|youtube|search/gi, '').trim();
+    const encodedFallbackQuery = encodeURIComponent(cleanSearchQuery || lastMsgText);
+
     try {
       const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
       const controller = new AbortController();
@@ -256,10 +258,12 @@ export default async function handler(req, res) {
         const searchResultsText = await searchRes.text();
         searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>). Do not use plain text or raw markdown syntax for links.`;
       } else {
-        console.error(`Jina search failed with status: ${searchRes.status}`);
+        // Fallback: Force link generation using clean format if Jina fails
+        searchContext = `\n\n[SYSTEM NOTE: Live search API was unreachable. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
       }
     } catch (err) {
-      console.error(`Jina search exception:`, err.message);
+      // Fallback: Force link generation using clean format if request times out
+      searchContext = `\n\n[SYSTEM NOTE: Live search timed out. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
     }
   }
 
@@ -295,9 +299,10 @@ export default async function handler(req, res) {
         content: String(m.content).slice(0, 3000),
       }));
 
-  // ── Build full system prompt ─────────────────────────────────────────────────
-  const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
-  const fullSystem = `${resolvedSystem}${urlContext}${searchContext}`;
+  // ── Permanent Core Prompt Protection ─────────────────────────────────────────
+  const fullSystem = clientSystemPrompt 
+    ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
+    : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING PATH — Gemini SSE (text only)
@@ -323,10 +328,7 @@ export default async function handler(req, res) {
         }
       );
 
-      if (!geminiRes.ok) {
-        const errText = await geminiRes.text();
-        throw new Error(`Gemini stream ${geminiRes.status}: ${errText}`);
-      }
+      if (!geminiRes.ok) throw new Error(`Upstream stream error`);
 
       streamStarted = true;
       res.setHeader('Content-Type',     'text/event-stream');
@@ -361,7 +363,6 @@ export default async function handler(req, res) {
       res.end();
       return;
     } catch (streamErr) {
-      console.error('Gemini stream error:', streamErr.message);
       if (streamStarted) {
         try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
         return;
@@ -390,10 +391,9 @@ export default async function handler(req, res) {
                 let mimeType = 'image/jpeg';
                 if (url.match(/\.png/i)) mimeType = 'image/png';
                 else if (url.match(/\.webp/i)) mimeType = 'image/webp';
-                else if (url.match(/\.gif/i)) mimeType = 'image/gif';
                 return { fileData: { mimeType, fileUri: url } };
               }
-              return { text: `[Image URL: ${url}]` };
+              return { text: `[Image]` };
             }
             return { text: String(c.text || '') };
           });
@@ -422,9 +422,7 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-    } catch (err) {
-      console.error('Gemini vision error:', err.message);
-    }
+    } catch (err) {}
   }
 
   // ── 2. Groq ──────────────────────────────────────────────────────────────────
@@ -462,18 +460,12 @@ export default async function handler(req, res) {
         });
 
         const data = await response.json();
-        if (!response.ok) {
-          console.error(`Groq ${model} error:`, data?.error?.message);
-          continue;
-        }
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {
-        console.error(`Groq ${model} exception:`, err.message);
-      }
+      } catch (err) {}
     }
   }
 
@@ -505,25 +497,17 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-    } catch (err) {
-      console.error('Gemini text fallback error:', err.message);
-    }
+    } catch (err) {}
   }
 
   // ── 4. OpenRouter Final Fallback ─────────────────────────────────────────────
   if (process.env.OPENROUTER_API_KEY) {
-    const openRouterModels = [
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'google/gemma-3-27b-it:free',
-    ];
-
+    const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
     for (const model of openRouterModels) {
       try {
         const orHistory = history.map((m) => ({
           role: m.role || 'user',
-          content: Array.isArray(m.content)
-            ? m.content.map((c) => c.text || '').join(' ')
-            : String(m.content),
+          content: Array.isArray(m.content) ? m.content.map((c) => c.text || '').join(' ') : String(m.content),
         }));
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -541,18 +525,12 @@ export default async function handler(req, res) {
         });
 
         const data = await response.json();
-        if (!response.ok) {
-          console.error(`OpenRouter ${model} error:`, data?.error?.message);
-          continue;
-        }
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {
-        console.error(`OpenRouter ${model} exception:`, err.message);
-      }
+      } catch (err) {}
     }
   }
 
