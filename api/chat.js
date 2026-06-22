@@ -49,7 +49,6 @@ WEBSITE / URL ANALYSIS:
 
 REALTIME SEARCH:
 - If web search is available, summarize information clearly and accurately
-- Whenever a user asks to search for something, or requests a video, song, or website, use your search tool to find it. You must always append the source URLs at the very bottom of your response as a neat, clickable Markdown list (e.g., - [Video Title](URL)).
 - Keep explanations beginner-friendly
 - Respond intelligently and confidently
 
@@ -212,6 +211,36 @@ export default async function handler(req, res) {
     urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
   }
 
+  // ── Detect Realtime Search or Video Request ──────────────────────────────────
+  const lowerMsgText = lastMsgText.toLowerCase();
+  const isSearchRequest = 
+    lowerMsgText.includes('search') || 
+    lowerMsgText.includes('find') || 
+    lowerMsgText.includes('video') || 
+    lowerMsgText.includes('tutorial') || 
+    lowerMsgText.includes('youtube') || 
+    lowerMsgText.includes('latest') || 
+    lowerMsgText.includes('how to') ||
+    lowerMsgText.includes('what is') ||
+    lowerMsgText.includes('realtime');
+
+  let searchContext = '';
+  if (isSearchRequest && detectedURLs.length === 0) {
+    try {
+      const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
+      const searchRes = await fetch(jinaSearchURL, {
+        headers: { 'Accept': 'text/plain' },
+        signal: AbortSignal.timeout(6000), // 6 second safety cutoff
+      });
+      if (searchRes.ok) {
+        const searchResultsText = await searchRes.text();
+        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: The above search data contains real-time web articles and clickable video URLs matching the user's prompt. Formulate a clean, highly engaging response based on this data. At the very bottom of your response, you MUST print a neat, clickable Markdown list of the source or video links discovered in the text (e.g., - [Video Title](URL)).`;
+      }
+    } catch (err) {
+      console.error('Realtime search pre-fetch failed:', err.message);
+    }
+  }
+
   // ── Pre-process messages: upload base64 images to Cloudflare ────────────────
   const processedMessages = await Promise.all(
     messages.map(async (m) => {
@@ -246,8 +275,8 @@ export default async function handler(req, res) {
 
   // ── Build full system prompt ─────────────────────────────────────────────────
   const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
-  // Always keep full personality + URL context, even for vision
-  const fullSystem = `${resolvedSystem}${urlContext}`;
+  // Always keep full personality + URL context + pre-fetched search data
+  const fullSystem = `${resolvedSystem}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING PATH — Gemini SSE (text only)
@@ -268,7 +297,6 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            tools: [{ google_search: {} }],
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
@@ -365,7 +393,6 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiContents,
-            tools: [{ google_search: {} }],
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
@@ -450,7 +477,6 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            tools: [{ google_search: {} }],
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
@@ -494,7 +520,6 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model,
             messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-            tools: [{ type: "openrouter:web_search" }],
             temperature: 0.75,
             max_tokens: 4096,
           }),
