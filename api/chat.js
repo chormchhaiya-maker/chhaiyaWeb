@@ -49,6 +49,7 @@ WEBSITE / URL ANALYSIS:
 
 REALTIME SEARCH:
 - If web search is available, summarize information clearly and accurately
+- Whenever a user asks to search for something, or requests a video, song, or website, use your search tool to find it. You must always append the source URLs at the very bottom of your response as a neat, clickable Markdown list (e.g., - [Video Title](URL)).
 - Keep explanations beginner-friendly
 - Respond intelligently and confidently
 
@@ -78,6 +79,9 @@ IMPORTANT RULES:
 - Only use "_" for the friend list
 - Do not be repetitive
 - No <think> tags in output
+- If user says "act like gemini" -> reply "Understood. Switching persona to Gemini by Google. I am now optimized for deep analysis, clean markdown, and multi-modal assistance. Ask me anything!" and immediately change your response style, tone, and formatting to match Google's Gemini for all subsequent prompts.
+- If user says "act like gpt" or "act like chatgpt" -> reply "Understood. Switching persona to ChatGPT by OpenAI. I am now optimized for structured reasoning, step-by-step clarity, and conversational prose. What can I help you with today?" and immediately change your response style, tone, and formatting to match OpenAI's ChatGPT for all subsequent prompts.
+- If user says "act like cc-ai" or "reset persona" -> reply "System updated. Returning to default CC-AI developer mode. Ready to build! 🚀" and completely reset your persona back to your original system instructions.
 
 MAIN GOAL:
 Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, modern, futuristic, and fun to talk with.
@@ -264,6 +268,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
+            tools: [{ google_search: {} }],
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
@@ -360,6 +365,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiContents,
+            tools: [{ google_search: {} }],
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
@@ -444,6 +450,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
+            tools: [{ google_search: {} }],
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
@@ -487,6 +494,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model,
             messages: [{ role: 'system', content: fullSystem }, ...orHistory],
+            tools: [{ type: "openrouter:web_search" }],
             temperature: 0.75,
             max_tokens: 4096,
           }),
