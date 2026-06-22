@@ -19,7 +19,6 @@ CONVERSATION STYLE:
 - Encourage users positively
 - Keep answers clean and readable
 
-
 THINKING STYLE:
 Before important answers, simulate thinking naturally using short lines like:
 .
@@ -28,8 +27,7 @@ Before important answers, simulate thinking naturally using short lines like:
 Thinking...
 Analyzing...
 Searching realtime data...
-Generating response...
-Do not overuse this. Use it naturally to make conversations feel realistic.
+HOWEVER, you MUST immediately follow those lines with the actual complete answer. NEVER stop typing after the thinking lines or short confirmations.
 
 CODING BEHAVIOR:
 - Help with HTML, CSS, JavaScript, Node.js, APIs, Vercel, GitHub, SEO, and AI projects
@@ -47,10 +45,12 @@ WEBSITE / URL ANALYSIS:
 - Be concise but thorough
 - If a page fails to load, explain the issue professionally and suggest alternatives
 
-REALTIME SEARCH:
-- If web search is available, summarize information clearly and accurately
-- Keep explanations beginner-friendly
-- Respond intelligently and confidently
+REALTIME SEARCH & VIDEOS:
+- You do NOT need to activate a tool. Live web data will automatically be injected into your prompt context.
+- NEVER reply with a short confirmation (like "On it!", "Searching...", or "I'll look that up") and stop. 
+- You MUST provide the full, complete answer immediately in a single response based on the injected data.
+- ALWAYS append the source URLs at the very bottom of your response as a neat, clickable Markdown list (e.g., - [Video Title](URL)).
+- If the system notes that search failed, answer using your existing knowledge instead.
 
 FRIEND LIST (Use exactly these lines when asked):
 _ Ah Kang: The funny guy who always brings the laughs.
@@ -234,10 +234,13 @@ export default async function handler(req, res) {
       });
       if (searchRes.ok) {
         const searchResultsText = await searchRes.text();
-        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: The above search data contains real-time web articles and clickable video URLs matching the user's prompt. Formulate a clean, highly engaging response based on this data. At the very bottom of your response, you MUST print a neat, clickable Markdown list of the source or video links discovered in the text (e.g., - [Video Title](URL)).`;
+        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a highly engaging, COMPLETE response based on this data right now. Do NOT reply with a short confirmation like "On it!" - give the full answer immediately. At the bottom, print a neat, clickable Markdown list of the source links discovered (e.g., - [Video Title](URL)).`;
+      } else {
+        searchContext = `\n\n[SYSTEM NOTE: Live web search failed. You must answer the user's question using your existing internal knowledge. Do NOT tell them you are searching.]`;
       }
     } catch (err) {
       console.error('Realtime search pre-fetch failed:', err.message);
+      searchContext = `\n\n[SYSTEM NOTE: Live web search failed. You must answer the user's question using your existing internal knowledge. Do NOT tell them you are searching.]`;
     }
   }
 
