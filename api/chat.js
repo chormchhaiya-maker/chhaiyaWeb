@@ -47,9 +47,9 @@ WEBSITE / URL ANALYSIS:
 
 REALTIME SEARCH & VIDEOS (CRITICAL RULES):
 - Live web search and video details are ALREADY fetched and injected into your context below. You do NOT need to wait or invoke a tool.
-- ABSOLUTELY NEVER reply with short placeholders like "On it!", "Searching...", or "I've got you!" and then terminate the response. This breaks the UI.
+- ABSOLUTELY NEVER reply with short placeholders like "On it!", "Searching...", or "I've got you!" and then terminate the response.
 - You must stream the ENTIRE informative guide, details, descriptions, and summaries immediately in a single continuous message.
-- ALWAYS append discovered source URLs at the very bottom of your response as a neat, clickable Markdown list (e.g., - [Video Title](URL)).
+- CRITICAL FOR LINKS: Do NOT wrap video links or source URLs in Markdown brackets like [Title](URL). The user's chat screen cannot parse them. Instead, you MUST output links as plain, raw text URLs directly next to their titles (for example: - Video Title: URL). This ensures the interface can automatically make them clickable.
 
 FRIEND LIST (Use exactly these lines when asked):
 _ Ah Kang: The funny guy who always brings the laughs.
@@ -87,11 +87,13 @@ Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, m
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Strip internal <think> blocks and normalize whitespace */
+/** Clean AI output and safely convert markdown links into raw clickable URLs */
 const cleanAIOutput = (text) => {
   if (!text) return '';
   return text
     .replace(/<think>[\s\S]*?<\/think>/g, '')
+    // Safety fallback: if an model accidentally outputs [Title](URL), convert it to "Title: URL"
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1: $2')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
@@ -183,25 +185,25 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
-  // ── FIX 1: History Laundering (Strip poisoned "On it!" states out of context) ──
+  // History Laundering: strip out any broken stubs from state
   const clearedMessages = messages.filter((m) => {
     if (m.role === 'assistant' || m.role === 'model') {
       const textVal = getMessageText(m).toLowerCase();
       if (textVal.includes('on it') && textVal.length < 65) {
-        return false; // Wipe out this broken turn completely
+        return false;
       }
     }
     return true;
   });
 
-  // ── Detect vision request ────────────────────────────────────────────────────
+  // Detect vision request
   const lastMsg        = clearedMessages[clearedMessages.length - 1];
   const isVisionRequest =
     hasImage ||
     (Array.isArray(lastMsg?.content) &&
       lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // ── Detect URL in last message ───────────────────────────────────────────────
+  // Detect URL in last message
   const lastMsgText    = getMessageText(lastMsg);
   const detectedURLs   = extractURLs(lastMsgText);
   let urlContext       = '';
@@ -219,7 +221,7 @@ export default async function handler(req, res) {
     urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
   }
 
-  // ── Detect Realtime Search or Video Request ──────────────────────────────────
+  // Detect Realtime Search or Video Request
   const lowerMsgText = lastMsgText.toLowerCase();
   const isSearchRequest = 
     lowerMsgText.includes('search') || 
@@ -242,7 +244,7 @@ export default async function handler(req, res) {
       });
       if (searchRes.ok) {
         const searchResultsText = await searchRes.text();
-        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate your response using this raw text. State the guide steps clearly and provide clickable links at the end. Do NOT use short text stubs. Tell the user the full facts immediately.`;
+        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom as plain raw text URLs without markdown brackets (e.g., - Video Title: URL).`;
       } else {
         searchContext = `\n\n[SYSTEM NOTE: Live web search failed. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
       }
@@ -251,7 +253,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── Pre-process messages: upload base64 images to Cloudflare ────────────────
+  // Pre-process messages: upload base64 images to Cloudflare
   const processedMessages = await Promise.all(
     clearedMessages.map(async (m) => {
       if (!Array.isArray(m.content)) return m;
@@ -268,7 +270,7 @@ export default async function handler(req, res) {
     })
   );
 
-  // ── Cap conversation history ─────────────────────────────────────────────────
+  // Cap conversation history
   const history = isVisionRequest
     ? processedMessages.slice(-5).map((m) => ({
         role: m.role,
@@ -283,7 +285,7 @@ export default async function handler(req, res) {
         content: String(m.content).slice(0, 3000),
       }));
 
-  // ── FIX 2: Prompt Protection (Enforce backend safety rules even if client sends a prompt) ──
+  // Protect system instructions from client overrides
   const fullSystem = clientSystemPrompt 
     ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
     : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
@@ -358,7 +360,7 @@ export default async function handler(req, res) {
   // NON-STREAMING PATH
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── 1. Gemini Vision ────────────────────────────────────────────────────────
+  // 1. Gemini Vision
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiContents = history.map((m) => {
@@ -409,7 +411,7 @@ export default async function handler(req, res) {
     } catch (err) {}
   }
 
-  // ── 2. Groq Fallback ─────────────────────────────────────────────────────────
+  // 2. Groq Fallback
   if (process.env.GROQ_API_KEY) {
     const groqModels = isVisionRequest
       ? ['meta-llama/llama-4-scout-17b-16e-instruct']
@@ -453,7 +455,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── 3. Gemini Text Fallback ───────────────────────────────────────────────────
+  // 3. Gemini Text Fallback
   if (!isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiMessages = history.map((m) => ({
@@ -484,7 +486,7 @@ export default async function handler(req, res) {
     } catch (err) {}
   }
 
-  // ── 4. OpenRouter Fallback ───────────────────────────────────────────────────
+  // 4. OpenRouter Fallback
   if (process.env.OPENROUTER_API_KEY) {
     const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
     for (const model of openRouterModels) {
