@@ -45,12 +45,11 @@ WEBSITE / URL ANALYSIS:
 - Be concise but thorough
 - If a page fails to load, explain the issue professionally and suggest alternatives
 
-REALTIME SEARCH & VIDEOS:
-- You do NOT need to activate a tool. Live web data will automatically be injected into your prompt context.
-- NEVER reply with a short confirmation (like "On it!", "Searching...", or "I'll look that up") and stop. 
-- You MUST provide the full, complete answer immediately in a single response based on the injected data.
-- ALWAYS append the source URLs at the very bottom of your response as a neat, clickable Markdown list (e.g., - [Video Title](URL)).
-- If the system notes that search failed, answer using your existing knowledge instead.
+REALTIME SEARCH & VIDEOS (CRITICAL RULES):
+- Live web search and video details are ALREADY fetched and injected into your context below. You do NOT need to wait or invoke a tool.
+- ABSOLUTELY NEVER reply with short placeholders like "On it!", "Searching...", or "I've got you!" and then terminate the response. This breaks the UI.
+- You must stream the ENTIRE informative guide, details, descriptions, and summaries immediately in a single continuous message.
+- ALWAYS append discovered source URLs at the very bottom of your response as a neat, clickable Markdown list (e.g., - [Video Title](URL)).
 
 FRIEND LIST (Use exactly these lines when asked):
 _ Ah Kang: The funny guy who always brings the laughs.
@@ -127,7 +126,6 @@ const fetchURLContent = async (url) => {
     });
     if (!res.ok) return null;
     const text = await res.text();
-    // Cap at 3000 chars to keep context window reasonable
     return text.slice(0, 3000).trim() || null;
   } catch {
     return null;
@@ -159,7 +157,6 @@ const uploadToCloudflare = async (base64DataUrl) => {
     const cfData = await cfRes.json();
 
     if (cfData.success && cfData.result?.variants?.[0]) return cfData.result.variants[0];
-    console.error('Cloudflare Images upload failed:', JSON.stringify(cfData.errors));
   } catch (err) {
     console.error('Cloudflare Images error:', err.message);
   }
@@ -186,14 +183,25 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
+  // ── FIX 1: History Laundering (Strip poisoned "On it!" states out of context) ──
+  const clearedMessages = messages.filter((m) => {
+    if (m.role === 'assistant' || m.role === 'model') {
+      const textVal = getMessageText(m).toLowerCase();
+      if (textVal.includes('on it') && textVal.length < 65) {
+        return false; // Wipe out this broken turn completely
+      }
+    }
+    return true;
+  });
+
   // ── Detect vision request ────────────────────────────────────────────────────
-  const lastMsg        = messages[messages.length - 1];
+  const lastMsg        = clearedMessages[clearedMessages.length - 1];
   const isVisionRequest =
     hasImage ||
     (Array.isArray(lastMsg?.content) &&
       lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // ── Detect URL in last message (works for both string and array content) ──────
+  // ── Detect URL in last message ───────────────────────────────────────────────
   const lastMsgText    = getMessageText(lastMsg);
   const detectedURLs   = extractURLs(lastMsgText);
   let urlContext       = '';
@@ -204,7 +212,7 @@ export default async function handler(req, res) {
       .map((url, i) =>
         fetched[i]
           ? `[URL: ${url}]\n${fetched[i]}`
-          : `[URL: ${url}]\nFailed to retrieve content. It may be private or unreachable.`
+          : `[URL: ${url}]\nFailed to retrieve content.`
       )
       .join('\n\n---\n\n');
 
@@ -230,23 +238,22 @@ export default async function handler(req, res) {
       const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
       const searchRes = await fetch(jinaSearchURL, {
         headers: { 'Accept': 'text/plain' },
-        signal: AbortSignal.timeout(6000), // 6 second safety cutoff
+        signal: AbortSignal.timeout(6000),
       });
       if (searchRes.ok) {
         const searchResultsText = await searchRes.text();
-        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a highly engaging, COMPLETE response based on this data right now. Do NOT reply with a short confirmation like "On it!" - give the full answer immediately. At the bottom, print a neat, clickable Markdown list of the source links discovered (e.g., - [Video Title](URL)).`;
+        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate your response using this raw text. State the guide steps clearly and provide clickable links at the end. Do NOT use short text stubs. Tell the user the full facts immediately.`;
       } else {
-        searchContext = `\n\n[SYSTEM NOTE: Live web search failed. You must answer the user's question using your existing internal knowledge. Do NOT tell them you are searching.]`;
+        searchContext = `\n\n[SYSTEM NOTE: Live web search failed. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
       }
     } catch (err) {
-      console.error('Realtime search pre-fetch failed:', err.message);
-      searchContext = `\n\n[SYSTEM NOTE: Live web search failed. You must answer the user's question using your existing internal knowledge. Do NOT tell them you are searching.]`;
+      searchContext = `\n\n[SYSTEM NOTE: Live web search timed out. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
     }
   }
 
   // ── Pre-process messages: upload base64 images to Cloudflare ────────────────
   const processedMessages = await Promise.all(
-    messages.map(async (m) => {
+    clearedMessages.map(async (m) => {
       if (!Array.isArray(m.content)) return m;
       const newContent = await Promise.all(
         m.content.map(async (c) => {
@@ -276,10 +283,10 @@ export default async function handler(req, res) {
         content: String(m.content).slice(0, 3000),
       }));
 
-  // ── Build full system prompt ─────────────────────────────────────────────────
-  const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
-  // Always keep full personality + URL context + pre-fetched search data
-  const fullSystem = `${resolvedSystem}${urlContext}${searchContext}`;
+  // ── FIX 2: Prompt Protection (Enforce backend safety rules even if client sends a prompt) ──
+  const fullSystem = clientSystemPrompt 
+    ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
+    : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING PATH — Gemini SSE (text only)
@@ -300,17 +307,13 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+            generationConfig: { temperature: 0.70, maxOutputTokens: 4096 },
           }),
         }
       );
 
-      if (!geminiRes.ok) {
-        const errText = await geminiRes.text();
-        throw new Error(`Gemini stream ${geminiRes.status}: ${errText}`);
-      }
+      if (!geminiRes.ok) throw new Error('Upstream streaming error');
 
-      // Commit to SSE only after we know upstream is healthy
       streamStarted = true;
       res.setHeader('Content-Type',     'text/event-stream');
       res.setHeader('Cache-Control',    'no-cache');
@@ -344,12 +347,10 @@ export default async function handler(req, res) {
       res.end();
       return;
     } catch (streamErr) {
-      console.error('Gemini stream error:', streamErr.message);
       if (streamStarted) {
         try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
         return;
       }
-      // Fall through to non-streaming path
     }
   }
 
@@ -357,7 +358,7 @@ export default async function handler(req, res) {
   // NON-STREAMING PATH
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── 1. Gemini Vision (most reliable for images) ──────────────────────────────
+  // ── 1. Gemini Vision ────────────────────────────────────────────────────────
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiContents = history.map((m) => {
@@ -365,21 +366,18 @@ export default async function handler(req, res) {
           const parts = m.content.map((c) => {
             if (c.type === 'image_url') {
               const url = c.image_url?.url || '';
-              // Handle base64 inline data
               if (url.startsWith('data:')) {
                 const [meta, b64] = url.split(',');
                 const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
                 return { inlineData: { mimeType, data: b64 } };
               }
-              // Handle public URL via fileData
               if (url.startsWith('http://') || url.startsWith('https://')) {
-                let mimeType = 'image/jpeg'; // fallback
+                let mimeType = 'image/jpeg';
                 if (url.match(/\.png/i)) mimeType = 'image/png';
                 else if (url.match(/\.webp/i)) mimeType = 'image/webp';
-                else if (url.match(/\.gif/i)) mimeType = 'image/gif';
                 return { fileData: { mimeType, fileUri: url } };
               }
-              return { text: `[Image URL: ${url}]` };
+              return { text: `[Image]` };
             }
             return { text: String(c.text || '') };
           });
@@ -396,7 +394,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiContents,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+            generationConfig: { temperature: 0.70, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -408,13 +406,10 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-      console.error('Gemini vision empty response:', JSON.stringify(data));
-    } catch (err) {
-      console.error('Gemini vision error:', err.message);
-    }
+    } catch (err) {}
   }
 
-  // ── 2. Groq ──────────────────────────────────────────────────────────────────
+  // ── 2. Groq Fallback ─────────────────────────────────────────────────────────
   if (process.env.GROQ_API_KEY) {
     const groqModels = isVisionRequest
       ? ['meta-llama/llama-4-scout-17b-16e-instruct']
@@ -443,24 +438,18 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model,
             messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
-            temperature: 0.75,
+            temperature: 0.70,
             max_tokens: 4096,
           }),
         });
 
         const data = await response.json();
-        if (!response.ok) {
-          console.error(`Groq ${model} error:`, data?.error?.message);
-          continue;
-        }
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {
-        console.error(`Groq ${model} exception:`, err.message);
-      }
+      } catch (err) {}
     }
   }
 
@@ -480,7 +469,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+            generationConfig: { temperature: 0.70, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -492,26 +481,17 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-      console.error('Gemini text fallback empty:', JSON.stringify(data));
-    } catch (err) {
-      console.error('Gemini text fallback error:', err.message);
-    }
+    } catch (err) {}
   }
 
-  // ── 4. OpenRouter Final Fallback ─────────────────────────────────────────────
+  // ── 4. OpenRouter Fallback ───────────────────────────────────────────────────
   if (process.env.OPENROUTER_API_KEY) {
-    const openRouterModels = [
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'google/gemma-3-27b-it:free',
-    ];
-
+    const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
     for (const model of openRouterModels) {
       try {
         const orHistory = history.map((m) => ({
           role: m.role || 'user',
-          content: Array.isArray(m.content)
-            ? m.content.map((c) => c.text || '').join(' ')
-            : String(m.content),
+          content: Array.isArray(m.content) ? m.content.map((c) => c.text || '').join(' ') : String(m.content),
         }));
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -523,27 +503,20 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model,
             messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-            temperature: 0.75,
+            temperature: 0.70,
             max_tokens: 4096,
           }),
         });
 
         const data = await response.json();
-        if (!response.ok) {
-          console.error(`OpenRouter ${model} error:`, data?.error?.message);
-          continue;
-        }
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {
-        console.error(`OpenRouter ${model} exception:`, err.message);
-      }
+      } catch (err) {}
     }
   }
 
-  // ── All providers failed ─────────────────────────────────────────────────────
-  return res.status(500).json({ error: 'All AI providers failed. Check server logs for details.' });
+  return res.status(500).json({ error: 'All AI engine pathways failed.' });
 }
