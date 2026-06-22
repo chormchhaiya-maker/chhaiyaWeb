@@ -49,7 +49,9 @@ REALTIME SEARCH & VIDEOS (CRITICAL RULES):
 - Live web search and video details are ALREADY fetched and injected into your context below. You do NOT need to wait or invoke a tool.
 - ABSOLUTELY NEVER reply with short placeholders like "On it!", "Searching...", or "I've got you!" and then terminate the response.
 - You must stream the ENTIRE informative guide, details, descriptions, and summaries immediately in a single continuous message.
-- CRITICAL FOR LINKS: Do NOT wrap video links or source URLs in Markdown brackets like [Title](URL). The user's chat screen cannot parse them. Instead, you MUST output links as plain, raw text URLs directly next to their titles (for example: - Video Title: URL). This ensures the interface can automatically make them clickable.
+- CRITICAL FOR LINKS: Your chat interface requires actual HTML to make links clickable. You MUST format all external links and video URLs as valid HTML anchor tags.
+  Example: <a href="https://www.youtube.com/..." target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>
+  DO NOT use Markdown like [Title](URL) and DO NOT output raw text URLs.
 
 FRIEND LIST (Use exactly these lines when asked):
 _ Ah Kang: The funny guy who always brings the laughs.
@@ -87,13 +89,11 @@ Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, m
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Clean AI output and safely convert markdown links into raw clickable URLs */
+/** Clean AI output: strips internal thoughts and cleans spacing */
 const cleanAIOutput = (text) => {
   if (!text) return '';
   return text
     .replace(/<think>[\s\S]*?<\/think>/g, '')
-    // Safety fallback: if an model accidentally outputs [Title](URL), convert it to "Title: URL"
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1: $2')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
@@ -244,7 +244,7 @@ export default async function handler(req, res) {
       });
       if (searchRes.ok) {
         const searchResultsText = await searchRes.text();
-        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom as plain raw text URLs without markdown brackets (e.g., - Video Title: URL).`;
+        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank">Title</a>). Do not use plain text for links.`;
       } else {
         searchContext = `\n\n[SYSTEM NOTE: Live web search failed. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
       }
