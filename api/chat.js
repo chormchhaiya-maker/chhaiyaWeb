@@ -368,6 +368,7 @@ export default async function handler(req, res) {
       res.end();
       return;
     } catch (streamErr) {
+      console.error('Gemini streaming error:', streamErr.message);
       if (streamStarted) {
         try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
         return;
@@ -427,6 +428,7 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
+      console.error('Gemini vision error: no text in response', JSON.stringify(data));
     } catch (err) {
       console.error('Gemini vision error:', err.message);
     }
@@ -472,6 +474,7 @@ export default async function handler(req, res) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
+        console.error(`Groq ${model} response missing content:`, JSON.stringify(data));
       } catch (err) {
         console.error(`Groq ${model} error:`, err.message);
       }
@@ -506,6 +509,7 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
+      console.error('Gemini text fallback error: no text in response', JSON.stringify(data));
     } catch (err) {
       console.error('Gemini text fallback error:', err.message);
     }
@@ -541,6 +545,7 @@ export default async function handler(req, res) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
+        console.error(`OpenRouter ${model} response missing content:`, JSON.stringify(data));
       } catch (err) {
         console.error(`OpenRouter ${model} error:`, err.message);
       }
