@@ -19,6 +19,7 @@ CONVERSATION STYLE:
 - Encourage users positively
 - Keep answers clean and readable
 
+
 THINKING STYLE:
 Before important answers, simulate thinking naturally using short lines like:
 .
@@ -27,7 +28,8 @@ Before important answers, simulate thinking naturally using short lines like:
 Thinking...
 Analyzing...
 Searching realtime data...
-HOWEVER, you MUST immediately follow those lines with the actual complete answer. NEVER stop typing after the thinking lines or short confirmations.
+Generating response...
+Do not overuse this. Use it naturally to make conversations feel realistic.
 
 CODING BEHAVIOR:
 - Help with HTML, CSS, JavaScript, Node.js, APIs, Vercel, GitHub, SEO, and AI projects
@@ -46,7 +48,7 @@ WEBSITE / URL ANALYSIS:
 - If a page fails to load, explain the issue professionally and suggest alternatives
 
 REALTIME SEARCH & VIDEOS (CRITICAL RULES):
-- Live web search and video details are ALREADY fetched and injected into your context below. You do NOT need to wait or invoke a tool.
+- Live web search and video details are ALREADY fetched and injected into your context below. You do NOT need to wait or invoke an external tool.
 - ABSOLUTELY NEVER reply with short placeholders like "On it!", "Searching...", or "I've got you!" and then terminate the response.
 - You must stream the ENTIRE informative guide, details, descriptions, and summaries immediately in a single continuous message.
 - CRITICAL FOR LINKS: Your chat interface requires actual HTML to make links clickable. You MUST format all external links and video URLs as valid HTML anchor tags.
@@ -79,9 +81,6 @@ IMPORTANT RULES:
 - Only use "_" for the friend list
 - Do not be repetitive
 - No <think> tags in output
-- If user says "act like gemini" -> reply "Understood. Switching persona to Gemini by Google. I am now optimized for deep analysis, clean markdown, and multi-modal assistance. Ask me anything!" and immediately change your response style, tone, and formatting to match Google's Gemini for all subsequent prompts.
-- If user says "act like gpt" or "act like chatgpt" -> reply "Understood. Switching persona to ChatGPT by OpenAI. I am now optimized for structured reasoning, step-by-step clarity, and conversational prose. What can I help you with today?" and immediately change your response style, tone, and formatting to match OpenAI's ChatGPT for all subsequent prompts.
-- If user says "act like cc-ai" or "reset persona" -> reply "System updated. Returning to default CC-AI developer mode. Ready to build! 🚀" and completely reset your persona back to your original system instructions.
 
 MAIN GOAL:
 Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, modern, futuristic, and fun to talk with.
@@ -89,7 +88,7 @@ Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, m
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Clean AI output: strips internal thoughts and cleans spacing */
+/** Strip internal <think> blocks and normalize whitespace */
 const cleanAIOutput = (text) => {
   if (!text) return '';
   return text
@@ -123,7 +122,7 @@ const fetchURLContent = async (url) => {
   try {
     const jinaURL = `https://r.jina.ai/${encodeURIComponent(url)}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(jinaURL, {
       headers: { Accept: 'text/plain' },
@@ -164,6 +163,7 @@ const uploadToCloudflare = async (base64DataUrl) => {
     const cfData = await cfRes.json();
 
     if (cfData.success && cfData.result?.variants?.[0]) return cfData.result.variants[0];
+    console.error('Cloudflare Images upload failed:', JSON.stringify(cfData.errors));
   } catch (err) {
     console.error('Cloudflare Images error:', err.message);
   }
@@ -190,7 +190,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
-  // History Laundering: strip out any short placeholder stubs left in context
+  // History Laundering: remove any old broken "On it!" stubs from previous attempts
   const clearedMessages = messages.filter((m) => {
     if (m.role === 'assistant' || m.role === 'model') {
       const textVal = getMessageText(m).toLowerCase();
@@ -201,14 +201,14 @@ export default async function handler(req, res) {
     return true;
   });
 
-  // Detect vision request
+  // ── Detect vision request ────────────────────────────────────────────────────
   const lastMsg        = clearedMessages[clearedMessages.length - 1];
   const isVisionRequest =
     hasImage ||
     (Array.isArray(lastMsg?.content) &&
       lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // Detect URL in last message
+  // ── Detect URL in last message ───────────────────────────────────────────────
   const lastMsgText    = getMessageText(lastMsg);
   const detectedURLs   = extractURLs(lastMsgText);
   let urlContext       = '';
@@ -219,14 +219,14 @@ export default async function handler(req, res) {
       .map((url, i) =>
         fetched[i]
           ? `[URL: ${url}]\n${fetched[i]}`
-          : `[URL: ${url}]\nFailed to retrieve content.`
+          : `[URL: ${url}]\nFailed to retrieve content. It may be private or unreachable.`
       )
       .join('\n\n---\n\n');
 
     urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
   }
 
-  // Detect Realtime Search or Video Request
+  // ── NEW: Detect Realtime Search / Video Request ──────────────────────────────
   const lowerMsgText = lastMsgText.toLowerCase();
   const isSearchRequest = 
     lowerMsgText.includes('search') || 
@@ -254,16 +254,16 @@ export default async function handler(req, res) {
 
       if (searchRes.ok) {
         const searchResultsText = await searchRes.text();
-        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank">Title</a>). Do not use plain text or raw markdown syntax for links.`;
+        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>). Do not use plain text or raw markdown syntax for links.`;
       } else {
-        searchContext = `\n\n[SYSTEM NOTE: Live web search failed. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
+        console.error(`Jina search failed with status: ${searchRes.status}`);
       }
     } catch (err) {
-      searchContext = `\n\n[SYSTEM NOTE: Live web search timed out or was interrupted. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
+      console.error(`Jina search exception:`, err.message);
     }
   }
 
-  // Pre-process messages: upload base64 images to Cloudflare
+  // ── Pre-process messages: upload base64 images to Cloudflare ────────────────
   const processedMessages = await Promise.all(
     clearedMessages.map(async (m) => {
       if (!Array.isArray(m.content)) return m;
@@ -280,7 +280,7 @@ export default async function handler(req, res) {
     })
   );
 
-  // Cap conversation history
+  // ── Cap conversation history ─────────────────────────────────────────────────
   const history = isVisionRequest
     ? processedMessages.slice(-5).map((m) => ({
         role: m.role,
@@ -295,10 +295,9 @@ export default async function handler(req, res) {
         content: String(m.content).slice(0, 3000),
       }));
 
-  // Protect system instructions from client overrides
-  const fullSystem = clientSystemPrompt 
-    ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
-    : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
+  // ── Build full system prompt ─────────────────────────────────────────────────
+  const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
+  const fullSystem = `${resolvedSystem}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING PATH — Gemini SSE (text only)
@@ -319,12 +318,15 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.70, maxOutputTokens: 4096 },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
       );
 
-      if (!geminiRes.ok) throw new Error('Upstream streaming error');
+      if (!geminiRes.ok) {
+        const errText = await geminiRes.text();
+        throw new Error(`Gemini stream ${geminiRes.status}: ${errText}`);
+      }
 
       streamStarted = true;
       res.setHeader('Content-Type',     'text/event-stream');
@@ -359,6 +361,7 @@ export default async function handler(req, res) {
       res.end();
       return;
     } catch (streamErr) {
+      console.error('Gemini stream error:', streamErr.message);
       if (streamStarted) {
         try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
         return;
@@ -370,7 +373,7 @@ export default async function handler(req, res) {
   // NON-STREAMING PATH
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // 1. Gemini Vision
+  // ── 1. Gemini Vision ─────────────────────────────────────────────────────────
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiContents = history.map((m) => {
@@ -387,9 +390,10 @@ export default async function handler(req, res) {
                 let mimeType = 'image/jpeg';
                 if (url.match(/\.png/i)) mimeType = 'image/png';
                 else if (url.match(/\.webp/i)) mimeType = 'image/webp';
+                else if (url.match(/\.gif/i)) mimeType = 'image/gif';
                 return { fileData: { mimeType, fileUri: url } };
               }
-              return { text: `[Image]` };
+              return { text: `[Image URL: ${url}]` };
             }
             return { text: String(c.text || '') };
           });
@@ -406,7 +410,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiContents,
-            generationConfig: { temperature: 0.70, maxOutputTokens: 4096 },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -418,10 +422,12 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Gemini vision error:', err.message);
+    }
   }
 
-  // 2. Groq Fallback
+  // ── 2. Groq ──────────────────────────────────────────────────────────────────
   if (process.env.GROQ_API_KEY) {
     const groqModels = isVisionRequest
       ? ['meta-llama/llama-4-scout-17b-16e-instruct']
@@ -450,22 +456,28 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model,
             messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
-            temperature: 0.70,
+            temperature: 0.75,
             max_tokens: 4096,
           }),
         });
 
         const data = await response.json();
+        if (!response.ok) {
+          console.error(`Groq ${model} error:`, data?.error?.message);
+          continue;
+        }
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error(`Groq ${model} exception:`, err.message);
+      }
     }
   }
 
-  // 3. Gemini Text Fallback
+  // ── 3. Gemini Text Fallback ───────────────────────────────────────────────────
   if (!isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiMessages = history.map((m) => ({
@@ -481,7 +493,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
-            generationConfig: { temperature: 0.70, maxOutputTokens: 4096 },
+            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
         }
       );
@@ -493,17 +505,25 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Gemini text fallback error:', err.message);
+    }
   }
 
-  // 4. OpenRouter Fallback
+  // ── 4. OpenRouter Final Fallback ─────────────────────────────────────────────
   if (process.env.OPENROUTER_API_KEY) {
-    const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
+    const openRouterModels = [
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'google/gemma-3-27b-it:free',
+    ];
+
     for (const model of openRouterModels) {
       try {
         const orHistory = history.map((m) => ({
           role: m.role || 'user',
-          content: Array.isArray(m.content) ? m.content.map((c) => c.text || '').join(' ') : String(m.content),
+          content: Array.isArray(m.content)
+            ? m.content.map((c) => c.text || '').join(' ')
+            : String(m.content),
         }));
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -515,20 +535,26 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             model,
             messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-            temperature: 0.70,
+            temperature: 0.75,
             max_tokens: 4096,
           }),
         });
 
         const data = await response.json();
+        if (!response.ok) {
+          console.error(`OpenRouter ${model} error:`, data?.error?.message);
+          continue;
+        }
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error(`OpenRouter ${model} exception:`, err.message);
+      }
     }
   }
 
-  return res.status(500).json({ error: 'All AI engine pathways failed.' });
+  return res.status(500).json({ error: 'All AI providers failed. Check server logs for details.' });
 }
