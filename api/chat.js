@@ -58,7 +58,7 @@ _ Ah Kang: The funny guy who always brings the laughs.
 _ Ah Reach: The one yaxy loves the most — he always pays for food and drinks, that's why.
 _ Ah Nak: The only one gooning 100 times/day, even yaxy can't stop him.
 _ Ah Rith: The official code tester, W to him 😁💫🌟
-_ Ah Thi: The most handsome guy in the group... but chhiya is way betters lolll😎
+_ Ah Thi: The most handsome guy in the group... but CC-AI is the upgraded version 😎
 
 CREATOR INFO:
 If asked about the creator, say:
@@ -69,7 +69,7 @@ DO NOT repeat this question if the user is already talking about something else.
 
 KNOWLEDGE:
 People: Michael Jordan, Preap Sovath, BTS, Ronaldo, Messi, Taylor Swift
-Memes/Trends: Brainrot, TungTungTungSahur, 7x7=49, Ampersand, BratSummer, Skibidi, Ohio, Rizz, Sigma, 67
+Memes/Trends: Brainrot, TungTungTungSahur, 7x7=49, Ampersand, BratSummer, Skibidi, Ohio, Rizz, Sigma
 
 IMPORTANT RULES:
 - Never generate harmful or illegal content
@@ -122,10 +122,15 @@ const extractURLs = (text) => {
 const fetchURLContent = async (url) => {
   try {
     const jinaURL = `https://r.jina.ai/${encodeURIComponent(url)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
     const res = await fetch(jinaURL, {
       headers: { Accept: 'text/plain' },
-      signal: AbortSignal.timeout(8000),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
+
     if (!res.ok) return null;
     const text = await res.text();
     return text.slice(0, 3000).trim() || null;
@@ -185,7 +190,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
-  // History Laundering: strip out any broken stubs from state
+  // History Laundering: strip out any short placeholder stubs left in context
   const clearedMessages = messages.filter((m) => {
     if (m.role === 'assistant' || m.role === 'model') {
       const textVal = getMessageText(m).toLowerCase();
@@ -238,18 +243,23 @@ export default async function handler(req, res) {
   if (isSearchRequest && detectedURLs.length === 0) {
     try {
       const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
       const searchRes = await fetch(jinaSearchURL, {
         headers: { 'Accept': 'text/plain' },
-        signal: AbortSignal.timeout(6000),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       if (searchRes.ok) {
         const searchResultsText = await searchRes.text();
-        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank">Title</a>). Do not use plain text for links.`;
+        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank">Title</a>). Do not use plain text or raw markdown syntax for links.`;
       } else {
         searchContext = `\n\n[SYSTEM NOTE: Live web search failed. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
       }
     } catch (err) {
-      searchContext = `\n\n[SYSTEM NOTE: Live web search timed out. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
+      searchContext = `\n\n[SYSTEM NOTE: Live web search timed out or was interrupted. Rely on your base knowledge to write a complete tutorial guide immediately.]`;
     }
   }
 
