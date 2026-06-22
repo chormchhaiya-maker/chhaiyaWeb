@@ -185,6 +185,25 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
+  // ─────────────────────────────────────────────────────────────
+  //  FIX: Check for at least one API key before proceeding
+  //  If none are set, return a friendly message (no 500 error)
+  // ─────────────────────────────────────────────────────────────
+  const hasGroq = !!process.env.GROQ_API_KEY;
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
+
+  if (!hasGroq && !hasGemini && !hasOpenRouter) {
+    return res.status(200).json({
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: `⚠️ **No AI engine configured.**\n\nTo use CC‑AI, you must set at least one of these environment variables:\n- \`GROQ_API_KEY\`\n- \`GEMINI_API_KEY\`\n- \`OPENROUTER_API_KEY\`\n\nPlease add your API key(s) to your environment and restart the server. Once set, I'll be ready to help! 🚀`
+        }
+      }]
+    });
+  }
+
   // History Laundering: strip out any broken stubs from state
   const clearedMessages = messages.filter((m) => {
     if (m.role === 'assistant' || m.role === 'model') {
@@ -408,7 +427,9 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Gemini vision error:', err.message);
+    }
   }
 
   // 2. Groq Fallback
@@ -451,7 +472,9 @@ export default async function handler(req, res) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error(`Groq ${model} error:`, err.message);
+      }
     }
   }
 
@@ -483,7 +506,9 @@ export default async function handler(req, res) {
           choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
         });
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error('Gemini text fallback error:', err.message);
+    }
   }
 
   // 4. OpenRouter Fallback
@@ -516,9 +541,22 @@ export default async function handler(req, res) {
           data.choices[0].message.content = cleanAIOutput(content);
           return res.status(200).json(data);
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error(`OpenRouter ${model} error:`, err.message);
+      }
     }
   }
 
-  return res.status(500).json({ error: 'All AI engine pathways failed.' });
+  // ─────────────────────────────────────────────────────────────
+  //  FIX: Final fallback – return a friendly 200 error message
+  //  instead of a 500 (so the frontend doesn't break)
+  // ─────────────────────────────────────────────────────────────
+  return res.status(200).json({
+    choices: [{
+      message: {
+        role: 'assistant',
+        content: `⚠️ **All AI providers are currently unavailable.**\n\nPossible reasons:\n- API keys are missing or invalid\n- Provider services are down\n- Rate limits exceeded\n\nPlease check your environment variables and try again later. If the issue persists, contact support.`
+      }
+    }]
+  });
 }
