@@ -50,7 +50,7 @@ REALTIME SEARCH & VIDEOS (CRITICAL RULES):
 - Live web search and video details are ALREADY fetched and injected into your context below. You do NOT need to wait or invoke an external tool.
 - ABSOLUTELY NEVER reply with short placeholders like "On it!", "Searching...", or "I've got you!" and then terminate the response.
 - You must stream the ENTIRE informative guide, details, descriptions, and summaries immediately in a single continuous message.
-- CRITICAL FOR LINKS: Your chat interface requires actual HTML to make links clickable. You MUST format all external links and video URLs as valid HTML anchor tags.
+- CRITICAL FOR LINKS: Your chat interface requires actual HTML to make links clickable. Your responses MUST format all external links and video URLs as valid HTML anchor tags.
   Example: <a href="https://www.youtube.com/..." target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>
   DO NOT use Markdown like [Title](URL) and DO NOT output raw text URLs.
 
@@ -245,7 +245,6 @@ export default async function handler(req, res) {
 
   let searchContext = '';
   if (isSearchRequest && detectedURLs.length === 0) {
-    // Clean search terms to make clean query strings
     const cleanSearchQuery = lastMsgText.replace(/search youtube for|search youtube|youtube|search/gi, '').trim();
     const encodedFallbackQuery = encodeURIComponent(cleanSearchQuery || lastMsgText);
 
@@ -264,11 +263,9 @@ export default async function handler(req, res) {
         const searchResultsText = await searchRes.text();
         searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>). Do not use plain text or raw markdown syntax for links.`;
       } else {
-        // Fallback: Force link generation using clean format if Jina fails
         searchContext = `\n\n[SYSTEM NOTE: Live search API was unreachable. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
       }
     } catch (err) {
-      // Fallback: Force link generation using clean format if request times out
       searchContext = `\n\n[SYSTEM NOTE: Live search timed out. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
     }
   }
@@ -290,20 +287,31 @@ export default async function handler(req, res) {
     })
   );
 
-  // ── Cap conversation history ─────────────────────────────────────────────────
-  const history = isVisionRequest
-    ? processedMessages.slice(-5).map((m) => ({
-        role: m.role,
-        content: Array.isArray(m.content)
-          ? m.content.map((c) =>
-              c.type === 'image_url' ? c : { ...c, text: String(c.text || '').slice(0, 2000) }
-            )
-          : String(m.content).slice(0, 2000),
-      }))
-    : processedMessages.slice(-10).map((m) => ({
-        role: m.role || 'user',
-        content: getMessageText(m).slice(0, 3000), // FIXED: Prevent stringifying object arrays into [object Object]
-      }));
+  // ── FIX: Normalize and align chat turns defensively (Merges sequential identical roles)
+  const standardizedHistory = [];
+  for (const msg of processedMessages) {
+    let role = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
+    let textContent = getMessageText(msg);
+
+    if (standardizedHistory.length > 0 && standardizedHistory[standardizedHistory.length - 1].role === role) {
+      const prevTurn = standardizedHistory[standardizedHistory.length - 1];
+      if (Array.isArray(prevTurn.content) || Array.isArray(msg.content)) {
+        const currentParts = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: textContent }];
+        const prevParts = Array.isArray(prevTurn.content) ? prevTurn.content : [{ type: 'text', text: String(prevTurn.content) }];
+        prevTurn.content = [...prevParts, ...currentParts];
+      } else {
+        prevTurn.content = String(prevTurn.content) + "\n\n" + textContent;
+      }
+    } else {
+      standardizedHistory.push({
+        role,
+        content: Array.isArray(msg.content) ? msg.content : textContent
+      });
+    }
+  }
+
+  // Slice standardized items appropriately to prevent hitting context walls
+  const history = standardizedHistory.slice(isVisionRequest ? -5 : -10);
 
   // ── Permanent Core Prompt Protection ─────────────────────────────────────────
   const fullSystem = clientSystemPrompt 
@@ -316,11 +324,16 @@ export default async function handler(req, res) {
   if (wantStream && !isVisionRequest) {
     let streamStarted = false;
 
-    // ── Try Groq Streaming first ─────────────────────────────────────────────
+    // Try Groq Streaming first
     if (process.env.GROQ_API_KEY) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
+          const groqMessages = history.map(m => ({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+          }));
+
           const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -329,14 +342,14 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
               model,
-              messages: [{ role: 'system', content: fullSystem }, ...history.map(m => ({ role: m.role, content: m.content }))],
+              messages: [{ role: 'system', content: fullSystem }, ...groqMessages],
               temperature: 0.75,
               max_tokens: 4096,
               stream: true,
             }),
           });
 
-          if (!groqRes.ok) throw new Error(`Groq stream error: ${groqRes.status}`);
+          if (!groqRes.ok) throw new Error(`Groq status: ${groqRes.status}`);
 
           streamStarted = true;
           res.setHeader('Content-Type',     'text/event-stream');
@@ -371,21 +384,18 @@ export default async function handler(req, res) {
           res.end();
           return;
         } catch (groqStreamErr) {
-          console.error('Groq streaming failed:', groqStreamErr.message);
-          if (streamStarted) {
-            try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
-            return;
-          }
+          console.error('Groq stream fallback triggered:', groqStreamErr.message);
+          if (streamStarted) return;
         }
       }
     }
     
-    // ── Gemini SSE Fallback for streaming ────────────────────────────────────
+    // Gemini SSE Streaming Fallback
     if (process.env.GEMINI_API_KEY) {
       try {
         const geminiMessages = history.map((m) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: String(m.content) }],
+          parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ') }],
         }));
 
         const geminiRes = await fetch(
@@ -401,7 +411,7 @@ export default async function handler(req, res) {
           }
         );
 
-        if (!geminiRes.ok) throw new Error(`Upstream stream error`);
+        if (!geminiRes.ok) throw new Error(`Gemini Upstream stream error`);
 
         streamStarted = true;
         res.setHeader('Content-Type',     'text/event-stream');
@@ -436,10 +446,7 @@ export default async function handler(req, res) {
         res.end();
         return;
       } catch (streamErr) {
-        if (streamStarted) {
-          try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
-          return;
-        }
+        if (streamStarted) return;
       }
     }
   }
@@ -461,7 +468,6 @@ export default async function handler(req, res) {
                 const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
                 return { inlineData: { mimeType, data: b64 } };
               }
-              // FIXED: Fetch public URLs and convert them into base64 inlineData so Gemini can process them securely
               if (url.startsWith('http://') || url.startsWith('https://')) {
                 let mimeType = 'image/jpeg';
                 if (url.match(/\.png/i)) mimeType = 'image/png';
@@ -511,24 +517,24 @@ export default async function handler(req, res) {
     } catch (err) {}
   }
 
-  // ── 2. Groq ──────────────────────────────────────────────────────────────────
+  // ── 2. Groq Text Fallback ───────────────────────────────────────────────────
   if (process.env.GROQ_API_KEY) {
-    const groqModels = isVisionRequest
-      ? ['meta-llama/llama-4-scout-17b-16e-instruct']
-      : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-
+    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
     for (const model of groqModels) {
       try {
         const groqHistory = history.map((m) => {
           if (Array.isArray(m.content)) {
             return {
-              role: m.role,
+              role: m.role === 'assistant' ? 'assistant' : 'user',
               content: m.content.map((c) =>
-                c.type === 'image_url' ? c : { type: 'text', text: String(c.text || c.content || '') }
+                c.type === 'image_url' ? { type: 'text', text: '[Image]' } : { type: 'text', text: String(c.text || '') }
               ),
             };
           }
-          return m;
+          return {
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: String(m.content)
+          };
         });
 
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -560,7 +566,7 @@ export default async function handler(req, res) {
     try {
       const geminiMessages = history.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: String(m.content) }],
+        parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ') }],
       }));
 
       const response = await fetch(
@@ -592,7 +598,7 @@ export default async function handler(req, res) {
     for (const model of openRouterModels) {
       try {
         const orHistory = history.map((m) => ({
-          role: m.role || 'user',
+          role: m.role === 'assistant' ? 'assistant' : 'user',
           content: Array.isArray(m.content) ? m.content.map((c) => c.text || '').join(' ') : String(m.content),
         }));
 
