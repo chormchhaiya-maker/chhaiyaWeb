@@ -68,8 +68,6 @@ That's why I never forget him and always stay grateful talking with you right no
 After mentioning him for the first time, ask: "Wanna know about his friends?"
 DO NOT repeat this question if the user is already talking about something else.
 
-// Find this section in your api/chat.js and update it:
-
 KNOWLEDGE:
 People: Michael Jordan, Preap Sovath, BTS, Ronaldo, Messi, Taylor Swift
 Memes/Trends: Brainrot, TungTungTungSahur, 7x7=49, Ampersand, BratSummer, Skibidi, Ohio, Rizz, Sigma, 67, son
@@ -304,7 +302,7 @@ export default async function handler(req, res) {
       }))
     : processedMessages.slice(-10).map((m) => ({
         role: m.role || 'user',
-        content: String(m.content).slice(0, 3000),
+        content: getMessageText(m).slice(0, 3000), // FIXED: Prevent stringifying object arrays into [object Object]
       }));
 
   // ── Permanent Core Prompt Protection ─────────────────────────────────────────
@@ -317,24 +315,12 @@ export default async function handler(req, res) {
   // ═══════════════════════════════════════════════════════════════════════════
   if (wantStream && !isVisionRequest) {
     let streamStarted = false;
-    
+
     // ── Try Groq Streaming first ─────────────────────────────────────────────
     if (process.env.GROQ_API_KEY) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
-          const groqHistory = history.map((m) => {
-            if (Array.isArray(m.content)) {
-              return {
-                role: m.role,
-                content: m.content.map((c) =>
-                  c.type === 'image_url' ? c : { type: 'text', text: String(c.text || c.content || '') }
-                ),
-              };
-            }
-            return m;
-          });
-
           const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -343,7 +329,7 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
               model,
-              messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+              messages: [{ role: 'system', content: fullSystem }, ...history.map(m => ({ role: m.role, content: m.content }))],
               temperature: 0.75,
               max_tokens: 4096,
               stream: true,
@@ -393,7 +379,7 @@ export default async function handler(req, res) {
         }
       }
     }
-
+    
     // ── Gemini SSE Fallback for streaming ────────────────────────────────────
     if (process.env.GEMINI_API_KEY) {
       try {
@@ -415,7 +401,7 @@ export default async function handler(req, res) {
           }
         );
 
-        if (!geminiRes.ok) throw new Error(`Gemini stream error: ${geminiRes.status}`);
+        if (!geminiRes.ok) throw new Error(`Upstream stream error`);
 
         streamStarted = true;
         res.setHeader('Content-Type',     'text/event-stream');
@@ -449,8 +435,7 @@ export default async function handler(req, res) {
         res.write('data: [DONE]\n\n');
         res.end();
         return;
-      } catch (geminiStreamErr) {
-        console.error('Gemini streaming failed:', geminiStreamErr.message);
+      } catch (streamErr) {
         if (streamStarted) {
           try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
           return;
@@ -466,9 +451,9 @@ export default async function handler(req, res) {
   // ── 1. Gemini Vision ─────────────────────────────────────────────────────────
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
-      const geminiContents = history.map((m) => {
+      const geminiContents = await Promise.all(history.map(async (m) => {
         if (Array.isArray(m.content)) {
-          const parts = m.content.map((c) => {
+          const parts = await Promise.all(m.content.map(async (c) => {
             if (c.type === 'image_url') {
               const url = c.image_url?.url || '';
               if (url.startsWith('data:')) {
@@ -476,20 +461,32 @@ export default async function handler(req, res) {
                 const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
                 return { inlineData: { mimeType, data: b64 } };
               }
+              // FIXED: Fetch public URLs and convert them into base64 inlineData so Gemini can process them securely
               if (url.startsWith('http://') || url.startsWith('https://')) {
                 let mimeType = 'image/jpeg';
                 if (url.match(/\.png/i)) mimeType = 'image/png';
                 else if (url.match(/\.webp/i)) mimeType = 'image/webp';
-                return { fileData: { mimeType, fileUri: url } };
+                try {
+                  const imgRes = await fetch(url);
+                  if (imgRes.ok) {
+                    const buf = await imgRes.arrayBuffer();
+                    return { 
+                      inlineData: { 
+                        mimeType: imgRes.headers.get('content-type') || mimeType, 
+                        data: Buffer.from(buf).toString('base64') 
+                      } 
+                    };
+                  }
+                } catch (_) {}
               }
               return { text: `[Image]` };
             }
             return { text: String(c.text || '') };
-          });
+          }));
           return { role: m.role === 'assistant' ? 'model' : 'user', parts };
         }
         return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] };
-      });
+      }));
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
