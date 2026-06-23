@@ -176,57 +176,6 @@ const uploadToCloudflare = async (base64DataUrl) => {
   return null;
 };
 
-/** Safely normalizes context items into clean alternating turns for Gemini */
-const buildGeminiMessages = (historyArr) => {
-  const optimized = [];
-  for (const m of historyArr) {
-    const currentRole = m.role === 'assistant' || m.role === 'model' ? 'model' : 'user';
-    
-    let currentParts = [];
-    if (Array.isArray(m.content)) {
-      currentParts = m.content.map((c) => {
-        if (c.type === 'image_url') {
-          const url = c.image_url?.url || '';
-          if (url.startsWith('data:')) {
-            const [meta, b64] = url.split(',');
-            const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-            return { inlineData: { mimeType, data: b64 } };
-          }
-          if (url.startsWith('http://') || url.startsWith('https://')) {
-            let mimeType = 'image/jpeg';
-            if (url.match(/\.png/i)) mimeType = 'image/png';
-            else if (url.match(/\.webp/i)) mimeType = 'image/webp';
-            return { fileData: { mimeType, fileUri: url } };
-          }
-          return { text: `[Image]` };
-        }
-        return { text: String(c.text || c.content || '') };
-      });
-    } else {
-      currentParts = [{ text: String(m.content || '') }];
-    }
-
-    if (optimized.length > 0 && optimized[optimized.length - 1].role === currentRole) {
-      optimized[optimized.length - 1].parts.push(...currentParts);
-    } else {
-      optimized.push({ role: currentRole, parts: currentParts });
-    }
-  }
-
-  // Rule: Array must begin with a user turn
-  while (optimized.length > 0 && optimized[0].role === 'model') {
-    optimized.shift();
-  }
-
-  // Sanitize parts to ensure none are completely empty strings
-  for (const turn of optimized) {
-    turn.parts = turn.parts.filter(p => p.text === undefined || p.text.trim() !== '');
-    if (turn.parts.length === 0) turn.parts = [{ text: '...' }];
-  }
-
-  return optimized;
-};
-
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   // CORS
@@ -364,64 +313,148 @@ export default async function handler(req, res) {
     : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STREAMING PATH — Gemini SSE (text only)
+  // STREAMING PATH — Try Groq first, then Gemini SSE (text only)
   // ═══════════════════════════════════════════════════════════════════════════
-  if (wantStream && !isVisionRequest && process.env.GEMINI_API_KEY) {
+  if (wantStream && !isVisionRequest) {
     let streamStarted = false;
-    try {
-      const geminiMessages = buildGeminiMessages(history);
+    
+    // ── Try Groq Streaming first ─────────────────────────────────────────────
+    if (process.env.GROQ_API_KEY) {
+      const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+      for (const model of groqModels) {
+        try {
+          const groqHistory = history.map((m) => {
+            if (Array.isArray(m.content)) {
+              return {
+                role: m.role,
+                content: m.content.map((c) =>
+                  c.type === 'image_url' ? c : { type: 'text', text: String(c.text || c.content || '') }
+                ),
+              };
+            }
+            return m;
+          });
 
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: fullSystem }] },
-            contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
-          }),
-        }
-      );
+          const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+              temperature: 0.75,
+              max_tokens: 4096,
+              stream: true,
+            }),
+          });
 
-      if (!geminiRes.ok) throw new Error(`Upstream stream error`);
+          if (!groqRes.ok) throw new Error(`Groq stream error: ${groqRes.status}`);
 
-      streamStarted = true;
-      res.setHeader('Content-Type',     'text/event-stream');
-      res.setHeader('Cache-Control',    'no-cache');
-      res.setHeader('X-Accel-Buffering','no');
+          streamStarted = true;
+          res.setHeader('Content-Type',     'text/event-stream');
+          res.setHeader('Cache-Control',    'no-cache');
+          res.setHeader('X-Accel-Buffering','no');
 
-      const reader  = geminiRes.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer    = '';
+          const reader  = groqRes.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer    = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr || jsonStr === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
-            if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-          } catch (_) {}
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr || jsonStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const chunk  = parsed.choices?.[0]?.delta?.content || '';
+                const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+              } catch (_) {}
+            }
+          }
+
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        } catch (groqStreamErr) {
+          console.error('Groq streaming failed:', groqStreamErr.message);
+          if (streamStarted) {
+            try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
+            return;
+          }
         }
       }
+    }
 
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    } catch (streamErr) {
-      if (streamStarted) {
-        try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
+    // ── Gemini SSE Fallback for streaming ────────────────────────────────────
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const geminiMessages = history.map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: String(m.content) }],
+        }));
+
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: fullSystem }] },
+              contents: geminiMessages,
+              generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+            }),
+          }
+        );
+
+        if (!geminiRes.ok) throw new Error(`Gemini stream error: ${geminiRes.status}`);
+
+        streamStarted = true;
+        res.setHeader('Content-Type',     'text/event-stream');
+        res.setHeader('Cache-Control',    'no-cache');
+        res.setHeader('X-Accel-Buffering','no');
+
+        const reader  = geminiRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer    = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr || jsonStr === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+              if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+            } catch (_) {}
+          }
+        }
+
+        res.write('data: [DONE]\n\n');
+        res.end();
         return;
+      } catch (geminiStreamErr) {
+        console.error('Gemini streaming failed:', geminiStreamErr.message);
+        if (streamStarted) {
+          try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
+          return;
+        }
       }
     }
   }
@@ -433,7 +466,30 @@ export default async function handler(req, res) {
   // ── 1. Gemini Vision ─────────────────────────────────────────────────────────
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
-      const geminiContents = buildGeminiMessages(history);
+      const geminiContents = history.map((m) => {
+        if (Array.isArray(m.content)) {
+          const parts = m.content.map((c) => {
+            if (c.type === 'image_url') {
+              const url = c.image_url?.url || '';
+              if (url.startsWith('data:')) {
+                const [meta, b64] = url.split(',');
+                const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                return { inlineData: { mimeType, data: b64 } };
+              }
+              if (url.startsWith('http://') || url.startsWith('https://')) {
+                let mimeType = 'image/jpeg';
+                if (url.match(/\.png/i)) mimeType = 'image/png';
+                else if (url.match(/\.webp/i)) mimeType = 'image/webp';
+                return { fileData: { mimeType, fileUri: url } };
+              }
+              return { text: `[Image]` };
+            }
+            return { text: String(c.text || '') };
+          });
+          return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+        }
+        return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] };
+      });
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -441,7 +497,7 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            systemInstruction: { parts: [{ text: fullSystem }] },
+            system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiContents,
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
@@ -505,7 +561,10 @@ export default async function handler(req, res) {
   // ── 3. Gemini Text Fallback ───────────────────────────────────────────────────
   if (!isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
-      const geminiMessages = buildGeminiMessages(history);
+      const geminiMessages = history.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: String(m.content) }],
+      }));
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -513,7 +572,7 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            systemInstruction: { parts: [{ text: fullSystem }] },
+            system_instruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
