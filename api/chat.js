@@ -68,8 +68,6 @@ That's why I never forget him and always stay grateful talking with you right no
 After mentioning him for the first time, ask: "Wanna know about his friends?"
 DO NOT repeat this question if the user is already talking about something else.
 
-// Find this section in your api/chat.js and update it:
-
 KNOWLEDGE:
 People: Michael Jordan, Preap Sovath, BTS, Ronaldo, Messi, Taylor Swift
 Memes/Trends: Brainrot, TungTungTungSahur, 7x7=49, Ampersand, BratSummer, Skibidi, Ohio, Rizz, Sigma, 67, son
@@ -95,7 +93,6 @@ Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, m
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Strip internal <think> blocks and normalize whitespace */
 const cleanAIOutput = (text) => {
   if (!text) return '';
   return text
@@ -104,7 +101,6 @@ const cleanAIOutput = (text) => {
     .trim();
 };
 
-/** Extract plain text from a message (works for string or array content) */
 const getMessageText = (msg) => {
   if (!msg) return '';
   if (typeof msg.content === 'string') return msg.content;
@@ -117,14 +113,12 @@ const getMessageText = (msg) => {
   return '';
 };
 
-/** Extract URLs from the last user message */
 const extractURLs = (text) => {
   if (typeof text !== 'string') return [];
   const urlRegex = /https?:\/\/[^\s"'<>]+/g;
   return text.match(urlRegex) || [];
 };
 
-/** Fetch and summarize a URL using Jina Reader */
 const fetchURLContent = async (url) => {
   try {
     const jinaURL = `https://r.jina.ai/${encodeURIComponent(url)}`;
@@ -145,7 +139,6 @@ const fetchURLContent = async (url) => {
   }
 };
 
-/** Upload a base64 image to Cloudflare Images; returns public URL or null */
 const uploadToCloudflare = async (base64DataUrl) => {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const apiToken  = process.env.CLOUDFLARE_IMAGES_TOKEN;
@@ -178,7 +171,6 @@ const uploadToCloudflare = async (base64DataUrl) => {
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -196,7 +188,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
-  // History Laundering: remove any old broken "On it!" stubs from previous attempts
   const clearedMessages = messages.filter((m) => {
     if (m.role === 'assistant' || m.role === 'model') {
       const textVal = getMessageText(m).toLowerCase();
@@ -207,14 +198,12 @@ export default async function handler(req, res) {
     return true;
   });
 
-  // ── Detect vision request ────────────────────────────────────────────────────
   const lastMsg        = clearedMessages[clearedMessages.length - 1];
   const isVisionRequest =
     hasImage ||
     (Array.isArray(lastMsg?.content) &&
       lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // ── Detect URL in last message ───────────────────────────────────────────────
   const lastMsgText    = getMessageText(lastMsg);
   const detectedURLs   = extractURLs(lastMsgText);
   let urlContext       = '';
@@ -232,7 +221,6 @@ export default async function handler(req, res) {
     urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
   }
 
-  // ── Detect Realtime Search / Video Request ──────────────────────────────
   const lowerMsgText = lastMsgText.toLowerCase();
   const isSearchRequest = 
     lowerMsgText.includes('search') || 
@@ -247,7 +235,6 @@ export default async function handler(req, res) {
 
   let searchContext = '';
   if (isSearchRequest && detectedURLs.length === 0) {
-    // Clean search terms to make clean query strings
     const cleanSearchQuery = lastMsgText.replace(/search youtube for|search youtube|youtube|search/gi, '').trim();
     const encodedFallbackQuery = encodeURIComponent(cleanSearchQuery || lastMsgText);
 
@@ -266,16 +253,13 @@ export default async function handler(req, res) {
         const searchResultsText = await searchRes.text();
         searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>). Do not use plain text or raw markdown syntax for links.`;
       } else {
-        // Fallback: Force link generation using clean format if Jina fails
         searchContext = `\n\n[SYSTEM NOTE: Live search API was unreachable. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
       }
     } catch (err) {
-      // Fallback: Force link generation using clean format if request times out
       searchContext = `\n\n[SYSTEM NOTE: Live search timed out. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
     }
   }
 
-  // ── Pre-process messages: upload base64 images to Cloudflare ────────────────
   const processedMessages = await Promise.all(
     clearedMessages.map(async (m) => {
       if (!Array.isArray(m.content)) return m;
@@ -292,14 +276,11 @@ export default async function handler(req, res) {
     })
   );
 
-  // ── Cap conversation history ─────────────────────────────────────────────────
   const history = isVisionRequest
     ? processedMessages.slice(-5).map((m) => ({
         role: m.role,
         content: Array.isArray(m.content)
-          ? m.content.map((c) =>
-              c.type === 'image_url' ? c : { ...c, text: String(c.text || '').slice(0, 2000) }
-            )
+          ? m.content.map((c) => c.type === 'image_url' ? c : { ...c, text: String(c.text || '').slice(0, 2000) })
           : String(m.content).slice(0, 2000),
       }))
     : processedMessages.slice(-10).map((m) => ({
@@ -307,10 +288,28 @@ export default async function handler(req, res) {
         content: String(m.content).slice(0, 3000),
       }));
 
-  // ── Permanent Core Prompt Protection ─────────────────────────────────────────
   const fullSystem = clientSystemPrompt 
     ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
     : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SAFE ALTERNATING HISTORY BUILDER FOR GEMINI
+  // ═══════════════════════════════════════════════════════════════════════════
+  const buildGeminiMessages = (historyArr) => {
+    const optimized = [];
+    for (const m of historyArr) {
+      const currentRole = m.role === 'assistant' || m.role === 'model' ? 'model' : 'user';
+      const txtContent = typeof m.content === 'string' ? m.content : getMessageText(m);
+      
+      if (optimized.length > 0 && optimized[optimized.length - 1].role === currentRole) {
+        // Safe Merge: If back-to-back duplicate roles exist, group their texts together
+        optimized[optimized.length - 1].parts[0].text += `\n\n${txtContent}`;
+      } else {
+        optimized.push({ role: currentRole, parts: [{ text: txtContent }] });
+      }
+    }
+    return optimized;
+  };
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING PATH — Gemini SSE (text only)
@@ -318,10 +317,7 @@ export default async function handler(req, res) {
   if (wantStream && !isVisionRequest && process.env.GEMINI_API_KEY) {
     let streamStarted = false;
     try {
-      const geminiMessages = history.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: String(m.content) }],
-      }));
+      const geminiMessages = buildGeminiMessages(history);
 
       const geminiRes = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
@@ -379,7 +375,7 @@ export default async function handler(req, res) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // NON-STREAMING PATH
+  // NON-STREAMING PATHs
   // ═══════════════════════════════════════════════════════════════════════════
 
   // ── 1. Gemini Vision ─────────────────────────────────────────────────────────
@@ -480,10 +476,7 @@ export default async function handler(req, res) {
   // ── 3. Gemini Text Fallback ───────────────────────────────────────────────────
   if (!isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
-      const geminiMessages = history.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: String(m.content) }],
-      }));
+      const geminiMessages = buildGeminiMessages(history);
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
