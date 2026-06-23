@@ -293,21 +293,55 @@ export default async function handler(req, res) {
     : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SAFE ALTERNATING HISTORY BUILDER FOR GEMINI
+  // SAFE ALTERNATING HISTORY & MULTIMODAL BUILDER FOR GEMINI
   // ═══════════════════════════════════════════════════════════════════════════
   const buildGeminiMessages = (historyArr) => {
     const optimized = [];
     for (const m of historyArr) {
       const currentRole = m.role === 'assistant' || m.role === 'model' ? 'model' : 'user';
-      const txtContent = typeof m.content === 'string' ? m.content : getMessageText(m);
       
-      if (optimized.length > 0 && optimized[optimized.length - 1].role === currentRole) {
-        // Safe Merge: If back-to-back duplicate roles exist, group their texts together
-        optimized[optimized.length - 1].parts[0].text += `\n\n${txtContent}`;
+      let currentParts = [];
+      if (Array.isArray(m.content)) {
+        currentParts = m.content.map((c) => {
+          if (c.type === 'image_url') {
+            const url = c.image_url?.url || '';
+            if (url.startsWith('data:')) {
+              const [meta, b64] = url.split(',');
+              const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+              return { inlineData: { mimeType, data: b64 } };
+            }
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              let mimeType = 'image/jpeg';
+              if (url.match(/\.png/i)) mimeType = 'image/png';
+              else if (url.match(/\.webp/i)) mimeType = 'image/webp';
+              return { fileData: { mimeType, fileUri: url } };
+            }
+            return { text: `[Image]` };
+          }
+          return { text: String(c.text || c.content || '') };
+        });
       } else {
-        optimized.push({ role: currentRole, parts: [{ text: txtContent }] });
+        currentParts = [{ text: String(m.content || '') }];
+      }
+
+      if (optimized.length > 0 && optimized[optimized.length - 1].role === currentRole) {
+        optimized[optimized.length - 1].parts.push(...currentParts);
+      } else {
+        optimized.push({ role: currentRole, parts: currentParts });
       }
     }
+
+    // Fix rule 1: Gemini requires that the context history must always begin with a user turn
+    while (optimized.length > 0 && optimized[0].role === 'model') {
+      optimized.shift();
+    }
+
+    // Clean blank string parts
+    for (const turn of optimized) {
+      turn.parts = turn.parts.filter(p => p.text === undefined || p.text.trim() !== '');
+      if (turn.parts.length === 0) turn.parts = [{ text: '...' }];
+    }
+
     return optimized;
   };
 
@@ -325,7 +359,7 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
+            systemInstruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
@@ -381,30 +415,7 @@ export default async function handler(req, res) {
   // ── 1. Gemini Vision ─────────────────────────────────────────────────────────
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
-      const geminiContents = history.map((m) => {
-        if (Array.isArray(m.content)) {
-          const parts = m.content.map((c) => {
-            if (c.type === 'image_url') {
-              const url = c.image_url?.url || '';
-              if (url.startsWith('data:')) {
-                const [meta, b64] = url.split(',');
-                const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                return { inlineData: { mimeType, data: b64 } };
-              }
-              if (url.startsWith('http://') || url.startsWith('https://')) {
-                let mimeType = 'image/jpeg';
-                if (url.match(/\.png/i)) mimeType = 'image/png';
-                else if (url.match(/\.webp/i)) mimeType = 'image/webp';
-                return { fileData: { mimeType, fileUri: url } };
-              }
-              return { text: `[Image]` };
-            }
-            return { text: String(c.text || '') };
-          });
-          return { role: m.role === 'assistant' ? 'model' : 'user', parts };
-        }
-        return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] };
-      });
+      const geminiContents = buildGeminiMessages(history);
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
@@ -412,7 +423,7 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
+            systemInstruction: { parts: [{ text: fullSystem }] },
             contents: geminiContents,
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
@@ -484,7 +495,7 @@ export default async function handler(req, res) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
+            systemInstruction: { parts: [{ text: fullSystem }] },
             contents: geminiMessages,
             generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
           }),
