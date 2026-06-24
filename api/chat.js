@@ -93,7 +93,6 @@ Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, m
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Strip internal <think> blocks and normalize whitespace */
 const cleanAIOutput = (text) => {
   if (!text) return '';
   return text
@@ -102,7 +101,6 @@ const cleanAIOutput = (text) => {
     .trim();
 };
 
-/** Extract plain text from a message (works for string or array content) */
 const getMessageText = (msg) => {
   if (!msg) return '';
   if (typeof msg.content === 'string') return msg.content;
@@ -115,14 +113,12 @@ const getMessageText = (msg) => {
   return '';
 };
 
-/** Extract URLs from the last user message */
 const extractURLs = (text) => {
   if (typeof text !== 'string') return [];
   const urlRegex = /https?:\/\/[^\s"'<>]+/g;
   return text.match(urlRegex) || [];
 };
 
-/** Fetch and summarize a URL using Jina Reader */
 const fetchURLContent = async (url) => {
   try {
     const jinaURL = `https://r.jina.ai/${encodeURIComponent(url)}`;
@@ -143,7 +139,6 @@ const fetchURLContent = async (url) => {
   }
 };
 
-/** Upload a base64 image to Cloudflare Images; returns public URL or null */
 const uploadToCloudflare = async (base64DataUrl) => {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const apiToken  = process.env.CLOUDFLARE_IMAGES_TOKEN;
@@ -174,9 +169,40 @@ const uploadToCloudflare = async (base64DataUrl) => {
   return null;
 };
 
+// Helpers to securely parse roles and formatting structures across providers
+const formatOpenAIHistory = (systemPrompt, historyArr) => {
+  const formatted = historyArr.map(m => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+  }));
+  return [{ role: 'system', content: systemPrompt }, ...formatted];
+};
+
+const formatGeminiHistory = (historyArr) => {
+  let parts = historyArr.map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ') }]
+  }));
+  
+  parts = parts.filter(p => p.parts[0].text.trim().length > 0);
+
+  while (parts.length > 0 && parts[0].role !== 'user') {
+    parts.shift();
+  }
+
+  const alternated = [];
+  for (const p of parts) {
+    if (alternated.length > 0 && alternated[alternated.length - 1].role === p.role) {
+      alternated[alternated.length - 1].parts[0].text += "\n\n" + p.parts[0].text;
+    } else {
+      alternated.push(p);
+    }
+  }
+  return alternated;
+};
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -194,7 +220,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
-  // History Laundering: remove any old broken "On it!" stubs from previous attempts
   const clearedMessages = messages.filter((m) => {
     if (m.role === 'assistant' || m.role === 'model') {
       const textVal = getMessageText(m).toLowerCase();
@@ -205,14 +230,12 @@ export default async function handler(req, res) {
     return true;
   });
 
-  // ── Detect vision request ────────────────────────────────────────────────────
   const lastMsg        = clearedMessages[clearedMessages.length - 1];
   const isVisionRequest =
     hasImage ||
     (Array.isArray(lastMsg?.content) &&
       lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // ── Detect URL in last message ───────────────────────────────────────────────
   const lastMsgText    = getMessageText(lastMsg);
   const detectedURLs   = extractURLs(lastMsgText);
   let urlContext       = '';
@@ -230,7 +253,6 @@ export default async function handler(req, res) {
     urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
   }
 
-  // ── Detect Realtime Search / Video Request ──────────────────────────────
   const lowerMsgText = lastMsgText.toLowerCase();
   const isSearchRequest = 
     lowerMsgText.includes('search') || 
@@ -270,7 +292,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── Pre-process messages: upload base64 images to Cloudflare ────────────────
   const processedMessages = await Promise.all(
     clearedMessages.map(async (m) => {
       if (!Array.isArray(m.content)) return m;
@@ -287,7 +308,6 @@ export default async function handler(req, res) {
     })
   );
 
-  // ── FIX: Normalize and align chat turns defensively (Merges sequential identical roles)
   const standardizedHistory = [];
   for (const msg of processedMessages) {
     let role = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
@@ -310,30 +330,22 @@ export default async function handler(req, res) {
     }
   }
 
-  // Slice standardized items appropriately to prevent hitting context walls
   const history = standardizedHistory.slice(isVisionRequest ? -5 : -10);
 
-  // ── Permanent Core Prompt Protection ─────────────────────────────────────────
   const fullSystem = clientSystemPrompt 
     ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
     : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STREAMING PATH — Try Groq first, then Gemini SSE (text only)
+  // STREAMING PATH — Covers Groq, Gemini, and OpenRouter natively
   // ═══════════════════════════════════════════════════════════════════════════
   if (wantStream && !isVisionRequest) {
-    let streamStarted = false;
-
-    // Try Groq Streaming first
+    // 1. Try Groq Streaming
     if (process.env.GROQ_API_KEY) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
-          const groqMessages = history.map(m => ({
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
-          }));
-
+          const groqMessages = formatOpenAIHistory(fullSystem, history);
           const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -342,7 +354,7 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
               model,
-              messages: [{ role: 'system', content: fullSystem }, ...groqMessages],
+              messages: groqMessages,
               temperature: 0.75,
               max_tokens: 4096,
               stream: true,
@@ -351,7 +363,6 @@ export default async function handler(req, res) {
 
           if (!groqRes.ok) throw new Error(`Groq status: ${groqRes.status}`);
 
-          streamStarted = true;
           res.setHeader('Content-Type',     'text/event-stream');
           res.setHeader('Cache-Control',    'no-cache');
           res.setHeader('X-Accel-Buffering','no');
@@ -379,86 +390,149 @@ export default async function handler(req, res) {
               } catch (_) {}
             }
           }
-
           res.write('data: [DONE]\n\n');
           res.end();
           return;
         } catch (groqStreamErr) {
-          console.error('Groq stream fallback triggered:', groqStreamErr.message);
-          if (streamStarted) return;
+          console.error('Groq streaming fallback setup:', groqStreamErr.message);
         }
       }
     }
     
-    // Gemini SSE Streaming Fallback
+    // 2. Try Gemini Streaming Fallback
     if (process.env.GEMINI_API_KEY) {
       try {
-        const geminiMessages = history.map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ') }],
-        }));
+        const geminiMessages = formatGeminiHistory(history);
+        if (geminiMessages.length > 0) {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: fullSystem }] },
+                contents: geminiMessages,
+                generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+              }),
+            }
+          );
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: fullSystem }] },
-              contents: geminiMessages,
-              generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
-            }),
+          if (!geminiRes.ok) throw new Error(`Gemini Upstream stream error`);
+
+          res.setHeader('Content-Type',     'text/event-stream');
+          res.setHeader('Cache-Control',    'no-cache');
+          res.setHeader('X-Accel-Buffering','no');
+
+          const reader  = geminiRes.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer    = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr || jsonStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+              } catch (_) {}
+            }
           }
-        );
-
-        if (!geminiRes.ok) throw new Error(`Gemini Upstream stream error`);
-
-        streamStarted = true;
-        res.setHeader('Content-Type',     'text/event-stream');
-        res.setHeader('Cache-Control',    'no-cache');
-        res.setHeader('X-Accel-Buffering','no');
-
-        const reader  = geminiRes.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer    = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop();
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const jsonStr = line.slice(6).trim();
-            if (!jsonStr || jsonStr === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-              const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
-              if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-            } catch (_) {}
-          }
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
         }
-
-        res.write('data: [DONE]\n\n');
-        res.end();
-        return;
       } catch (streamErr) {
-        if (streamStarted) return;
+        console.error('Gemini stream failed:', streamErr.message);
       }
     }
+
+    // 3. Try OpenRouter Streaming Fallback
+    if (process.env.OPENROUTER_API_KEY) {
+      const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
+      for (const model of openRouterModels) {
+        try {
+          const orMessages = formatOpenAIHistory(fullSystem, history);
+          const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: orMessages,
+              temperature: 0.75,
+              max_tokens: 4096,
+              stream: true,
+                }),
+              });
+
+          if (!orRes.ok) throw new Error(`OpenRouter stream status: ${orRes.status}`);
+
+          res.setHeader('Content-Type',     'text/event-stream');
+          res.setHeader('Cache-Control',    'no-cache');
+          res.setHeader('X-Accel-Buffering','no');
+
+          const reader  = orRes.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer    = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr || jsonStr === '[DONE]') continue;
+              try {
+                const parsed = JSON.parse(jsonStr);
+                const chunk  = parsed.choices?.[0]?.delta?.content || '';
+                const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+              } catch (_) {}
+            }
+          }
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        } catch (orStreamErr) {
+          console.error('OpenRouter stream fallback failed:', orStreamErr.message);
+        }
+      }
+    }
+
+    // Fallback error safely wrapped inside an SSE stream block so the frontend decodes it correctly
+    res.setHeader('Content-Type',     'text/event-stream');
+    res.setHeader('Cache-Control',    'no-cache');
+    res.setHeader('X-Accel-Buffering','no');
+    res.write(`data: ${JSON.stringify({ chunk: "⚠️ All streaming providers are currently overloaded. Please send your message again in a brief moment!" })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // NON-STREAMING PATH
+  // NON-STREAMING PATH (Only hit when stream: false or vision modality triggers)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── 1. Gemini Vision ─────────────────────────────────────────────────────────
+  // 1. Gemini Vision
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
-      const geminiContents = await Promise.all(history.map(async (m) => {
+      let geminiContents = await Promise.all(history.map(async (m) => {
+        const role = m.role === 'assistant' ? 'model' : 'user';
         if (Array.isArray(m.content)) {
           const parts = await Promise.all(m.content.map(async (c) => {
             if (c.type === 'image_url') {
@@ -489,53 +563,61 @@ export default async function handler(req, res) {
             }
             return { text: String(c.text || '') };
           }));
-          return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+          return { role, parts };
         }
-        return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] };
+        return { role, parts: [{ text: String(m.content) }] };
       }));
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
-            contents: geminiContents,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
-          }),
-        }
-      );
+      while (geminiContents.length > 0 && geminiContents[0].role !== 'user') {
+        geminiContents.shift();
+      }
 
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        return res.status(200).json({
-          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
-        });
+      const cleanContents = [];
+      for (const turn of geminiContents) {
+        if (cleanContents.length > 0 && cleanContents[cleanContents.length - 1].role === turn.role) {
+          cleanContents[cleanContents.length - 1].parts = [
+            ...cleanContents[cleanContents.length - 1].parts,
+            ...turn.parts
+          ];
+        } else {
+          cleanContents.push(turn);
+        }
+      }
+
+      if (cleanContents.length > 0) {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: fullSystem }] },
+              contents: cleanContents,
+              generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+            }),
+          }
+        );
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return res.status(200).json({
+            choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+          });
+        }
       }
     } catch (err) {}
   }
 
-  // ── 2. Groq Text Fallback ───────────────────────────────────────────────────
+  // 2. Groq Non-Streaming
   if (process.env.GROQ_API_KEY) {
     const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
     for (const model of groqModels) {
       try {
-        const groqHistory = history.map((m) => {
-          if (Array.isArray(m.content)) {
-            return {
-              role: m.role === 'assistant' ? 'assistant' : 'user',
-              content: m.content.map((c) =>
-                c.type === 'image_url' ? { type: 'text', text: '[Image]' } : { type: 'text', text: String(c.text || '') }
-              ),
-            };
-          }
-          return {
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: String(m.content)
-          };
-        });
+        const groqHistory = history.map((m) => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+        }));
 
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
@@ -561,45 +643,43 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── 3. Gemini Text Fallback ───────────────────────────────────────────────────
+  // 3. Gemini Non-Streaming
   if (!isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
-      const geminiMessages = history.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ') }],
-      }));
+      const geminiMessages = formatGeminiHistory(history);
+      if (geminiMessages.length > 0) {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: fullSystem }] },
+              contents: geminiMessages,
+              generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+            }),
+          }
+        );
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
-            contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
-          }),
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return res.status(200).json({
+            choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+          });
         }
-      );
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        return res.status(200).json({
-          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
-        });
       }
     } catch (err) {}
   }
 
-  // ── 4. OpenRouter Final Fallback ─────────────────────────────────────────────
+  // 4. OpenRouter Non-Streaming Final Fallback
   if (process.env.OPENROUTER_API_KEY) {
     const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
     for (const model of openRouterModels) {
       try {
         const orHistory = history.map((m) => ({
           role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: Array.isArray(m.content) ? m.content.map((c) => c.text || '').join(' ') : String(m.content),
+          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
         }));
 
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
