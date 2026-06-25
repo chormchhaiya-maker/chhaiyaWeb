@@ -113,6 +113,11 @@ const getMessageText = (msg) => {
   return '';
 };
 
+// Rough token estimation (4 chars ≈ 1 token)
+const estimateTokens = (text) => {
+  return Math.ceil((text || '').length / 4);
+};
+
 const extractURLs = (text) => {
   if (typeof text !== 'string') return [];
   const urlRegex = /https?:\/\/[^\s"'<>]+/g;
@@ -199,6 +204,31 @@ const formatGeminiHistory = (historyArr) => {
     }
   }
   return alternated;
+};
+
+// Smart history trimming based on estimated token count
+const trimHistoryByTokens = (history, maxTokens = 24000) => {
+  const systemTokens = estimateTokens(BASE_SYSTEM_PROMPT);
+  const availableTokens = maxTokens - systemTokens - 1000; // Reserve 1000 for response
+
+  let totalTokens = 0;
+  const trimmedHistory = [];
+
+  // Start from the most recent messages
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i];
+    const msgText = getMessageText(msg);
+    const msgTokens = estimateTokens(msgText);
+
+    if (totalTokens + msgTokens <= availableTokens) {
+      trimmedHistory.unshift(msg);
+      totalTokens += msgTokens;
+    } else {
+      break;
+    }
+  }
+
+  return trimmedHistory;
 };
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
@@ -330,7 +360,10 @@ export default async function handler(req, res) {
     }
   }
 
-  const history = standardizedHistory.slice(isVisionRequest ? -5 : -10);
+  // INCREASED HISTORY LENGTH: Keep last 40 messages for vision, 60 for regular chat
+  // Then use smart token-based trimming to ensure we don't exceed context limits
+  const initialHistory = standardizedHistory.slice(isVisionRequest ? -40 : -60);
+  const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 20000 : 28000);
 
   const fullSystem = clientSystemPrompt 
     ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
@@ -356,7 +389,7 @@ export default async function handler(req, res) {
               model,
               messages: groqMessages,
               temperature: 0.75,
-              max_tokens: 4096,
+              max_tokens: 8192, // INCREASED from 4096
               stream: true,
             }),
           });
@@ -412,7 +445,7 @@ export default async function handler(req, res) {
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: fullSystem }] },
                 contents: geminiMessages,
-                generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 }, // INCREASED from 4096
               }),
             }
           );
@@ -471,10 +504,10 @@ export default async function handler(req, res) {
               model,
               messages: orMessages,
               temperature: 0.75,
-              max_tokens: 4096,
+              max_tokens: 8192, // INCREASED from 4096
               stream: true,
-                }),
-              });
+            }),
+          });
 
           if (!orRes.ok) throw new Error(`OpenRouter stream status: ${orRes.status}`);
 
@@ -593,7 +626,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               system_instruction: { parts: [{ text: fullSystem }] },
               contents: cleanContents,
-              generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+              generationConfig: { temperature: 0.75, maxOutputTokens: 8192 }, // INCREASED from 4096
             }),
           }
         );
@@ -629,7 +662,7 @@ export default async function handler(req, res) {
             model,
             messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
             temperature: 0.75,
-            max_tokens: 4096,
+            max_tokens: 8192, // INCREASED from 4096
           }),
         });
 
@@ -656,7 +689,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               system_instruction: { parts: [{ text: fullSystem }] },
               contents: geminiMessages,
-              generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
+              generationConfig: { temperature: 0.75, maxOutputTokens: 8192 }, // INCREASED from 4096
             }),
           }
         );
@@ -692,7 +725,7 @@ export default async function handler(req, res) {
             model,
             messages: [{ role: 'system', content: fullSystem }, ...orHistory],
             temperature: 0.75,
-            max_tokens: 4096,
+            max_tokens: 8192, // INCREASED from 4096
           }),
         });
 
