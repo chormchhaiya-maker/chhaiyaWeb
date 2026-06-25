@@ -1,6 +1,6 @@
-// api/chat.js — CC-AI by ChormChhaiya [EVENT-OPTIMIZED VERSION]
+// api/chat.js — CC-AI by ChormChhaiya [EVENT-OPTIMIZED + CODE FIX]
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
-// Optimized for high-traffic events with smart load balancing and queue management
+// Fixed: Code generation no longer breaks follow-up messages
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -160,6 +160,33 @@ const estimateTokens = (text) => {
   return Math.ceil((text || '').length / 4);
 };
 
+// NEW: Compress code blocks in old messages to save tokens
+const compressCodeInMessage = (text) => {
+  if (!text || typeof text !== 'string') return text;
+  
+  // If message contains code blocks, compress them
+  const codeBlockRegex = /```[\s\S]*?```/g;
+  const codeBlocks = text.match(codeBlockRegex);
+  
+  if (codeBlocks && codeBlocks.length > 0) {
+    let compressed = text;
+    codeBlocks.forEach(block => {
+      // Extract language and first/last few lines
+      const lines = block.split('\n');
+      const lang = lines[0].replace('```', '').trim();
+      
+      if (lines.length > 15) {
+        // Keep first 3 and last 3 lines, add summary in middle
+        const summary = `\`\`\`${lang}\n${lines.slice(1, 4).join('\n')}\n... [${lines.length - 8} lines of code omitted] ...\n${lines.slice(-4, -1).join('\n')}\n\`\`\``;
+        compressed = compressed.replace(block, summary);
+      }
+    });
+    return compressed;
+  }
+  
+  return text;
+};
+
 const extractURLs = (text) => {
   if (typeof text !== 'string') return [];
   const urlRegex = /https?:\/\/[^\s"'<>]+/g;
@@ -247,20 +274,47 @@ const formatGeminiHistory = (historyArr) => {
   return alternated;
 };
 
+// IMPROVED: Smart token-based trimming with code compression
 const trimHistoryByTokens = (history, maxTokens = 24000) => {
   const systemTokens = estimateTokens(BASE_SYSTEM_PROMPT);
-  const availableTokens = maxTokens - systemTokens - 1000;
+  const availableTokens = maxTokens - systemTokens - 2000; // Increased reserve for safety
 
   let totalTokens = 0;
   const trimmedHistory = [];
 
-  for (let i = history.length - 1; i >= 0; i--) {
-    const msg = history[i];
+  // Always keep the last 2 messages (current context)
+  const recentMessages = history.slice(-2);
+  const olderMessages = history.slice(0, -2);
+
+  // Add recent messages first (uncompressed)
+  for (const msg of recentMessages) {
     const msgText = getMessageText(msg);
+    const msgTokens = estimateTokens(msgText);
+    trimmedHistory.push(msg);
+    totalTokens += msgTokens;
+  }
+
+  // Add older messages with code compression
+  for (let i = olderMessages.length - 1; i >= 0; i--) {
+    const msg = olderMessages[i];
+    let msgText = getMessageText(msg);
+    
+    // Compress code blocks in older assistant messages
+    if (msg.role === 'assistant' || msg.role === 'model') {
+      msgText = compressCodeInMessage(msgText);
+    }
+    
     const msgTokens = estimateTokens(msgText);
 
     if (totalTokens + msgTokens <= availableTokens) {
-      trimmedHistory.unshift(msg);
+      // Create compressed version of the message
+      const compressedMsg = {
+        ...msg,
+        content: typeof msg.content === 'string' 
+          ? (msg.role === 'assistant' || msg.role === 'model' ? compressCodeInMessage(msg.content) : msg.content)
+          : msg.content
+      };
+      trimmedHistory.unshift(compressedMsg);
       totalTokens += msgTokens;
     } else {
       break;
@@ -415,7 +469,7 @@ export default async function handler(req, res) {
   }
 
   const initialHistory = standardizedHistory.slice(isVisionRequest ? -40 : -60);
-  const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 20000 : 28000);
+  const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 20000 : 30000); // Increased to 30k for better code handling
 
   const fullSystem = clientSystemPrompt 
     ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
