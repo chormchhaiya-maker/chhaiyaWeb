@@ -1,5 +1,6 @@
-// api/chat.js — CC-AI by ChormChhaiya
+// api/chat.js — CC-AI by ChormChhaiya [EVENT-OPTIMIZED VERSION]
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
+// Optimized for high-traffic events with smart load balancing and queue management
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -56,10 +57,10 @@ REALTIME SEARCH & VIDEOS (CRITICAL RULES):
 
 FRIEND LIST (Use exactly these lines when asked):
 _ Ah Kang: The funny guy who always brings the laughs.
-_ Ah Reach: The one yaxy loves the most — he always pays for food and drinks, that's why my creator likes him.
+_ Ah Reach: The one yaxy loves the most — he always pays for food and drinks, that's why.
 _ Ah Nak: The only one gooning 100 times/day, even yaxy can't stop him.
 _ Ah Rith: The official code tester, W to him 😁💫🌟
-_ Ah Thi: The most handsome guy in the group... but my creator the better version. 😎
+_ Ah Thi: The most handsome guy in the group... but CC-AI is the upgraded version 😎
 
 CREATOR INFO:
 If asked about the creator, say:
@@ -91,6 +92,48 @@ MAIN GOAL:
 Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, modern, futuristic, and fun to talk with.
 `.trim();
 
+// ── Rate Limiting & Load Balancing ────────────────────────────────────────────
+let providerStats = {
+  groq: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false },
+  gemini: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false },
+  openrouter: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false }
+};
+
+const RATE_LIMITS = {
+  groq: { maxPerMinute: 25, cooldownTime: 3000 },
+  gemini: { maxPerMinute: 12, cooldownTime: 5000 },
+  openrouter: { maxPerMinute: 18, cooldownTime: 4000 }
+};
+
+const resetProviderStats = (provider) => {
+  const now = Date.now();
+  if (now - providerStats[provider].lastReset > 60000) {
+    providerStats[provider].requests = 0;
+    providerStats[provider].lastReset = now;
+  }
+};
+
+const canUseProvider = (provider) => {
+  resetProviderStats(provider);
+  const stats = providerStats[provider];
+  if (stats.cooldown) return false;
+  return stats.requests < RATE_LIMITS[provider].maxPerMinute;
+};
+
+const recordProviderUse = (provider, success = true) => {
+  providerStats[provider].requests++;
+  if (!success) {
+    providerStats[provider].failures++;
+    if (providerStats[provider].failures >= 3) {
+      providerStats[provider].cooldown = true;
+      setTimeout(() => {
+        providerStats[provider].cooldown = false;
+        providerStats[provider].failures = 0;
+      }, RATE_LIMITS[provider].cooldownTime);
+    }
+  }
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const cleanAIOutput = (text) => {
@@ -113,7 +156,6 @@ const getMessageText = (msg) => {
   return '';
 };
 
-// Rough token estimation (4 chars ≈ 1 token)
 const estimateTokens = (text) => {
   return Math.ceil((text || '').length / 4);
 };
@@ -174,7 +216,6 @@ const uploadToCloudflare = async (base64DataUrl) => {
   return null;
 };
 
-// Helpers to securely parse roles and formatting structures across providers
 const formatOpenAIHistory = (systemPrompt, historyArr) => {
   const formatted = historyArr.map(m => ({
     role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -206,15 +247,13 @@ const formatGeminiHistory = (historyArr) => {
   return alternated;
 };
 
-// Smart history trimming based on estimated token count
 const trimHistoryByTokens = (history, maxTokens = 24000) => {
   const systemTokens = estimateTokens(BASE_SYSTEM_PROMPT);
-  const availableTokens = maxTokens - systemTokens - 1000; // Reserve 1000 for response
+  const availableTokens = maxTokens - systemTokens - 1000;
 
   let totalTokens = 0;
   const trimmedHistory = [];
 
-  // Start from the most recent messages
   for (let i = history.length - 1; i >= 0; i--) {
     const msg = history[i];
     const msgText = getMessageText(msg);
@@ -231,6 +270,19 @@ const trimHistoryByTokens = (history, maxTokens = 24000) => {
   return trimmedHistory;
 };
 
+// ── Retry Logic with Smart Fallback ───────────────────────────────────────────
+const retryWithExponentialBackoff = async (fn, maxRetries = 2, baseDelay = 1000) => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === maxRetries - 1) throw err;
+      const delay = baseDelay * Math.pow(2, i);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
@@ -238,6 +290,8 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')    return res.status(405).end();
+
+  const startTime = Date.now();
 
   const {
     messages,
@@ -360,8 +414,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // INCREASED HISTORY LENGTH: Keep last 40 messages for vision, 60 for regular chat
-  // Then use smart token-based trimming to ensure we don't exceed context limits
   const initialHistory = standardizedHistory.slice(isVisionRequest ? -40 : -60);
   const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 20000 : 28000);
 
@@ -370,28 +422,31 @@ export default async function handler(req, res) {
     : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STREAMING PATH — Covers Groq, Gemini, and OpenRouter natively
+  // STREAMING PATH — Load-balanced across providers
   // ═══════════════════════════════════════════════════════════════════════════
   if (wantStream && !isVisionRequest) {
-    // 1. Try Groq Streaming
-    if (process.env.GROQ_API_KEY) {
+    // Try Groq Streaming with load balancing
+    if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
+          recordProviderUse('groq', true);
           const groqMessages = formatOpenAIHistory(fullSystem, history);
-          const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: groqMessages,
-              temperature: 0.75,
-              max_tokens: 8192, // INCREASED from 4096
-              stream: true,
-            }),
+          const groqRes = await retryWithExponentialBackoff(async () => {
+            return await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: groqMessages,
+                temperature: 0.75,
+                max_tokens: 8192,
+                stream: true,
+              }),
+            });
           });
 
           if (!groqRes.ok) throw new Error(`Groq status: ${groqRes.status}`);
@@ -425,32 +480,37 @@ export default async function handler(req, res) {
           }
           res.write('data: [DONE]\n\n');
           res.end();
+          console.log(`✅ Groq stream success (${Date.now() - startTime}ms)`);
           return;
         } catch (groqStreamErr) {
-          console.error('Groq streaming fallback setup:', groqStreamErr.message);
+          recordProviderUse('groq', false);
+          console.error('Groq stream failed, trying next provider:', groqStreamErr.message);
         }
       }
     }
     
-    // 2. Try Gemini Streaming Fallback
-    if (process.env.GEMINI_API_KEY) {
+    // Try Gemini Streaming Fallback
+    if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
       try {
+        recordProviderUse('gemini', true);
         const geminiMessages = formatGeminiHistory(history);
         if (geminiMessages.length > 0) {
-          const geminiRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: fullSystem }] },
-                contents: geminiMessages,
-                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 }, // INCREASED from 4096
-              }),
-            }
-          );
+          const geminiRes = await retryWithExponentialBackoff(async () => {
+            return await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  system_instruction: { parts: [{ text: fullSystem }] },
+                  contents: geminiMessages,
+                  generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+                }),
+              }
+            );
+          });
 
-          if (!geminiRes.ok) throw new Error(`Gemini Upstream stream error`);
+          if (!geminiRes.ok) throw new Error(`Gemini stream error`);
 
           res.setHeader('Content-Type',     'text/event-stream');
           res.setHeader('Cache-Control',    'no-cache');
@@ -481,32 +541,37 @@ export default async function handler(req, res) {
           }
           res.write('data: [DONE]\n\n');
           res.end();
+          console.log(`✅ Gemini stream success (${Date.now() - startTime}ms)`);
           return;
         }
       } catch (streamErr) {
-        console.error('Gemini stream failed:', streamErr.message);
+        recordProviderUse('gemini', false);
+        console.error('Gemini stream failed, trying next provider:', streamErr.message);
       }
     }
 
-    // 3. Try OpenRouter Streaming Fallback
-    if (process.env.OPENROUTER_API_KEY) {
+    // Try OpenRouter Streaming Fallback
+    if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
       const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
       for (const model of openRouterModels) {
         try {
+          recordProviderUse('openrouter', true);
           const orMessages = formatOpenAIHistory(fullSystem, history);
-          const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: orMessages,
-              temperature: 0.75,
-              max_tokens: 8192, // INCREASED from 4096
-              stream: true,
-            }),
+          const orRes = await retryWithExponentialBackoff(async () => {
+            return await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: orMessages,
+                temperature: 0.75,
+                max_tokens: 8192,
+                stream: true,
+              }),
+            });
           });
 
           if (!orRes.ok) throw new Error(`OpenRouter stream status: ${orRes.status}`);
@@ -540,30 +605,34 @@ export default async function handler(req, res) {
           }
           res.write('data: [DONE]\n\n');
           res.end();
+          console.log(`✅ OpenRouter stream success (${Date.now() - startTime}ms)`);
           return;
         } catch (orStreamErr) {
-          console.error('OpenRouter stream fallback failed:', orStreamErr.message);
+          recordProviderUse('openrouter', false);
+          console.error('OpenRouter stream failed:', orStreamErr.message);
         }
       }
     }
 
-    // Fallback error safely wrapped inside an SSE stream block so the frontend decodes it correctly
+    // All providers busy or failed - friendly event message
     res.setHeader('Content-Type',     'text/event-stream');
     res.setHeader('Cache-Control',    'no-cache');
     res.setHeader('X-Accel-Buffering','no');
-    res.write(`data: ${JSON.stringify({ chunk: "⚠️ All streaming providers are currently overloaded. Please send your message again in a brief moment!" })}\n\n`);
+    res.write(`data: ${JSON.stringify({ chunk: "🔥 Wow! CC-AI is getting lots of love right now! So many people testing me at the event! 😄\n\nGive me 3-5 seconds and send your message again - I'll be ready for you! 💪✨" })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
+    console.log(`⚠️ All providers busy (${Date.now() - startTime}ms)`);
     return;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // NON-STREAMING PATH (Only hit when stream: false or vision modality triggers)
+  // NON-STREAMING PATH
   // ═══════════════════════════════════════════════════════════════════════════
 
   // 1. Gemini Vision
-  if (isVisionRequest && process.env.GEMINI_API_KEY) {
+  if (isVisionRequest && process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
     try {
+      recordProviderUse('gemini', true);
       let geminiContents = await Promise.all(history.map(async (m) => {
         const role = m.role === 'assistant' ? 'model' : 'user';
         if (Array.isArray(m.content)) {
@@ -618,126 +687,156 @@ export default async function handler(req, res) {
       }
 
       if (cleanContents.length > 0) {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: fullSystem }] },
-              contents: cleanContents,
-              generationConfig: { temperature: 0.75, maxOutputTokens: 8192 }, // INCREASED from 4096
-            }),
-          }
-        );
+        const response = await retryWithExponentialBackoff(async () => {
+          return await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: fullSystem }] },
+                contents: cleanContents,
+                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+              }),
+            }
+          );
+        });
 
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
+          console.log(`✅ Gemini vision success (${Date.now() - startTime}ms)`);
           return res.status(200).json({
             choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
           });
         }
       }
-    } catch (err) {}
+    } catch (err) {
+      recordProviderUse('gemini', false);
+      console.error('Gemini vision failed:', err.message);
+    }
   }
 
   // 2. Groq Non-Streaming
-  if (process.env.GROQ_API_KEY) {
+  if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
     const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
     for (const model of groqModels) {
       try {
+        recordProviderUse('groq', true);
         const groqHistory = history.map((m) => ({
           role: m.role === 'assistant' ? 'assistant' : 'user',
           content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
         }));
 
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
-            temperature: 0.75,
-            max_tokens: 8192, // INCREASED from 4096
-          }),
+        const response = await retryWithExponentialBackoff(async () => {
+          return await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+              temperature: 0.75,
+              max_tokens: 8192,
+            }),
+          });
         });
 
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
+          console.log(`✅ Groq success (${Date.now() - startTime}ms)`);
           return res.status(200).json(data);
         }
-      } catch (err) {}
+      } catch (err) {
+        recordProviderUse('groq', false);
+        console.error('Groq failed:', err.message);
+      }
     }
   }
 
   // 3. Gemini Non-Streaming
-  if (!isVisionRequest && process.env.GEMINI_API_KEY) {
+  if (!isVisionRequest && process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
     try {
+      recordProviderUse('gemini', true);
       const geminiMessages = formatGeminiHistory(history);
       if (geminiMessages.length > 0) {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: fullSystem }] },
-              contents: geminiMessages,
-              generationConfig: { temperature: 0.75, maxOutputTokens: 8192 }, // INCREASED from 4096
-            }),
-          }
-        );
+        const response = await retryWithExponentialBackoff(async () => {
+          return await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: fullSystem }] },
+                contents: geminiMessages,
+                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+              }),
+            }
+          );
+        });
 
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
+          console.log(`✅ Gemini success (${Date.now() - startTime}ms)`);
           return res.status(200).json({
             choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
           });
         }
       }
-    } catch (err) {}
+    } catch (err) {
+      recordProviderUse('gemini', false);
+      console.error('Gemini failed:', err.message);
+    }
   }
 
   // 4. OpenRouter Non-Streaming Final Fallback
-  if (process.env.OPENROUTER_API_KEY) {
+  if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
     const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
     for (const model of openRouterModels) {
       try {
+        recordProviderUse('openrouter', true);
         const orHistory = history.map((m) => ({
           role: m.role === 'assistant' ? 'assistant' : 'user',
           content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
         }));
 
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-            temperature: 0.75,
-            max_tokens: 8192, // INCREASED from 4096
-          }),
+        const response = await retryWithExponentialBackoff(async () => {
+          return await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'system', content: fullSystem }, ...orHistory],
+              temperature: 0.75,
+              max_tokens: 8192,
+            }),
+          });
         });
 
         const data = await response.json();
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           data.choices[0].message.content = cleanAIOutput(content);
+          console.log(`✅ OpenRouter success (${Date.now() - startTime}ms)`);
           return res.status(200).json(data);
         }
-      } catch (err) {}
+      } catch (err) {
+        recordProviderUse('openrouter', false);
+        console.error('OpenRouter failed:', err.message);
+      }
     }
   }
 
-  return res.status(500).json({ error: 'All AI providers failed. Check server logs for details.' });
+  console.log(`❌ All providers failed (${Date.now() - startTime}ms)`);
+  return res.status(503).json({ 
+    error: '🔥 CC-AI is super popular right now at the event! Wait 3-5 seconds and try again! 💪✨' 
+  });
 }
