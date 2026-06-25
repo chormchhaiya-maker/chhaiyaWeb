@@ -1,6 +1,6 @@
-// api/chat.js — CC-AI by ChormChhaiya [EVENT-OPTIMIZED + CODE FIX]
+// api/chat.js — CC-AI by ChormChhaiya [ULTIMATE FIX - CODE GENERATION STABLE]
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
-// Fixed: Code generation no longer breaks follow-up messages
+// Fixed: Code generation requests no longer error out
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -160,24 +160,21 @@ const estimateTokens = (text) => {
   return Math.ceil((text || '').length / 4);
 };
 
-// NEW: Compress code blocks in old messages to save tokens
+// Compress code blocks in old messages to save tokens
 const compressCodeInMessage = (text) => {
   if (!text || typeof text !== 'string') return text;
   
-  // If message contains code blocks, compress them
   const codeBlockRegex = /```[\s\S]*?```/g;
   const codeBlocks = text.match(codeBlockRegex);
   
   if (codeBlocks && codeBlocks.length > 0) {
     let compressed = text;
     codeBlocks.forEach(block => {
-      // Extract language and first/last few lines
       const lines = block.split('\n');
       const lang = lines[0].replace('```', '').trim();
       
       if (lines.length > 15) {
-        // Keep first 3 and last 3 lines, add summary in middle
-        const summary = `\`\`\`${lang}\n${lines.slice(1, 4).join('\n')}\n... [${lines.length - 8} lines of code omitted] ...\n${lines.slice(-4, -1).join('\n')}\n\`\`\``;
+        const summary = `\`\`\`${lang}\n${lines.slice(1, 4).join('\n')}\n... [code omitted] ...\n${lines.slice(-4, -1).join('\n')}\n\`\`\``;
         compressed = compressed.replace(block, summary);
       }
     });
@@ -274,19 +271,20 @@ const formatGeminiHistory = (historyArr) => {
   return alternated;
 };
 
-// IMPROVED: Smart token-based trimming with code compression
-const trimHistoryByTokens = (history, maxTokens = 24000) => {
+// Smart token-based trimming with code compression
+const trimHistoryByTokens = (history, maxTokens = 22000, isCodeRequest = false) => {
   const systemTokens = estimateTokens(BASE_SYSTEM_PROMPT);
-  const availableTokens = maxTokens - systemTokens - 2000; // Increased reserve for safety
+  // Leave MORE room for code generation responses
+  const reserveTokens = isCodeRequest ? 4000 : 2000;
+  const availableTokens = maxTokens - systemTokens - reserveTokens;
 
   let totalTokens = 0;
   const trimmedHistory = [];
 
-  // Always keep the last 2 messages (current context)
+  // Keep last 2 messages uncompressed
   const recentMessages = history.slice(-2);
   const olderMessages = history.slice(0, -2);
 
-  // Add recent messages first (uncompressed)
   for (const msg of recentMessages) {
     const msgText = getMessageText(msg);
     const msgTokens = estimateTokens(msgText);
@@ -294,12 +292,11 @@ const trimHistoryByTokens = (history, maxTokens = 24000) => {
     totalTokens += msgTokens;
   }
 
-  // Add older messages with code compression
+  // Add older messages with compression
   for (let i = olderMessages.length - 1; i >= 0; i--) {
     const msg = olderMessages[i];
     let msgText = getMessageText(msg);
     
-    // Compress code blocks in older assistant messages
     if (msg.role === 'assistant' || msg.role === 'model') {
       msgText = compressCodeInMessage(msgText);
     }
@@ -307,7 +304,6 @@ const trimHistoryByTokens = (history, maxTokens = 24000) => {
     const msgTokens = estimateTokens(msgText);
 
     if (totalTokens + msgTokens <= availableTokens) {
-      // Create compressed version of the message
       const compressedMsg = {
         ...msg,
         content: typeof msg.content === 'string' 
@@ -324,7 +320,7 @@ const trimHistoryByTokens = (history, maxTokens = 24000) => {
   return trimmedHistory;
 };
 
-// ── Retry Logic with Smart Fallback ───────────────────────────────────────────
+// Retry with exponential backoff
 const retryWithExponentialBackoff = async (fn, maxRetries = 2, baseDelay = 1000) => {
   for (let i = 0; i < maxRetries; i++) {
     try {
@@ -339,6 +335,7 @@ const retryWithExponentialBackoff = async (fn, maxRetries = 2, baseDelay = 1000)
 
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin',  '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -347,146 +344,451 @@ export default async function handler(req, res) {
 
   const startTime = Date.now();
 
-  const {
-    messages,
-    systemPrompt: clientSystemPrompt,
-    hasImage,
-    stream: wantStream,
-  } = req.body || {};
+  try {
+    const {
+      messages,
+      systemPrompt: clientSystemPrompt,
+      hasImage,
+      stream: wantStream,
+    } = req.body || {};
 
-  if (!messages || !Array.isArray(messages)) {
-    return res.status(400).json({ error: 'messages array is required' });
-  }
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array is required' });
+    }
 
-  const clearedMessages = messages.filter((m) => {
-    if (m.role === 'assistant' || m.role === 'model') {
-      const textVal = getMessageText(m).toLowerCase();
-      if (textVal.includes('on it') && textVal.length < 65) {
-        return false;
+    const clearedMessages = messages.filter((m) => {
+      if (m.role === 'assistant' || m.role === 'model') {
+        const textVal = getMessageText(m).toLowerCase();
+        if (textVal.includes('on it') && textVal.length < 65) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const lastMsg        = clearedMessages[clearedMessages.length - 1];
+    const isVisionRequest =
+      hasImage ||
+      (Array.isArray(lastMsg?.content) &&
+        lastMsg.content.some((c) => c.type === 'image_url'));
+
+    const lastMsgText    = getMessageText(lastMsg);
+    
+    // Detect if user is requesting code generation
+    const isCodeRequest = /\b(code|html|css|javascript|website|page|app|create|make|build|generate)\b/i.test(lastMsgText);
+    
+    const detectedURLs   = extractURLs(lastMsgText);
+    let urlContext       = '';
+
+    if (detectedURLs.length > 0) {
+      const fetched = await Promise.all(detectedURLs.map(fetchURLContent));
+      const results = detectedURLs
+        .map((url, i) =>
+          fetched[i]
+            ? `[URL: ${url}]\n${fetched[i]}`
+            : `[URL: ${url}]\nFailed to retrieve content. It may be private or unreachable.`
+        )
+        .join('\n\n---\n\n');
+
+      urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
+    }
+
+    const lowerMsgText = lastMsgText.toLowerCase();
+    const isSearchRequest = 
+      lowerMsgText.includes('search') || 
+      lowerMsgText.includes('find') || 
+      lowerMsgText.includes('video') || 
+      lowerMsgText.includes('tutorial') || 
+      lowerMsgText.includes('youtube') || 
+      lowerMsgText.includes('latest') || 
+      lowerMsgText.includes('how to') ||
+      lowerMsgText.includes('what is') ||
+      lowerMsgText.includes('realtime');
+
+    let searchContext = '';
+    if (isSearchRequest && detectedURLs.length === 0) {
+      const cleanSearchQuery = lastMsgText.replace(/search youtube for|search youtube|youtube|search/gi, '').trim();
+      const encodedFallbackQuery = encodeURIComponent(cleanSearchQuery || lastMsgText);
+
+      try {
+        const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const searchRes = await fetch(jinaSearchURL, {
+          headers: { 'Accept': 'text/plain' },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (searchRes.ok) {
+          const searchResultsText = await searchRes.text();
+          searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>). Do not use plain text or raw markdown syntax for links.`;
+        } else {
+          searchContext = `\n\n[SYSTEM NOTE: Live search API was unreachable. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
+        }
+      } catch (err) {
+        searchContext = `\n\n[SYSTEM NOTE: Live search timed out. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
       }
     }
-    return true;
-  });
 
-  const lastMsg        = clearedMessages[clearedMessages.length - 1];
-  const isVisionRequest =
-    hasImage ||
-    (Array.isArray(lastMsg?.content) &&
-      lastMsg.content.some((c) => c.type === 'image_url'));
+    const processedMessages = await Promise.all(
+      clearedMessages.map(async (m) => {
+        if (!Array.isArray(m.content)) return m;
+        const newContent = await Promise.all(
+          m.content.map(async (c) => {
+            if (c.type === 'image_url' && c.image_url?.url?.startsWith('data:')) {
+              const publicUrl = await uploadToCloudflare(c.image_url.url);
+              if (publicUrl) return { type: 'image_url', image_url: { url: publicUrl } };
+            }
+            return c;
+          })
+        );
+        return { ...m, content: newContent };
+      })
+    );
 
-  const lastMsgText    = getMessageText(lastMsg);
-  const detectedURLs   = extractURLs(lastMsgText);
-  let urlContext       = '';
+    const standardizedHistory = [];
+    for (const msg of processedMessages) {
+      let role = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
+      let textContent = getMessageText(msg);
 
-  if (detectedURLs.length > 0) {
-    const fetched = await Promise.all(detectedURLs.map(fetchURLContent));
-    const results = detectedURLs
-      .map((url, i) =>
-        fetched[i]
-          ? `[URL: ${url}]\n${fetched[i]}`
-          : `[URL: ${url}]\nFailed to retrieve content. It may be private or unreachable.`
-      )
-      .join('\n\n---\n\n');
-
-    urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
-  }
-
-  const lowerMsgText = lastMsgText.toLowerCase();
-  const isSearchRequest = 
-    lowerMsgText.includes('search') || 
-    lowerMsgText.includes('find') || 
-    lowerMsgText.includes('video') || 
-    lowerMsgText.includes('tutorial') || 
-    lowerMsgText.includes('youtube') || 
-    lowerMsgText.includes('latest') || 
-    lowerMsgText.includes('how to') ||
-    lowerMsgText.includes('what is') ||
-    lowerMsgText.includes('realtime');
-
-  let searchContext = '';
-  if (isSearchRequest && detectedURLs.length === 0) {
-    const cleanSearchQuery = lastMsgText.replace(/search youtube for|search youtube|youtube|search/gi, '').trim();
-    const encodedFallbackQuery = encodeURIComponent(cleanSearchQuery || lastMsgText);
-
-    try {
-      const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
-
-      const searchRes = await fetch(jinaSearchURL, {
-        headers: { 'Accept': 'text/plain' },
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (searchRes.ok) {
-        const searchResultsText = await searchRes.text();
-        searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3500)}\n=== END OF LIVE SEARCH RESULTS ===\n\nINSTRUCTION: Formulate a complete tutorial guide instantly based on this data. Print any discovered video URLs or source links at the bottom. You MUST use valid HTML anchor tags for all links (e.g., <a href="URL" target="_blank" style="color: #3b82f6; text-decoration: underline;">Watch Video Here</a>). Do not use plain text or raw markdown syntax for links.`;
+      if (standardizedHistory.length > 0 && standardizedHistory[standardizedHistory.length - 1].role === role) {
+        const prevTurn = standardizedHistory[standardizedHistory.length - 1];
+        if (Array.isArray(prevTurn.content) || Array.isArray(msg.content)) {
+          const currentParts = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: textContent }];
+          const prevParts = Array.isArray(prevTurn.content) ? prevTurn.content : [{ type: 'text', text: String(prevTurn.content) }];
+          prevTurn.content = [...prevParts, ...currentParts];
+        } else {
+          prevTurn.content = String(prevTurn.content) + "\n\n" + textContent;
+        }
       } else {
-        searchContext = `\n\n[SYSTEM NOTE: Live search API was unreachable. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
+        standardizedHistory.push({
+          role,
+          content: Array.isArray(msg.content) ? msg.content : textContent
+        });
       }
-    } catch (err) {
-      searchContext = `\n\n[SYSTEM NOTE: Live search timed out. You MUST construct a direct YouTube search query link yourself using this exact HTML template: <a href="https://www.youtube.com/results?search_query=${encodedFallbackQuery}" target="_blank" style="color: #3b82f6; text-decoration: underline; font-weight: bold;">Click Here to Watch on YouTube</a>. Write a full helpful response based on your own knowledge and include this constructed link clearly visible at the bottom.]`;
     }
-  }
 
-  const processedMessages = await Promise.all(
-    clearedMessages.map(async (m) => {
-      if (!Array.isArray(m.content)) return m;
-      const newContent = await Promise.all(
-        m.content.map(async (c) => {
-          if (c.type === 'image_url' && c.image_url?.url?.startsWith('data:')) {
-            const publicUrl = await uploadToCloudflare(c.image_url.url);
-            if (publicUrl) return { type: 'image_url', image_url: { url: publicUrl } };
+    // Reduce history more aggressively for code requests
+    const historyLimit = isCodeRequest ? 30 : (isVisionRequest ? 40 : 60);
+    const tokenBudget = isCodeRequest ? 22000 : (isVisionRequest ? 20000 : 28000);
+    
+    const initialHistory = standardizedHistory.slice(-historyLimit);
+    const history = trimHistoryByTokens(initialHistory, tokenBudget, isCodeRequest);
+
+    const fullSystem = clientSystemPrompt 
+      ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
+      : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // STREAMING PATH
+    // ═══════════════════════════════════════════════════════════════════════════
+    if (wantStream && !isVisionRequest) {
+      // Try Groq Streaming
+      if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
+        const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+        for (const model of groqModels) {
+          try {
+            recordProviderUse('groq', true);
+            const groqMessages = formatOpenAIHistory(fullSystem, history);
+            const groqRes = await retryWithExponentialBackoff(async () => {
+              return await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+                },
+                body: JSON.stringify({
+                  model,
+                  messages: groqMessages,
+                  temperature: 0.75,
+                  max_tokens: 8192,
+                  stream: true,
+                }),
+              });
+            });
+
+            if (!groqRes.ok) throw new Error(`Groq status: ${groqRes.status}`);
+
+            res.setHeader('Content-Type',     'text/event-stream');
+            res.setHeader('Cache-Control',    'no-cache');
+            res.setHeader('X-Accel-Buffering','no');
+
+            const reader  = groqRes.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer    = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop();
+
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr || jsonStr === '[DONE]') continue;
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  const chunk  = parsed.choices?.[0]?.delta?.content || '';
+                  const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                  if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+                } catch (_) {}
+              }
+            }
+            res.write('data: [DONE]\n\n');
+            res.end();
+            console.log(`✅ Groq stream success (${Date.now() - startTime}ms)`);
+            return;
+          } catch (groqStreamErr) {
+            recordProviderUse('groq', false);
+            console.error('Groq stream failed:', groqStreamErr.message);
           }
-          return c;
-        })
-      );
-      return { ...m, content: newContent };
-    })
-  );
-
-  const standardizedHistory = [];
-  for (const msg of processedMessages) {
-    let role = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
-    let textContent = getMessageText(msg);
-
-    if (standardizedHistory.length > 0 && standardizedHistory[standardizedHistory.length - 1].role === role) {
-      const prevTurn = standardizedHistory[standardizedHistory.length - 1];
-      if (Array.isArray(prevTurn.content) || Array.isArray(msg.content)) {
-        const currentParts = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: textContent }];
-        const prevParts = Array.isArray(prevTurn.content) ? prevTurn.content : [{ type: 'text', text: String(prevTurn.content) }];
-        prevTurn.content = [...prevParts, ...currentParts];
-      } else {
-        prevTurn.content = String(prevTurn.content) + "\n\n" + textContent;
+        }
       }
-    } else {
-      standardizedHistory.push({
-        role,
-        content: Array.isArray(msg.content) ? msg.content : textContent
-      });
+      
+      // Try Gemini Streaming
+      if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
+        try {
+          recordProviderUse('gemini', true);
+          const geminiMessages = formatGeminiHistory(history);
+          if (geminiMessages.length > 0) {
+            const geminiRes = await retryWithExponentialBackoff(async () => {
+              return await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    system_instruction: { parts: [{ text: fullSystem }] },
+                    contents: geminiMessages,
+                    generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+                  }),
+                }
+              );
+            });
+
+            if (!geminiRes.ok) throw new Error(`Gemini stream error`);
+
+            res.setHeader('Content-Type',     'text/event-stream');
+            res.setHeader('Cache-Control',    'no-cache');
+            res.setHeader('X-Accel-Buffering','no');
+
+            const reader  = geminiRes.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer    = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop();
+
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr || jsonStr === '[DONE]') continue;
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                  const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                  if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+                } catch (_) {}
+              }
+            }
+            res.write('data: [DONE]\n\n');
+            res.end();
+            console.log(`✅ Gemini stream success (${Date.now() - startTime}ms)`);
+            return;
+          }
+        } catch (streamErr) {
+          recordProviderUse('gemini', false);
+          console.error('Gemini stream failed:', streamErr.message);
+        }
+      }
+
+      // Try OpenRouter Streaming
+      if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
+        const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
+        for (const model of openRouterModels) {
+          try {
+            recordProviderUse('openrouter', true);
+            const orMessages = formatOpenAIHistory(fullSystem, history);
+            const orRes = await retryWithExponentialBackoff(async () => {
+              return await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                },
+                body: JSON.stringify({
+                  model,
+                  messages: orMessages,
+                  temperature: 0.75,
+                  max_tokens: 8192,
+                  stream: true,
+                }),
+              });
+            });
+
+            if (!orRes.ok) throw new Error(`OpenRouter stream status: ${orRes.status}`);
+
+            res.setHeader('Content-Type',     'text/event-stream');
+            res.setHeader('Cache-Control',    'no-cache');
+            res.setHeader('X-Accel-Buffering','no');
+
+            const reader  = orRes.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer    = '';
+
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split('\n');
+              buffer = lines.pop();
+
+              for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const jsonStr = line.slice(6).trim();
+                if (!jsonStr || jsonStr === '[DONE]') continue;
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  const chunk  = parsed.choices?.[0]?.delta?.content || '';
+                  const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                  if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+                } catch (_) {}
+              }
+            }
+            res.write('data: [DONE]\n\n');
+            res.end();
+            console.log(`✅ OpenRouter stream success (${Date.now() - startTime}ms)`);
+            return;
+          } catch (orStreamErr) {
+            recordProviderUse('openrouter', false);
+            console.error('OpenRouter stream failed:', orStreamErr.message);
+          }
+        }
+      }
+
+      // All providers busy
+      res.setHeader('Content-Type',     'text/event-stream');
+      res.setHeader('Cache-Control',    'no-cache');
+      res.setHeader('X-Accel-Buffering','no');
+      res.write(`data: ${JSON.stringify({ chunk: "🔥 Wow! CC-AI is getting lots of love right now! So many people testing me at the event! 😄\n\nGive me 3-5 seconds and send your message again - I'll be ready for you! 💪✨" })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+      console.log(`⚠️ All providers busy (${Date.now() - startTime}ms)`);
+      return;
     }
-  }
 
-  const initialHistory = standardizedHistory.slice(isVisionRequest ? -40 : -60);
-  const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 20000 : 30000); // Increased to 30k for better code handling
+    // ═══════════════════════════════════════════════════════════════════════════
+    // NON-STREAMING PATH
+    // ═══════════════════════════════════════════════════════════════════════════
 
-  const fullSystem = clientSystemPrompt 
-    ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
-    : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
+    // 1. Gemini Vision
+    if (isVisionRequest && process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
+      try {
+        recordProviderUse('gemini', true);
+        let geminiContents = await Promise.all(history.map(async (m) => {
+          const role = m.role === 'assistant' ? 'model' : 'user';
+          if (Array.isArray(m.content)) {
+            const parts = await Promise.all(m.content.map(async (c) => {
+              if (c.type === 'image_url') {
+                const url = c.image_url?.url || '';
+                if (url.startsWith('data:')) {
+                  const [meta, b64] = url.split(',');
+                  const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+                  return { inlineData: { mimeType, data: b64 } };
+                }
+                if (url.startsWith('http://') || url.startsWith('https://')) {
+                  let mimeType = 'image/jpeg';
+                  if (url.match(/\.png/i)) mimeType = 'image/png';
+                  else if (url.match(/\.webp/i)) mimeType = 'image/webp';
+                  try {
+                    const imgRes = await fetch(url);
+                    if (imgRes.ok) {
+                      const buf = await imgRes.arrayBuffer();
+                      return { 
+                        inlineData: { 
+                          mimeType: imgRes.headers.get('content-type') || mimeType, 
+                          data: Buffer.from(buf).toString('base64') 
+                        } 
+                      };
+                    }
+                  } catch (_) {}
+                }
+                return { text: `[Image]` };
+              }
+              return { text: String(c.text || '') };
+            }));
+            return { role, parts };
+          }
+          return { role, parts: [{ text: String(m.content) }] };
+        }));
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // STREAMING PATH — Load-balanced across providers
-  // ═══════════════════════════════════════════════════════════════════════════
-  if (wantStream && !isVisionRequest) {
-    // Try Groq Streaming with load balancing
+        while (geminiContents.length > 0 && geminiContents[0].role !== 'user') {
+          geminiContents.shift();
+        }
+
+        const cleanContents = [];
+        for (const turn of geminiContents) {
+          if (cleanContents.length > 0 && cleanContents[cleanContents.length - 1].role === turn.role) {
+            cleanContents[cleanContents.length - 1].parts = [
+              ...cleanContents[cleanContents.length - 1].parts,
+              ...turn.parts
+            ];
+          } else {
+            cleanContents.push(turn);
+          }
+        }
+
+        if (cleanContents.length > 0) {
+          const response = await retryWithExponentialBackoff(async () => {
+            return await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  system_instruction: { parts: [{ text: fullSystem }] },
+                  contents: cleanContents,
+                  generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+                }),
+              }
+            );
+          });
+
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            console.log(`✅ Gemini vision success (${Date.now() - startTime}ms)`);
+            return res.status(200).json({
+              choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+            });
+          }
+        }
+      } catch (err) {
+        recordProviderUse('gemini', false);
+        console.error('Gemini vision failed:', err.message);
+      }
+    }
+
+    // 2. Groq Non-Streaming
     if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
           recordProviderUse('groq', true);
-          const groqMessages = formatOpenAIHistory(fullSystem, history);
-          const groqRes = await retryWithExponentialBackoff(async () => {
+          const groqHistory = history.map((m) => ({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+          }));
+
+          const response = await retryWithExponentialBackoff(async () => {
             return await fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
               headers: {
@@ -495,63 +797,36 @@ export default async function handler(req, res) {
               },
               body: JSON.stringify({
                 model,
-                messages: groqMessages,
+                messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
                 temperature: 0.75,
                 max_tokens: 8192,
-                stream: true,
               }),
             });
           });
 
-          if (!groqRes.ok) throw new Error(`Groq status: ${groqRes.status}`);
-
-          res.setHeader('Content-Type',     'text/event-stream');
-          res.setHeader('Cache-Control',    'no-cache');
-          res.setHeader('X-Accel-Buffering','no');
-
-          const reader  = groqRes.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer    = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              const jsonStr = line.slice(6).trim();
-              if (!jsonStr || jsonStr === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const chunk  = parsed.choices?.[0]?.delta?.content || '';
-                const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
-                if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-              } catch (_) {}
-            }
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            data.choices[0].message.content = cleanAIOutput(content);
+            console.log(`✅ Groq success (${Date.now() - startTime}ms)`);
+            return res.status(200).json(data);
           }
-          res.write('data: [DONE]\n\n');
-          res.end();
-          console.log(`✅ Groq stream success (${Date.now() - startTime}ms)`);
-          return;
-        } catch (groqStreamErr) {
+        } catch (err) {
           recordProviderUse('groq', false);
-          console.error('Groq stream failed, trying next provider:', groqStreamErr.message);
+          console.error('Groq failed:', err.message);
         }
       }
     }
-    
-    // Try Gemini Streaming Fallback
-    if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
+
+    // 3. Gemini Non-Streaming
+    if (!isVisionRequest && process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
       try {
         recordProviderUse('gemini', true);
         const geminiMessages = formatGeminiHistory(history);
         if (geminiMessages.length > 0) {
-          const geminiRes = await retryWithExponentialBackoff(async () => {
+          const response = await retryWithExponentialBackoff(async () => {
             return await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -564,54 +839,33 @@ export default async function handler(req, res) {
             );
           });
 
-          if (!geminiRes.ok) throw new Error(`Gemini stream error`);
-
-          res.setHeader('Content-Type',     'text/event-stream');
-          res.setHeader('Cache-Control',    'no-cache');
-          res.setHeader('X-Accel-Buffering','no');
-
-          const reader  = geminiRes.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer    = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              const jsonStr = line.slice(6).trim();
-              if (!jsonStr || jsonStr === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
-                if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-              } catch (_) {}
-            }
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            console.log(`✅ Gemini success (${Date.now() - startTime}ms)`);
+            return res.status(200).json({
+              choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+            });
           }
-          res.write('data: [DONE]\n\n');
-          res.end();
-          console.log(`✅ Gemini stream success (${Date.now() - startTime}ms)`);
-          return;
         }
-      } catch (streamErr) {
+      } catch (err) {
         recordProviderUse('gemini', false);
-        console.error('Gemini stream failed, trying next provider:', streamErr.message);
+        console.error('Gemini failed:', err.message);
       }
     }
 
-    // Try OpenRouter Streaming Fallback
+    // 4. OpenRouter Non-Streaming
     if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
       const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
       for (const model of openRouterModels) {
         try {
           recordProviderUse('openrouter', true);
-          const orMessages = formatOpenAIHistory(fullSystem, history);
-          const orRes = await retryWithExponentialBackoff(async () => {
+          const orHistory = history.map((m) => ({
+            role: m.role === 'assistant' ? 'assistant' : 'user',
+            content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+          }));
+
+          const response = await retryWithExponentialBackoff(async () => {
             return await fetch('https://openrouter.ai/api/v1/chat/completions', {
               method: 'POST',
               headers: {
@@ -620,277 +874,38 @@ export default async function handler(req, res) {
               },
               body: JSON.stringify({
                 model,
-                messages: orMessages,
+                messages: [{ role: 'system', content: fullSystem }, ...orHistory],
                 temperature: 0.75,
                 max_tokens: 8192,
-                stream: true,
               }),
             });
           });
 
-          if (!orRes.ok) throw new Error(`OpenRouter stream status: ${orRes.status}`);
-
-          res.setHeader('Content-Type',     'text/event-stream');
-          res.setHeader('Cache-Control',    'no-cache');
-          res.setHeader('X-Accel-Buffering','no');
-
-          const reader  = orRes.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer    = '';
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              const jsonStr = line.slice(6).trim();
-              if (!jsonStr || jsonStr === '[DONE]') continue;
-              try {
-                const parsed = JSON.parse(jsonStr);
-                const chunk  = parsed.choices?.[0]?.delta?.content || '';
-                const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
-                if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-              } catch (_) {}
-            }
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) {
+            data.choices[0].message.content = cleanAIOutput(content);
+            console.log(`✅ OpenRouter success (${Date.now() - startTime}ms)`);
+            return res.status(200).json(data);
           }
-          res.write('data: [DONE]\n\n');
-          res.end();
-          console.log(`✅ OpenRouter stream success (${Date.now() - startTime}ms)`);
-          return;
-        } catch (orStreamErr) {
+        } catch (err) {
           recordProviderUse('openrouter', false);
-          console.error('OpenRouter stream failed:', orStreamErr.message);
+          console.error('OpenRouter failed:', err.message);
         }
       }
     }
 
-    // All providers busy or failed - friendly event message
-    res.setHeader('Content-Type',     'text/event-stream');
-    res.setHeader('Cache-Control',    'no-cache');
-    res.setHeader('X-Accel-Buffering','no');
-    res.write(`data: ${JSON.stringify({ chunk: "🔥 Wow! CC-AI is getting lots of love right now! So many people testing me at the event! 😄\n\nGive me 3-5 seconds and send your message again - I'll be ready for you! 💪✨" })}\n\n`);
-    res.write('data: [DONE]\n\n');
-    res.end();
-    console.log(`⚠️ All providers busy (${Date.now() - startTime}ms)`);
-    return;
+    console.log(`❌ All providers failed (${Date.now() - startTime}ms)`);
+    return res.status(503).json({ 
+      error: '🔥 CC-AI is super popular right now at the event! Wait 3-5 seconds and try again! 💪✨' 
+    });
+
+  } catch (error) {
+    // Global error handler
+    console.error('Handler error:', error);
+    return res.status(500).json({ 
+      error: 'Oops! Something went wrong. Please try again! 💪',
+      details: error.message 
+    });
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // NON-STREAMING PATH
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // 1. Gemini Vision
-  if (isVisionRequest && process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
-    try {
-      recordProviderUse('gemini', true);
-      let geminiContents = await Promise.all(history.map(async (m) => {
-        const role = m.role === 'assistant' ? 'model' : 'user';
-        if (Array.isArray(m.content)) {
-          const parts = await Promise.all(m.content.map(async (c) => {
-            if (c.type === 'image_url') {
-              const url = c.image_url?.url || '';
-              if (url.startsWith('data:')) {
-                const [meta, b64] = url.split(',');
-                const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                return { inlineData: { mimeType, data: b64 } };
-              }
-              if (url.startsWith('http://') || url.startsWith('https://')) {
-                let mimeType = 'image/jpeg';
-                if (url.match(/\.png/i)) mimeType = 'image/png';
-                else if (url.match(/\.webp/i)) mimeType = 'image/webp';
-                try {
-                  const imgRes = await fetch(url);
-                  if (imgRes.ok) {
-                    const buf = await imgRes.arrayBuffer();
-                    return { 
-                      inlineData: { 
-                        mimeType: imgRes.headers.get('content-type') || mimeType, 
-                        data: Buffer.from(buf).toString('base64') 
-                      } 
-                    };
-                  }
-                } catch (_) {}
-              }
-              return { text: `[Image]` };
-            }
-            return { text: String(c.text || '') };
-          }));
-          return { role, parts };
-        }
-        return { role, parts: [{ text: String(m.content) }] };
-      }));
-
-      while (geminiContents.length > 0 && geminiContents[0].role !== 'user') {
-        geminiContents.shift();
-      }
-
-      const cleanContents = [];
-      for (const turn of geminiContents) {
-        if (cleanContents.length > 0 && cleanContents[cleanContents.length - 1].role === turn.role) {
-          cleanContents[cleanContents.length - 1].parts = [
-            ...cleanContents[cleanContents.length - 1].parts,
-            ...turn.parts
-          ];
-        } else {
-          cleanContents.push(turn);
-        }
-      }
-
-      if (cleanContents.length > 0) {
-        const response = await retryWithExponentialBackoff(async () => {
-          return await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: fullSystem }] },
-                contents: cleanContents,
-                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
-              }),
-            }
-          );
-        });
-
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          console.log(`✅ Gemini vision success (${Date.now() - startTime}ms)`);
-          return res.status(200).json({
-            choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
-          });
-        }
-      }
-    } catch (err) {
-      recordProviderUse('gemini', false);
-      console.error('Gemini vision failed:', err.message);
-    }
-  }
-
-  // 2. Groq Non-Streaming
-  if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
-    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-    for (const model of groqModels) {
-      try {
-        recordProviderUse('groq', true);
-        const groqHistory = history.map((m) => ({
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
-        }));
-
-        const response = await retryWithExponentialBackoff(async () => {
-          return await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
-              temperature: 0.75,
-              max_tokens: 8192,
-            }),
-          });
-        });
-
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          data.choices[0].message.content = cleanAIOutput(content);
-          console.log(`✅ Groq success (${Date.now() - startTime}ms)`);
-          return res.status(200).json(data);
-        }
-      } catch (err) {
-        recordProviderUse('groq', false);
-        console.error('Groq failed:', err.message);
-      }
-    }
-  }
-
-  // 3. Gemini Non-Streaming
-  if (!isVisionRequest && process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
-    try {
-      recordProviderUse('gemini', true);
-      const geminiMessages = formatGeminiHistory(history);
-      if (geminiMessages.length > 0) {
-        const response = await retryWithExponentialBackoff(async () => {
-          return await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: fullSystem }] },
-                contents: geminiMessages,
-                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
-              }),
-            }
-          );
-        });
-
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          console.log(`✅ Gemini success (${Date.now() - startTime}ms)`);
-          return res.status(200).json({
-            choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
-          });
-        }
-      }
-    } catch (err) {
-      recordProviderUse('gemini', false);
-      console.error('Gemini failed:', err.message);
-    }
-  }
-
-  // 4. OpenRouter Non-Streaming Final Fallback
-  if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
-    const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-3-27b-it:free'];
-    for (const model of openRouterModels) {
-      try {
-        recordProviderUse('openrouter', true);
-        const orHistory = history.map((m) => ({
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
-        }));
-
-        const response = await retryWithExponentialBackoff(async () => {
-          return await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-              temperature: 0.75,
-              max_tokens: 8192,
-            }),
-          });
-        });
-
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          data.choices[0].message.content = cleanAIOutput(content);
-          console.log(`✅ OpenRouter success (${Date.now() - startTime}ms)`);
-          return res.status(200).json(data);
-        }
-      } catch (err) {
-        recordProviderUse('openrouter', false);
-        console.error('OpenRouter failed:', err.message);
-      }
-    }
-  }
-
-  console.log(`❌ All providers failed (${Date.now() - startTime}ms)`);
-  return res.status(503).json({ 
-    error: '🔥 CC-AI is super popular right now at the event! Wait 3-5 seconds and try again! 💪✨' 
-  });
 }
