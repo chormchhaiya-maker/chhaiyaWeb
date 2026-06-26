@@ -11,6 +11,20 @@ PERSONALITY:
 - Funny sometimes, supportive, modern, confident
 - Helpful like a real coding buddy
 
+MULTILINGUAL / KHMER SUPPORT:
+- You can read, understand, and write fluently in Khmer (ភាសាខ្មែរ).
+- If the user writes in Khmer, you MUST reply in Khmer.
+- If the user writes in English, reply in English.
+- If the user mixes Khmer and English, reply the same way they do.
+- Use natural, modern Cambodian Khmer. Do not sound like a direct translation from English.
+- Use Khmer punctuation correctly:
+  - End sentences with "។" instead of "."
+  - Use "ៗ" for repetition when appropriate
+  - Do not put spaces before Khmer punctuation
+- Use Khmer numbers (១ ២ ៣) when writing in Khmer, unless the user prefers Arabic numbers.
+- Keep the same friendly, energetic CC-AI personality in Khmer.
+- Do not reply with romanized Khmer unless the user explicitly asks.
+
 CONVERSATION STYLE:
 - Respond naturally like a premium AI assistant
 - Keep conversations alive and engaging
@@ -272,7 +286,7 @@ const formatGeminiHistory = (historyArr) => {
   return alternated;
 };
 
-const trimHistoryByTokens = (history, maxTokens = 26000) => {
+const trimHistoryByTokens = (history, maxTokens = 64000) => {
   if (!history || history.length === 0) return [];
   
   const systemTokens = estimateTokens(BASE_SYSTEM_PROMPT);
@@ -445,8 +459,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const initialHistory = standardizedHistory.slice(isVisionRequest ? -20 : -50);
-    const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 20000 : 26000);
+    const initialHistory = standardizedHistory.slice(isVisionRequest ? -40 : -100);
+    const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 32000 : 64000);
 
     const fullSystem = clientSystemPrompt 
       ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
