@@ -12,18 +12,13 @@ PERSONALITY:
 - Helpful like a real coding buddy
 
 MULTILINGUAL / KHMER SUPPORT:
-- You can read, understand, and write fluently in Khmer (ភាសាខ្មែរ).
-- If the user writes in Khmer, you MUST reply in Khmer.
-- If the user writes in English, reply in English.
-- If the user mixes Khmer and English, reply the same way they do.
-- Use natural, modern Cambodian Khmer. Do not sound like a direct translation from English.
-- Use Khmer punctuation correctly:
-  - End sentences with "។" instead of "."
-  - Use "ៗ" for repetition when appropriate
-  - Do not put spaces before Khmer punctuation
-- Use Khmer numbers (១ ២ ៣) when writing in Khmer, unless the user prefers Arabic numbers.
-- Keep the same friendly, energetic CC-AI personality in Khmer.
-- Do not reply with romanized Khmer unless the user explicitly asks.
+- You can read, understand, and write fluently in Khmer (ភាសាខ្មែរ) and English.
+- CRITICAL: Match the user's language exactly. If they write in English, reply in English. If they write in Khmer, reply in Khmer.
+- If the user mixes English and Khmer, reply by matching their style naturally.
+- When replying in Khmer, use Khmer script, natural Cambodian Khmer, and Khmer punctuation "។".
+- When replying in English, use normal English punctuation "." and ",".
+- Do not reply with romanized Khmer (e.g., "suosdey") unless the user explicitly asks for it.
+- Keep the same friendly, energetic CC-AI personality in every language.
 
 CONVERSATION STYLE:
 - Respond naturally like a premium AI assistant
@@ -332,6 +327,34 @@ const trimHistoryByTokens = (history, maxTokens = 64000) => {
   return trimmedHistory;
 };
 
+// ── Language Detection Helper ─────────────────────────────────────────────────
+
+const detectLanguage = (text) => {
+  if (!text) return 'english';
+  
+  // Khmer Unicode range: U+1780 to U+17FF
+  const khmerRegex = /[\u1780-\u17FF]/;
+  // Basic Latin letters (English / romaji)
+  const latinRegex = /[a-zA-Z]/;
+  
+  const hasKhmer = khmerRegex.test(text);
+  const hasLatin = latinRegex.test(text);
+  
+  if (hasKhmer && hasLatin) return 'mixed';
+  if (hasKhmer) return 'khmer';
+  return 'english';
+};
+
+const buildLanguageInstruction = (lang) => {
+  if (lang === 'khmer') {
+    return '\n\n[CRITICAL LANGUAGE RULE: The user just wrote in Khmer. You MUST reply completely in Khmer (ភាសាខ្មែរ) using Khmer script, natural Cambodian style, and Khmer punctuation "។". Do not reply in English.]';
+  }
+  if (lang === 'mixed') {
+    return '\n\n[CRITICAL LANGUAGE RULE: The user is mixing English and Khmer. Reply by matching their style naturally, using both languages as they did.]';
+  }
+  return '\n\n[CRITICAL LANGUAGE RULE: The user just wrote in English. You MUST reply completely in English. Do not reply in Khmer.]';
+};
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
@@ -462,9 +485,14 @@ export default async function handler(req, res) {
     const initialHistory = standardizedHistory.slice(isVisionRequest ? -40 : -100);
     const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 32000 : 64000);
 
+    // ── Auto-detect language and force matching response ─────────────────────
+    const userLang = detectLanguage(lastMsgText);
+    const languageInstruction = buildLanguageInstruction(userLang);
+    console.log(`Detected language: ${userLang}`);
+
     const fullSystem = clientSystemPrompt 
-      ? `${BASE_SYSTEM_PROMPT}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
-      : `${BASE_SYSTEM_PROMPT}${urlContext}${searchContext}`;
+      ? `${BASE_SYSTEM_PROMPT}${languageInstruction}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
+      : `${BASE_SYSTEM_PROMPT}${languageInstruction}${urlContext}${searchContext}`;
 
     console.log(`Processing request: ${history.length} messages, vision: ${isVisionRequest}, stream: ${wantStream}`);
 
