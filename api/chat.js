@@ -1,6 +1,7 @@
 // api/chat.js — CC-AI by ChormChhaiya [STABLE PRODUCTION VERSION]
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
-// Fixed rate limiting version
+// Extended rate limits + higher token limits version
+
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
 You are CC-AI, a futuristic smart AI assistant built by Chhaiya (Chorm Chhaiya), also known as Yaxy.
@@ -86,54 +87,50 @@ IMPORTANT RULES:
 MAIN GOAL:
 Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, modern, futuristic, and fun to talk with.
 `.trim();
+
 // ── Improved Rate Limiting & Load Balancing ───────────────────────────────────
 let providerStats = {
-  groq: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
-  gemini: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
-  openrouter: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 }
+  groq:        { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
+  gemini:      { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
+  openrouter:  { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
 };
-// Increased limits for better performance
+
+// ── Extended limits ───────────────────────────────────────────────────────────
 const RATE_LIMITS = {
-  groq: { maxPerMinute: 50, cooldownTime: 2000, minDelay: 100 },
-  gemini: { maxPerMinute: 25, cooldownTime: 3000, minDelay: 150 },
-  openrouter: { maxPerMinute: 35, cooldownTime: 2500, minDelay: 120 }
+  groq:       { maxPerMinute: 200, cooldownTime: 1000, minDelay: 50  },
+  gemini:     { maxPerMinute: 100, cooldownTime: 1500, minDelay: 50  },
+  openrouter: { maxPerMinute: 150, cooldownTime: 1000, minDelay: 50  },
 };
+
 const resetProviderStats = (provider) => {
-  const now = Date.now();
+  const now   = Date.now();
   const stats = providerStats[provider];
-  
-  // Reset every minute
   if (now - stats.lastReset > 60000) {
-    stats.requests = 0;
-    stats.failures = 0;
+    stats.requests  = 0;
+    stats.failures  = 0;
     stats.lastReset = now;
   }
 };
+
 const canUseProvider = (provider) => {
   resetProviderStats(provider);
   const stats = providerStats[provider];
-  const now = Date.now();
-  
-  // Check cooldown
-  if (stats.cooldown) return false;
-  
-  // Check rate limit
-  if (stats.requests >= RATE_LIMITS[provider].maxPerMinute) return false;
-  
-  // Check minimum delay between requests
-  if (now - stats.lastRequest < RATE_LIMITS[provider].minDelay) return false;
-  
+  const now   = Date.now();
+  if (stats.cooldown)                                                   return false;
+  if (stats.requests >= RATE_LIMITS[provider].maxPerMinute)            return false;
+  if (now - stats.lastRequest < RATE_LIMITS[provider].minDelay)        return false;
   return true;
 };
+
 const recordProviderUse = (provider, success = true) => {
-  const stats = providerStats[provider];
+  const stats        = providerStats[provider];
   stats.requests++;
-  stats.lastRequest = Date.now();
-  
+  stats.lastRequest  = Date.now();
+
   if (!success) {
     stats.failures++;
-    // Only cooldown after 5 consecutive failures (more lenient)
-    if (stats.failures >= 5) {
+    // Cooldown only after 10 consecutive failures (more lenient)
+    if (stats.failures >= 10) {
       stats.cooldown = true;
       setTimeout(() => {
         stats.cooldown = false;
@@ -141,10 +138,10 @@ const recordProviderUse = (provider, success = true) => {
       }, RATE_LIMITS[provider].cooldownTime);
     }
   } else {
-    // Reset failures on success
     stats.failures = 0;
   }
 };
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const cleanAIOutput = (text) => {
   if (!text) return '';
@@ -153,55 +150,54 @@ const cleanAIOutput = (text) => {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
+
 const getMessageText = (msg) => {
   if (!msg) return '';
   if (typeof msg.content === 'string') return msg.content;
   if (Array.isArray(msg.content)) {
     return msg.content
-      .filter(c => c.type === 'text')
-      .map(c => c.text || '')
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text || '')
       .join(' ');
   }
   return '';
 };
-const estimateTokens = (text) => {
-  return Math.ceil((text || '').length / 4);
-};
+
+const estimateTokens = (text) => Math.ceil((text || '').length / 4);
+
 const compressCodeInMessage = (text) => {
   if (!text || typeof text !== 'string') return text;
-  
   const codeBlockRegex = /```[\s\S]*?```/g;
-  const codeBlocks = text.match(codeBlockRegex);
-  
+  const codeBlocks     = text.match(codeBlockRegex);
   if (codeBlocks && codeBlocks.length > 0) {
     let compressed = text;
-    codeBlocks.forEach(block => {
+    codeBlocks.forEach((block) => {
       const lines = block.split('\n');
-      const lang = lines[0].replace('```', '').trim();
-      
+      const lang  = lines[0].replace('```', '').trim();
       if (lines.length > 15) {
         const summary = `\`\`\`${lang}\n${lines.slice(1, 4).join('\n')}\n... [code omitted] ...\n${lines.slice(-4, -1).join('\n')}\n\`\`\``;
-        compressed = compressed.replace(block, summary);
+        compressed    = compressed.replace(block, summary);
       }
     });
     return compressed;
   }
-  
   return text;
 };
+
 const extractURLs = (text) => {
   if (typeof text !== 'string') return [];
   const urlRegex = /https?:\/\/[^\s"'<>]+/g;
   return text.match(urlRegex) || [];
 };
+
 const fetchURLContent = async (url) => {
   try {
-    const jinaURL = `https://r.jina.ai/${encodeURIComponent(url)}`;
+    const jinaURL    = `https://r.jina.ai/${encodeURIComponent(url)}`;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(jinaURL, {
+    const timeoutId  = setTimeout(() => controller.abort(), 6000);
+    const res        = await fetch(jinaURL, {
       headers: { Accept: 'text/plain' },
-      signal: controller.signal,
+      signal:  controller.signal,
     });
     clearTimeout(timeoutId);
     if (!res.ok) return null;
@@ -211,16 +207,17 @@ const fetchURLContent = async (url) => {
     return null;
   }
 };
+
 const uploadToCloudflare = async (base64DataUrl) => {
   const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
   const apiToken  = process.env.CLOUDFLARE_IMAGES_TOKEN;
   if (!accountId || !apiToken || !base64DataUrl?.startsWith('data:')) return null;
   try {
     const [meta, b64] = base64DataUrl.split(',');
-    const mimeType   = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-    const ext        = mimeType.split('/')[1] || 'jpg';
-    const byteChars = atob(b64);
-    const byteArr   = new Uint8Array(byteChars.length);
+    const mimeType    = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const ext         = mimeType.split('/')[1] || 'jpg';
+    const byteChars   = atob(b64);
+    const byteArr     = new Uint8Array(byteChars.length);
     for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
     const formData = new FormData();
     formData.append('file', new Blob([byteArr], { type: mimeType }), `upload.${ext}`);
@@ -235,65 +232,65 @@ const uploadToCloudflare = async (base64DataUrl) => {
   }
   return null;
 };
+
 const formatOpenAIHistory = (systemPrompt, historyArr) => {
-  const formatted = historyArr.map(m => ({
-    role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+  const formatted = historyArr.map((m) => ({
+    role:    m.role === 'assistant' ? 'assistant' : 'user',
+    content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
   }));
   return [{ role: 'system', content: systemPrompt }, ...formatted];
 };
+
 const formatGeminiHistory = (historyArr) => {
   if (!historyArr || historyArr.length === 0) return [];
-  
-  let parts = historyArr.map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ') }]
+  let parts = historyArr.map((m) => ({
+    role:  m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' ') }],
   }));
-  
-  parts = parts.filter(p => p.parts[0].text.trim().length > 0);
-  while (parts.length > 0 && parts[0].role !== 'user') {
-    parts.shift();
-  }
+  parts = parts.filter((p) => p.parts[0].text.trim().length > 0);
+  while (parts.length > 0 && parts[0].role !== 'user') parts.shift();
   const alternated = [];
   for (const p of parts) {
     if (alternated.length > 0 && alternated[alternated.length - 1].role === p.role) {
-      alternated[alternated.length - 1].parts[0].text += "\n\n" + p.parts[0].text;
+      alternated[alternated.length - 1].parts[0].text += '\n\n' + p.parts[0].text;
     } else {
       alternated.push(p);
     }
   }
   return alternated;
 };
-const trimHistoryByTokens = (history, maxTokens = 64000) => {
+
+// ── Higher token budget for history ──────────────────────────────────────────
+const trimHistoryByTokens = (history, maxTokens = 128000) => {
   if (!history || history.length === 0) return [];
-  
-  const systemTokens = estimateTokens(BASE_SYSTEM_PROMPT);
+  const systemTokens    = estimateTokens(BASE_SYSTEM_PROMPT);
   const availableTokens = maxTokens - systemTokens - 2000;
-  let totalTokens = 0;
-  const trimmedHistory = [];
-  const recentMessages = history.slice(-3);
-  const olderMessages = history.slice(0, -3);
+  let totalTokens       = 0;
+  const trimmedHistory  = [];
+  const recentMessages  = history.slice(-5);   // keep last 5 turns always
+  const olderMessages   = history.slice(0, -5);
+
   for (const msg of recentMessages) {
-    const msgText = getMessageText(msg);
-    const msgTokens = estimateTokens(msgText);
     trimmedHistory.push(msg);
-    totalTokens += msgTokens;
+    totalTokens += estimateTokens(getMessageText(msg));
   }
+
   for (let i = olderMessages.length - 1; i >= 0; i--) {
-    const msg = olderMessages[i];
-    let msgText = getMessageText(msg);
-    
+    const msg     = olderMessages[i];
+    let msgText   = getMessageText(msg);
     if (msg.role === 'assistant' || msg.role === 'model') {
       msgText = compressCodeInMessage(msgText);
     }
-    
     const msgTokens = estimateTokens(msgText);
     if (totalTokens + msgTokens <= availableTokens) {
       const compressedMsg = {
         ...msg,
-        content: typeof msg.content === 'string' 
-          ? (msg.role === 'assistant' || msg.role === 'model' ? compressCodeInMessage(msg.content) : msg.content)
-          : msg.content
+        content:
+          typeof msg.content === 'string'
+            ? msg.role === 'assistant' || msg.role === 'model'
+              ? compressCodeInMessage(msg.content)
+              : msg.content
+            : msg.content,
       };
       trimmedHistory.unshift(compressedMsg);
       totalTokens += msgTokens;
@@ -303,22 +300,19 @@ const trimHistoryByTokens = (history, maxTokens = 64000) => {
   }
   return trimmedHistory;
 };
+
 // ── Language Detection Helper ─────────────────────────────────────────────────
 const detectLanguage = (text) => {
   if (!text) return 'english';
-  
-  // Khmer Unicode range: U+1780 to U+17FF
   const khmerRegex = /[\u1780-\u17FF]/;
-  // Basic Latin letters (English / romaji)
   const latinRegex = /[a-zA-Z]/;
-  
-  const hasKhmer = khmerRegex.test(text);
-  const hasLatin = latinRegex.test(text);
-  
+  const hasKhmer   = khmerRegex.test(text);
+  const hasLatin   = latinRegex.test(text);
   if (hasKhmer && hasLatin) return 'mixed';
-  if (hasKhmer) return 'khmer';
+  if (hasKhmer)              return 'khmer';
   return 'english';
 };
+
 const buildLanguageInstruction = (lang) => {
   if (lang === 'khmer') {
     return '\n\n[CRITICAL LANGUAGE RULE: The user just wrote in Khmer. You MUST reply completely in Khmer (ភាសាខ្មែរ) using Khmer script, natural Cambodian style, and Khmer punctuation "។". Do not reply in English.]';
@@ -328,6 +322,7 @@ const buildLanguageInstruction = (lang) => {
   }
   return '\n\n[CRITICAL LANGUAGE RULE: The user just wrote in English. You MUST reply completely in English. Do not reply in Khmer.]';
 };
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
@@ -335,36 +330,37 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')    return res.status(405).end();
+
   const startTime = Date.now();
+
   try {
-    const {
-      messages,
-      systemPrompt: clientSystemPrompt,
-      hasImage,
-      stream: wantStream,
-    } = req.body || {};
+    const { messages, systemPrompt: clientSystemPrompt, hasImage, stream: wantStream } = req.body || {};
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Valid messages array is required' });
     }
+
     const clearedMessages = messages.filter((m) => {
       if (m.role === 'assistant' || m.role === 'model') {
         const textVal = getMessageText(m).toLowerCase();
-        if (textVal.includes('on it') && textVal.length < 65) {
-          return false;
-        }
+        if (textVal.includes('on it') && textVal.length < 65) return false;
       }
       return true;
     });
+
     if (clearedMessages.length === 0) {
       return res.status(400).json({ error: 'No valid messages to process' });
     }
-    const lastMsg = clearedMessages[clearedMessages.length - 1];
+
+    const lastMsg        = clearedMessages[clearedMessages.length - 1];
     const isVisionRequest =
       hasImage ||
-      (Array.isArray(lastMsg?.content) &&
-        lastMsg.content.some((c) => c.type === 'image_url'));
-    const lastMsgText = getMessageText(lastMsg);
+      (Array.isArray(lastMsg?.content) && lastMsg.content.some((c) => c.type === 'image_url'));
+
+    const lastMsgText  = getMessageText(lastMsg);
     const detectedURLs = extractURLs(lastMsgText);
+
+    // ── URL fetching ──────────────────────────────────────────────────────────
     let urlContext = '';
     if (detectedURLs.length > 0) {
       const fetched = await Promise.all(detectedURLs.map(fetchURLContent));
@@ -377,22 +373,25 @@ export default async function handler(req, res) {
         .join('\n\n---\n\n');
       urlContext = `\n\n=== WEBSITE CONTENT FOR ANALYSIS ===\n${results}\n=== END OF WEBSITE CONTENT ===`;
     }
-    const lowerMsgText = lastMsgText.toLowerCase();
-    const isSearchRequest = 
-      lowerMsgText.includes('search') || 
-      lowerMsgText.includes('find') || 
-      lowerMsgText.includes('video') || 
-      lowerMsgText.includes('tutorial') || 
+
+    // ── Search context ────────────────────────────────────────────────────────
+    const lowerMsgText    = lastMsgText.toLowerCase();
+    const isSearchRequest =
+      lowerMsgText.includes('search') ||
+      lowerMsgText.includes('find')   ||
+      lowerMsgText.includes('video')  ||
+      lowerMsgText.includes('tutorial') ||
       lowerMsgText.includes('youtube');
+
     let searchContext = '';
     if (isSearchRequest && detectedURLs.length === 0) {
       try {
         const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        const searchRes = await fetch(jinaSearchURL, {
-          headers: { 'Accept': 'text/plain' },
-          signal: controller.signal,
+        const controller    = new AbortController();
+        const timeoutId     = setTimeout(() => controller.abort(), 5000);
+        const searchRes     = await fetch(jinaSearchURL, {
+          headers: { Accept: 'text/plain' },
+          signal:  controller.signal,
         });
         clearTimeout(timeoutId);
         if (searchRes.ok) {
@@ -403,6 +402,8 @@ export default async function handler(req, res) {
         console.log('Search fetch skipped:', err.message);
       }
     }
+
+    // ── Process image uploads ─────────────────────────────────────────────────
     const processedMessages = await Promise.all(
       clearedMessages.map(async (m) => {
         if (!Array.isArray(m.content)) return m;
@@ -418,78 +419,93 @@ export default async function handler(req, res) {
         return { ...m, content: newContent };
       })
     );
+
+    // ── Standardize history ───────────────────────────────────────────────────
     const standardizedHistory = [];
     for (const msg of processedMessages) {
-      let role = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
-      let textContent = getMessageText(msg);
-      if (standardizedHistory.length > 0 && standardizedHistory[standardizedHistory.length - 1].role === role) {
+      const role        = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
+      const textContent = getMessageText(msg);
+      if (
+        standardizedHistory.length > 0 &&
+        standardizedHistory[standardizedHistory.length - 1].role === role
+      ) {
         const prevTurn = standardizedHistory[standardizedHistory.length - 1];
         if (Array.isArray(prevTurn.content) || Array.isArray(msg.content)) {
-          const currentParts = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: textContent }];
-          const prevParts = Array.isArray(prevTurn.content) ? prevTurn.content : [{ type: 'text', text: String(prevTurn.content) }];
+          const currentParts = Array.isArray(msg.content)
+            ? msg.content
+            : [{ type: 'text', text: textContent }];
+          const prevParts = Array.isArray(prevTurn.content)
+            ? prevTurn.content
+            : [{ type: 'text', text: String(prevTurn.content) }];
           prevTurn.content = [...prevParts, ...currentParts];
         } else {
-          prevTurn.content = String(prevTurn.content) + "\n\n" + textContent;
+          prevTurn.content = String(prevTurn.content) + '\n\n' + textContent;
         }
       } else {
         standardizedHistory.push({
           role,
-          content: Array.isArray(msg.content) ? msg.content : textContent
+          content: Array.isArray(msg.content) ? msg.content : textContent,
         });
       }
     }
-    const initialHistory = standardizedHistory.slice(isVisionRequest ? -40 : -100);
-    const history = trimHistoryByTokens(initialHistory, isVisionRequest ? 32000 : 64000);
-    // ── Auto-detect language and force matching response ─────────────────────
-    const userLang = detectLanguage(lastMsgText);
+
+    // ── Trim history with larger budgets ──────────────────────────────────────
+    const initialHistory = standardizedHistory.slice(isVisionRequest ? -60 : -150);
+    const history        = trimHistoryByTokens(initialHistory, isVisionRequest ? 64000 : 128000);
+
+    // ── Language detection ────────────────────────────────────────────────────
+    const userLang            = detectLanguage(lastMsgText);
     const languageInstruction = buildLanguageInstruction(userLang);
     console.log(`Detected language: ${userLang}`);
-    const fullSystem = clientSystemPrompt 
-      ? `${BASE_SYSTEM_PROMPT}${languageInstruction}\n\n[Client Layer Configuration Overrides]:\n${clientSystemPrompt}${urlContext}${searchContext}`
+
+    const fullSystem = clientSystemPrompt
+      ? `${BASE_SYSTEM_PROMPT}${languageInstruction}\n\n[Client Layer]:\n${clientSystemPrompt}${urlContext}${searchContext}`
       : `${BASE_SYSTEM_PROMPT}${languageInstruction}${urlContext}${searchContext}`;
+
     console.log(`Processing: ${history.length} msgs, vision: ${isVisionRequest}, stream: ${wantStream}`);
+
     // ═══════════════════════════════════════════════════════════════════════════
     // STREAMING PATH
     // ═══════════════════════════════════════════════════════════════════════════
     if (wantStream && !isVisionRequest) {
-      // Try Groq Streaming
+
+      // ── Groq Streaming ──────────────────────────────────────────────────────
       if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
         const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
         for (const model of groqModels) {
           try {
             const groqMessages = formatOpenAIHistory(fullSystem, history);
-            
             const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+                Authorization:  `Bearer ${process.env.GROQ_API_KEY}`,
               },
               body: JSON.stringify({
                 model,
-                messages: groqMessages,
+                messages:    groqMessages,
                 temperature: 0.75,
-                max_tokens: 8192,
-                stream: true,
+                max_tokens:  16384,   // ← extended
+                stream:      true,
               }),
             });
-            if (!groqRes.ok) {
-              console.log(`Groq ${model} failed: ${groqRes.status}`);
-              throw new Error(`Groq failed`);
-            }
+            if (!groqRes.ok) throw new Error(`Groq ${groqRes.status}`);
+
             recordProviderUse('groq', true);
-            res.setHeader('Content-Type',     'text/event-stream');
-            res.setHeader('Cache-Control',    'no-cache');
-            res.setHeader('X-Accel-Buffering','no');
+            res.setHeader('Content-Type',      'text/event-stream');
+            res.setHeader('Cache-Control',     'no-cache');
+            res.setHeader('X-Accel-Buffering', 'no');
+
             const reader  = groqRes.body.getReader();
             const decoder = new TextDecoder();
             let buffer    = '';
+
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
               buffer += decoder.decode(value, { stream: true });
               const lines = buffer.split('\n');
-              buffer = lines.pop();
+              buffer      = lines.pop();
               for (const line of lines) {
                 if (!line.startsWith('data: ')) continue;
                 const jsonStr = line.slice(6).trim();
@@ -506,48 +522,47 @@ export default async function handler(req, res) {
             res.end();
             console.log(`✅ Groq stream (${Date.now() - startTime}ms)`);
             return;
-          } catch (groqStreamErr) {
+          } catch (err) {
             recordProviderUse('groq', false);
-            console.error(`Groq ${model} failed:`, groqStreamErr.message);
+            console.error(`Groq ${model} failed:`, err.message);
           }
         }
       }
-      
-      // Try Gemini Streaming
+
+      // ── Gemini Streaming ────────────────────────────────────────────────────
       if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
         try {
           const geminiMessages = formatGeminiHistory(history);
-          
           if (geminiMessages.length > 0) {
             const geminiRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
               {
-                method: 'POST',
+                method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   system_instruction: { parts: [{ text: fullSystem }] },
-                  contents: geminiMessages,
-                  generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+                  contents:           geminiMessages,
+                  generationConfig:   { temperature: 0.75, maxOutputTokens: 16384 },  // ← extended
                 }),
               }
             );
-            if (!geminiRes.ok) {
-              console.log(`Gemini failed: ${geminiRes.status}`);
-              throw new Error(`Gemini failed`);
-            }
+            if (!geminiRes.ok) throw new Error(`Gemini ${geminiRes.status}`);
+
             recordProviderUse('gemini', true);
-            res.setHeader('Content-Type',     'text/event-stream');
-            res.setHeader('Cache-Control',    'no-cache');
-            res.setHeader('X-Accel-Buffering','no');
+            res.setHeader('Content-Type',      'text/event-stream');
+            res.setHeader('Cache-Control',     'no-cache');
+            res.setHeader('X-Accel-Buffering', 'no');
+
             const reader  = geminiRes.body.getReader();
             const decoder = new TextDecoder();
             let buffer    = '';
+
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
               buffer += decoder.decode(value, { stream: true });
               const lines = buffer.split('\n');
-              buffer = lines.pop();
+              buffer      = lines.pop();
               for (const line of lines) {
                 if (!line.startsWith('data: ')) continue;
                 const jsonStr = line.slice(6).trim();
@@ -565,49 +580,52 @@ export default async function handler(req, res) {
             console.log(`✅ Gemini stream (${Date.now() - startTime}ms)`);
             return;
           }
-        } catch (streamErr) {
+        } catch (err) {
           recordProviderUse('gemini', false);
-          console.error('Gemini failed:', streamErr.message);
+          console.error('Gemini stream failed:', err.message);
         }
       }
-      // Try OpenRouter Streaming
+
+      // ── OpenRouter Streaming ────────────────────────────────────────────────
       if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
-        const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
+        const openRouterModels = [
+          'meta-llama/llama-3.3-70b-instruct:free',
+          'google/gemma-2-9b-it:free',
+        ];
         for (const model of openRouterModels) {
           try {
             const orMessages = formatOpenAIHistory(fullSystem, history);
-            
             const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                Authorization:  `Bearer ${process.env.OPENROUTER_API_KEY}`,
               },
               body: JSON.stringify({
                 model,
-                messages: orMessages,
+                messages:    orMessages,
                 temperature: 0.75,
-                max_tokens: 8192,
-                stream: true,
+                max_tokens:  16384,   // ← extended
+                stream:      true,
               }),
             });
-            if (!orRes.ok) {
-              console.log(`OpenRouter ${model} failed: ${orRes.status}`);
-              throw new Error(`OpenRouter failed`);
-            }
+            if (!orRes.ok) throw new Error(`OpenRouter ${orRes.status}`);
+
             recordProviderUse('openrouter', true);
-            res.setHeader('Content-Type',     'text/event-stream');
-            res.setHeader('Cache-Control',    'no-cache');
-            res.setHeader('X-Accel-Buffering','no');
+            res.setHeader('Content-Type',      'text/event-stream');
+            res.setHeader('Cache-Control',     'no-cache');
+            res.setHeader('X-Accel-Buffering', 'no');
+
             const reader  = orRes.body.getReader();
             const decoder = new TextDecoder();
             let buffer    = '';
+
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
               buffer += decoder.decode(value, { stream: true });
               const lines = buffer.split('\n');
-              buffer = lines.pop();
+              buffer      = lines.pop();
               for (const line of lines) {
                 if (!line.startsWith('data: ')) continue;
                 const jsonStr = line.slice(6).trim();
@@ -624,53 +642,55 @@ export default async function handler(req, res) {
             res.end();
             console.log(`✅ OpenRouter stream (${Date.now() - startTime}ms)`);
             return;
-          } catch (orStreamErr) {
+          } catch (err) {
             recordProviderUse('openrouter', false);
-            console.error(`OpenRouter ${model} failed:`, orStreamErr.message);
+            console.error(`OpenRouter ${model} failed:`, err.message);
           }
         }
       }
-      // All providers busy
-      console.log('All streaming providers unavailable');
-      res.setHeader('Content-Type',     'text/event-stream');
-      res.setHeader('Cache-Control',    'no-cache');
-      res.setHeader('X-Accel-Buffering','no');
-      res.write(`data: ${JSON.stringify({ chunk: "Hey! 👋 I'm getting lots of messages. Wait 2-3 seconds and try again! 💪" })}\n\n`);
+
+      // All providers busy — stream a friendly message
+      res.setHeader('Content-Type',      'text/event-stream');
+      res.setHeader('Cache-Control',     'no-cache');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.write(
+        `data: ${JSON.stringify({ chunk: "Hey! 👋 I'm getting lots of messages. Wait 2-3 seconds and try again! 💪" })}\n\n`
+      );
       res.write('data: [DONE]\n\n');
       res.end();
       return;
     }
+
     // ═══════════════════════════════════════════════════════════════════════════
     // NON-STREAMING PATH
     // ═══════════════════════════════════════════════════════════════════════════
-    // Try Groq
+
+    // ── Groq ───────────────────────────────────────────────────────────────────
     if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
           const groqHistory = history.map((m) => ({
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+            role:    m.role === 'assistant' ? 'assistant' : 'user',
+            content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
           }));
           const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+              Authorization:  `Bearer ${process.env.GROQ_API_KEY}`,
             },
             body: JSON.stringify({
               model,
-              messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+              messages:    [{ role: 'system', content: fullSystem }, ...groqHistory],
               temperature: 0.75,
-              max_tokens: 8192,
+              max_tokens:  16384,   // ← extended
             }),
           });
-          if (!response.ok) {
-            console.log(`Groq ${model} failed: ${response.status}`);
-            throw new Error(`Groq failed`);
-          }
+          if (!response.ok) throw new Error(`Groq ${response.status}`);
+
           recordProviderUse('groq', true);
-          const data = await response.json();
+          const data    = await response.json();
           const content = data.choices?.[0]?.message?.content;
           if (content) {
             data.choices[0].message.content = cleanAIOutput(content);
@@ -683,28 +703,26 @@ export default async function handler(req, res) {
         }
       }
     }
-    // Try Gemini
+
+    // ── Gemini ─────────────────────────────────────────────────────────────────
     if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
       try {
         const geminiMessages = formatGeminiHistory(history);
-        
         if (geminiMessages.length > 0) {
           const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`,
             {
-              method: 'POST',
+              method:  'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: fullSystem }] },
-                contents: geminiMessages,
-                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+                contents:           geminiMessages,
+                generationConfig:   { temperature: 0.75, maxOutputTokens: 16384 },  // ← extended
               }),
             }
           );
-          if (!response.ok) {
-            console.log(`Gemini failed: ${response.status}`);
-            throw new Error(`Gemini failed`);
-          }
+          if (!response.ok) throw new Error(`Gemini ${response.status}`);
+
           recordProviderUse('gemini', true);
           const data = await response.json();
           const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -720,34 +738,36 @@ export default async function handler(req, res) {
         console.error('Gemini error:', err.message);
       }
     }
-    // Try OpenRouter
+
+    // ── OpenRouter ─────────────────────────────────────────────────────────────
     if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
-      const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
+      const openRouterModels = [
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'google/gemma-2-9b-it:free',
+      ];
       for (const model of openRouterModels) {
         try {
           const orHistory = history.map((m) => ({
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof m.content === 'string' ? m.content : m.content.map(c => c.text || '').join(' ')
+            role:    m.role === 'assistant' ? 'assistant' : 'user',
+            content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
           }));
           const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              Authorization:  `Bearer ${process.env.OPENROUTER_API_KEY}`,
             },
             body: JSON.stringify({
               model,
-              messages: [{ role: 'system', content: fullSystem }, ...orHistory],
+              messages:    [{ role: 'system', content: fullSystem }, ...orHistory],
               temperature: 0.75,
-              max_tokens: 8192,
+              max_tokens:  16384,   // ← extended
             }),
           });
-          if (!response.ok) {
-            console.log(`OpenRouter ${model} failed: ${response.status}`);
-            throw new Error(`OpenRouter failed`);
-          }
+          if (!response.ok) throw new Error(`OpenRouter ${response.status}`);
+
           recordProviderUse('openrouter', true);
-          const data = await response.json();
+          const data    = await response.json();
           const content = data.choices?.[0]?.message?.content;
           if (content) {
             data.choices[0].message.content = cleanAIOutput(content);
@@ -760,25 +780,27 @@ export default async function handler(req, res) {
         }
       }
     }
+
     // All providers failed
     console.log(`❌ All providers unavailable (${Date.now() - startTime}ms)`);
-    return res.status(200).json({ 
-      choices: [{ 
-        message: { 
-          role: 'assistant', 
-          content: "Hey! 👋 All servers are busy. Wait 2-3 seconds and try again! I'll be ready! 💪✨"
-        } 
-      }] 
+    return res.status(200).json({
+      choices: [{
+        message: {
+          role:    'assistant',
+          content: "Hey! 👋 All servers are busy. Wait 2-3 seconds and try again! I'll be ready! 💪✨",
+        },
+      }],
     });
+
   } catch (error) {
     console.error('Handler error:', error);
-    return res.status(200).json({ 
-      choices: [{ 
-        message: { 
-          role: 'assistant', 
-          content: "Oops! Something went wrong. Please try again! 😊"
-        } 
-      }] 
+    return res.status(200).json({
+      choices: [{
+        message: {
+          role:    'assistant',
+          content: 'Oops! Something went wrong. Please try again! 😊',
+        },
+      }],
     });
   }
 }
