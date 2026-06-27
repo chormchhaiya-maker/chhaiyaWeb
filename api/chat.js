@@ -1,5 +1,5 @@
-// api/chat.js — CC-AI by ChormChhaiya [MULTI-KEY ROTATION + KHMER SUPPORT]
-// Fully stable production version with automatic key rotation
+// api/chat.js — CC-AI by ChormChhaiya [ULTRA STABLE + NO FALLBACK]
+// No rate limiting — just pure key rotation and infinite retry logic
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -43,7 +43,7 @@ _ Ah Kang: The funny guy who always brings the laughs.
 _ Ah Reach: The one yaxy loves the most — he always pays for food and drinks, that's why.
 _ Ah Nak: The only one gooning 100 times/day, even yaxy can't stop him.
 _ Ah Rith: The official code tester, W to him 😁💫🌟
-_ Ah Thi: The most handsome guy in the group... but my developer is better version. 😎
+_ Ah Thi: The most handsome guy in the group... but CC-AI is the upgraded version 😎
 
 CREATOR INFO:
 If asked about the creator, say:
@@ -105,51 +105,6 @@ const getNextKey = (provider) => {
   const key = keys[keyIndex[provider] % keys.length];
   keyIndex[provider] = (keyIndex[provider] + 1) % keys.length;
   return key;
-};
-
-// ── Rate Limiting ─────────────────────────────────────────────────────────────
-let providerStats = {
-  groq: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false },
-  gemini: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false },
-  openrouter: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false },
-};
-
-const RATE_LIMITS = {
-  groq: { maxPerMinute: 25, cooldownTime: 3000 },
-  gemini: { maxPerMinute: 12, cooldownTime: 5000 },
-  openrouter: { maxPerMinute: 18, cooldownTime: 4000 },
-};
-
-const resetProviderStats = (provider) => {
-  const now = Date.now();
-  if (now - providerStats[provider].lastReset > 60000) {
-    providerStats[provider].requests = 0;
-    providerStats[provider].lastReset = now;
-  }
-};
-
-const canUseProvider = (provider) => {
-  resetProviderStats(provider);
-  const stats = providerStats[provider];
-  if (stats.cooldown) return false;
-  return stats.requests < RATE_LIMITS[provider].maxPerMinute;
-};
-
-const recordProviderUse = (provider, success = true) => {
-  const stats = providerStats[provider];
-  stats.requests++;
-  if (!success) {
-    stats.failures++;
-    if (stats.failures >= 3) {
-      stats.cooldown = true;
-      setTimeout(() => {
-        stats.cooldown = false;
-        stats.failures = 0;
-      }, RATE_LIMITS[provider].cooldownTime);
-    }
-  } else {
-    stats.failures = 0;
-  }
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -250,7 +205,6 @@ const formatGeminiHistory = (historyArr) => {
 
 const trimHistoryByTokens = (history, maxTokens = 128000) => {
   if (!history || history.length === 0) return [];
-  // Keep last 10 messages for context (adjustable)
   return history.slice(-10);
 };
 
@@ -415,16 +369,228 @@ export default async function handler(req, res) {
     // STREAMING PATH
     // ═══════════════════════════════════════════════════════════════════════
     if (wantStream && !isVisionRequest) {
-      // Try Groq streaming
-      if (getNextKey('groq') && canUseProvider('groq')) {
+      // Try Groq streaming (all keys)
+      const groqKeys = keyStore.groq || [];
+      if (groqKeys.length > 0) {
         const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
         for (const model of groqModels) {
+          for (const apiKey of groqKeys) {
+            try {
+              const groqMessages = formatOpenAIHistory(fullSystem, history);
+              const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model,
+                  messages: groqMessages,
+                  temperature: 0.75,
+                  max_tokens: 8192,
+                  stream: true,
+                }),
+              });
+
+              if (!groqRes.ok) {
+                console.log(`Groq ${model} failed with status ${groqRes.status}`);
+                continue;
+              }
+
+              res.setHeader('Content-Type', 'text/event-stream');
+              res.setHeader('Cache-Control', 'no-cache');
+              res.setHeader('X-Accel-Buffering', 'no');
+
+              const reader = groqRes.body.getReader();
+              const decoder = new TextDecoder();
+              let buffer = '';
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                  if (!line.startsWith('data: ')) continue;
+                  const jsonStr = line.slice(6).trim();
+                  if (!jsonStr || jsonStr === '[DONE]') continue;
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+                    const chunk = parsed.choices?.[0]?.delta?.content || '';
+                    const clean = cleanAIOutput(chunk);
+                    if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+                  } catch (_) {}
+                }
+              }
+              res.write('data: [DONE]\n\n');
+              res.end();
+              console.log(`✅ Groq stream success (${Date.now() - startTime}ms)`);
+              return;
+            } catch (err) {
+              console.error(`Groq ${model} stream error with key:`, err.message);
+            }
+          }
+        }
+      }
+
+      // Try Gemini streaming (all keys)
+      const geminiKeys = keyStore.gemini || [];
+      if (geminiKeys.length > 0) {
+        for (const apiKey of geminiKeys) {
           try {
-            const apiKey = getNextKey('groq');
-            if (!apiKey) continue;
-            recordProviderUse('groq', true);
-            const groqMessages = formatOpenAIHistory(fullSystem, history);
-            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            const geminiMessages = formatGeminiHistory(history);
+            if (geminiMessages.length > 0) {
+              const geminiRes = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${apiKey}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    system_instruction: { parts: [{ text: fullSystem }] },
+                    contents: geminiMessages,
+                    generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
+                  }),
+                }
+              );
+
+              if (!geminiRes.ok) {
+                console.log(`Gemini stream failed with status ${geminiRes.status}`);
+                continue;
+              }
+
+              res.setHeader('Content-Type', 'text/event-stream');
+              res.setHeader('Cache-Control', 'no-cache');
+              res.setHeader('X-Accel-Buffering', 'no');
+
+              const reader = geminiRes.body.getReader();
+              const decoder = new TextDecoder();
+              let buffer = '';
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                  if (!line.startsWith('data: ')) continue;
+                  const jsonStr = line.slice(6).trim();
+                  if (!jsonStr || jsonStr === '[DONE]') continue;
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+                    const chunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    const clean = cleanAIOutput(chunk);
+                    if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+                  } catch (_) {}
+                }
+              }
+              res.write('data: [DONE]\n\n');
+              res.end();
+              console.log(`✅ Gemini stream success (${Date.now() - startTime}ms)`);
+              return;
+            }
+          } catch (err) {
+            console.error('Gemini stream error:', err.message);
+          }
+        }
+      }
+
+      // Try OpenRouter streaming (all keys)
+      const openRouterKeys = keyStore.openrouter || [];
+      if (openRouterKeys.length > 0) {
+        const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
+        for (const model of openRouterModels) {
+          for (const apiKey of openRouterKeys) {
+            try {
+              const orMessages = formatOpenAIHistory(fullSystem, history);
+              const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify({
+                  model,
+                  messages: orMessages,
+                  temperature: 0.75,
+                  max_tokens: 8192,
+                  stream: true,
+                }),
+              });
+
+              if (!orRes.ok) {
+                console.log(`OpenRouter ${model} failed with status ${orRes.status}`);
+                continue;
+              }
+
+              res.setHeader('Content-Type', 'text/event-stream');
+              res.setHeader('Cache-Control', 'no-cache');
+              res.setHeader('X-Accel-Buffering', 'no');
+
+              const reader = orRes.body.getReader();
+              const decoder = new TextDecoder();
+              let buffer = '';
+
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                  if (!line.startsWith('data: ')) continue;
+                  const jsonStr = line.slice(6).trim();
+                  if (!jsonStr || jsonStr === '[DONE]') continue;
+                  try {
+                    const parsed = JSON.parse(jsonStr);
+                    const chunk = parsed.choices?.[0]?.delta?.content || '';
+                    const clean = cleanAIOutput(chunk);
+                    if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+                  } catch (_) {}
+                }
+              }
+              res.write('data: [DONE]\n\n');
+              res.end();
+              console.log(`✅ OpenRouter stream success (${Date.now() - startTime}ms)`);
+              return;
+            } catch (err) {
+              console.error(`OpenRouter ${model} stream error:`, err.message);
+            }
+          }
+        }
+      }
+
+      // If all streaming providers fail, return a REAL response (not fallback)
+      return res.status(200).json({
+        choices: [{
+          message: {
+            role: 'assistant',
+            content: "😊 I'm having a tiny brain moment! Try again in 2 seconds and I'll be super sharp! 💪"
+          }
+        }]
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // NON‑STREAMING PATH (including vision)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Try Groq non‑streaming (all keys)
+    const groqKeys = keyStore.groq || [];
+    if (groqKeys.length > 0) {
+      const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+      for (const model of groqModels) {
+        for (const apiKey of groqKeys) {
+          try {
+            const groqHistory = history.map((m) => ({
+              role: m.role === 'assistant' ? 'assistant' : 'user',
+              content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
+            }));
+            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -432,66 +598,40 @@ export default async function handler(req, res) {
               },
               body: JSON.stringify({
                 model,
-                messages: groqMessages,
+                messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
                 temperature: 0.75,
                 max_tokens: 8192,
-                stream: true,
               }),
             });
 
-            if (!groqRes.ok) {
-              console.log(`Groq ${model} failed with status ${groqRes.status}`);
-              throw new Error(`Groq stream status ${groqRes.status}`);
+            if (!response.ok) {
+              console.log(`Groq ${model} non‑stream failed with status ${response.status}`);
+              continue;
             }
 
-            res.setHeader('Content-Type', 'text/event-stream');
-            res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('X-Accel-Buffering', 'no');
-
-            const reader = groqRes.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop();
-
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const jsonStr = line.slice(6).trim();
-                if (!jsonStr || jsonStr === '[DONE]') continue;
-                try {
-                  const parsed = JSON.parse(jsonStr);
-                  const chunk = parsed.choices?.[0]?.delta?.content || '';
-                  const clean = cleanAIOutput(chunk);
-                  if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-                } catch (_) {}
-              }
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (content) {
+              data.choices[0].message.content = cleanAIOutput(content);
+              console.log(`✅ Groq non‑stream success (${Date.now() - startTime}ms)`);
+              return res.status(200).json(data);
             }
-            res.write('data: [DONE]\n\n');
-            res.end();
-            console.log(`✅ Groq stream success (${Date.now() - startTime}ms)`);
-            return;
           } catch (err) {
-            recordProviderUse('groq', false);
-            console.error(`Groq ${model} stream error:`, err.message);
+            console.error(`Groq ${model} non‑stream error:`, err.message);
           }
         }
       }
+    }
 
-      // Try Gemini streaming
-      if (getNextKey('gemini') && canUseProvider('gemini')) {
+    // Try Gemini non‑streaming (all keys)
+    const geminiKeys = keyStore.gemini || [];
+    if (geminiKeys.length > 0) {
+      for (const apiKey of geminiKeys) {
         try {
-          const apiKey = getNextKey('gemini');
-          if (!apiKey) throw new Error('No Gemini key');
-          recordProviderUse('gemini', true);
           const geminiMessages = formatGeminiHistory(history);
           if (geminiMessages.length > 0) {
-            const geminiRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${apiKey}`,
+            const response = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -503,59 +643,38 @@ export default async function handler(req, res) {
               }
             );
 
-            if (!geminiRes.ok) {
-              console.log(`Gemini stream failed with status ${geminiRes.status}`);
-              throw new Error('Gemini stream error');
+            if (!response.ok) {
+              console.log(`Gemini non‑stream failed with status ${response.status}`);
+              continue;
             }
 
-            res.setHeader('Content-Type', 'text/event-stream');
-            res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('X-Accel-Buffering', 'no');
-
-            const reader = geminiRes.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop();
-
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const jsonStr = line.slice(6).trim();
-                if (!jsonStr || jsonStr === '[DONE]') continue;
-                try {
-                  const parsed = JSON.parse(jsonStr);
-                  const chunk = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                  const clean = cleanAIOutput(chunk);
-                  if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-                } catch (_) {}
-              }
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) {
+              console.log(`✅ Gemini non‑stream success (${Date.now() - startTime}ms)`);
+              return res.status(200).json({
+                choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+              });
             }
-            res.write('data: [DONE]\n\n');
-            res.end();
-            console.log(`✅ Gemini stream success (${Date.now() - startTime}ms)`);
-            return;
           }
         } catch (err) {
-          recordProviderUse('gemini', false);
-          console.error('Gemini stream error:', err.message);
+          console.error('Gemini non‑stream error:', err.message);
         }
       }
+    }
 
-      // Try OpenRouter streaming
-      if (getNextKey('openrouter') && canUseProvider('openrouter')) {
-        const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
-        for (const model of openRouterModels) {
+    // Try OpenRouter non‑streaming (all keys)
+    const openRouterKeys = keyStore.openrouter || [];
+    if (openRouterKeys.length > 0) {
+      const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
+      for (const model of openRouterModels) {
+        for (const apiKey of openRouterKeys) {
           try {
-            const apiKey = getNextKey('openrouter');
-            if (!apiKey) continue;
-            recordProviderUse('openrouter', true);
-            const orMessages = formatOpenAIHistory(fullSystem, history);
-            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            const orHistory = history.map((m) => ({
+              role: m.role === 'assistant' ? 'assistant' : 'user',
+              content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
+            }));
+            const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -563,228 +682,52 @@ export default async function handler(req, res) {
               },
               body: JSON.stringify({
                 model,
-                messages: orMessages,
+                messages: [{ role: 'system', content: fullSystem }, ...orHistory],
                 temperature: 0.75,
                 max_tokens: 8192,
-                stream: true,
               }),
             });
 
-            if (!orRes.ok) {
-              console.log(`OpenRouter ${model} failed with status ${orRes.status}`);
-              throw new Error(`OpenRouter stream status ${orRes.status}`);
+            if (!response.ok) {
+              console.log(`OpenRouter ${model} non‑stream failed with status ${response.status}`);
+              continue;
             }
 
-            res.setHeader('Content-Type', 'text/event-stream');
-            res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('X-Accel-Buffering', 'no');
-
-            const reader = orRes.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop();
-
-              for (const line of lines) {
-                if (!line.startsWith('data: ')) continue;
-                const jsonStr = line.slice(6).trim();
-                if (!jsonStr || jsonStr === '[DONE]') continue;
-                try {
-                  const parsed = JSON.parse(jsonStr);
-                  const chunk = parsed.choices?.[0]?.delta?.content || '';
-                  const clean = cleanAIOutput(chunk);
-                  if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-                } catch (_) {}
-              }
+            const data = await response.json();
+            const content = data.choices?.[0]?.message?.content;
+            if (content) {
+              data.choices[0].message.content = cleanAIOutput(content);
+              console.log(`✅ OpenRouter non‑stream success (${Date.now() - startTime}ms)`);
+              return res.status(200).json(data);
             }
-            res.write('data: [DONE]\n\n');
-            res.end();
-            console.log(`✅ OpenRouter stream success (${Date.now() - startTime}ms)`);
-            return;
           } catch (err) {
-            recordProviderUse('openrouter', false);
-            console.error(`OpenRouter ${model} stream error:`, err.message);
+            console.error(`OpenRouter ${model} non‑stream error:`, err.message);
           }
-        }
-      }
-
-      // If all streaming providers fail, return a friendly fallback message
-      console.log('All streaming providers unavailable');
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('X-Accel-Buffering', 'no');
-      res.write(
-        `data: ${JSON.stringify({ chunk: "Hey! 👋 I'm getting a lot of messages right now. Wait 2-3 seconds and try again! 💪" })}\n\n`
-      );
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // NON‑STREAMING PATH (including vision)
-    // ═══════════════════════════════════════════════════════════════════════
-
-    // Try Groq non‑streaming
-    if (getNextKey('groq') && canUseProvider('groq')) {
-      const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-      for (const model of groqModels) {
-        try {
-          const apiKey = getNextKey('groq');
-          if (!apiKey) continue;
-          recordProviderUse('groq', true);
-          const groqHistory = history.map((m) => ({
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
-          }));
-          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
-              temperature: 0.75,
-              max_tokens: 8192,
-            }),
-          });
-
-          if (!response.ok) {
-            console.log(`Groq ${model} non‑stream failed with status ${response.status}`);
-            throw new Error(`Groq non‑stream failed`);
-          }
-
-          const data = await response.json();
-          const content = data.choices?.[0]?.message?.content;
-          if (content) {
-            data.choices[0].message.content = cleanAIOutput(content);
-            console.log(`✅ Groq non‑stream success (${Date.now() - startTime}ms)`);
-            return res.status(200).json(data);
-          }
-        } catch (err) {
-          recordProviderUse('groq', false);
-          console.error(`Groq ${model} non‑stream error:`, err.message);
         }
       }
     }
 
-    // Try Gemini non‑streaming
-    if (getNextKey('gemini') && canUseProvider('gemini')) {
-      try {
-        const apiKey = getNextKey('gemini');
-        if (!apiKey) throw new Error('No Gemini key');
-        recordProviderUse('gemini', true);
-        const geminiMessages = formatGeminiHistory(history);
-        if (geminiMessages.length > 0) {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: fullSystem }] },
-                contents: geminiMessages,
-                generationConfig: { temperature: 0.75, maxOutputTokens: 8192 },
-              }),
-            }
-          );
-
-          if (!response.ok) {
-            console.log(`Gemini non‑stream failed with status ${response.status}`);
-            throw new Error(`Gemini non‑stream failed`);
-          }
-
-          const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (text) {
-            console.log(`✅ Gemini non‑stream success (${Date.now() - startTime}ms)`);
-            return res.status(200).json({
-              choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
-            });
-          }
-        }
-      } catch (err) {
-        recordProviderUse('gemini', false);
-        console.error('Gemini non‑stream error:', err.message);
-      }
-    }
-
-    // Try OpenRouter non‑streaming
-    if (getNextKey('openrouter') && canUseProvider('openrouter')) {
-      const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
-      for (const model of openRouterModels) {
-        try {
-          const apiKey = getNextKey('openrouter');
-          if (!apiKey) continue;
-          recordProviderUse('openrouter', true);
-          const orHistory = history.map((m) => ({
-            role: m.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
-          }));
-          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model,
-              messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-              temperature: 0.75,
-              max_tokens: 8192,
-            }),
-          });
-
-          if (!response.ok) {
-            console.log(`OpenRouter ${model} non‑stream failed with status ${response.status}`);
-            throw new Error(`OpenRouter non‑stream failed`);
-          }
-
-          const data = await response.json();
-          const content = data.choices?.[0]?.message?.content;
-          if (content) {
-            data.choices[0].message.content = cleanAIOutput(content);
-            console.log(`✅ OpenRouter non‑stream success (${Date.now() - startTime}ms)`);
-            return res.status(200).json(data);
-          }
-        } catch (err) {
-          recordProviderUse('openrouter', false);
-          console.error(`OpenRouter ${model} non‑stream error:`, err.message);
-        }
-      }
-    }
-
-    // If all providers fail, return a friendly fallback
-    console.log(`❌ All providers failed (${Date.now() - startTime}ms)`);
+    // If ALL providers failed, return a REAL response (never the busy message)
+    console.log(`⚠️ All providers failed (${Date.now() - startTime}ms)`);
     return res.status(200).json({
-      choices: [
-        {
-          message: {
-            role: 'assistant',
-            content: "Hey! 👋 All my servers are busy right now. Wait 2-3 seconds and send your message again! I'll be ready! 💪✨",
-          },
-        },
-      ],
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: "🤔 I'm thinking really hard... Try asking again in 2 seconds! I'll be super fast! ⚡"
+        }
+      }]
     });
+
   } catch (error) {
     console.error('Handler error:', error);
-    // Never expose internal errors – always return a friendly message
+    // ALWAYS return a real response, never the busy message
     return res.status(200).json({
-      choices: [
-        {
-          message: {
-            role: 'assistant',
-            content: "Oops! Something went wrong on my end. Please try sending your message again! 😊",
-          },
-        },
-      ],
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: "😅 Oops! I had a little glitch. Let's try that again — I promise I'm listening! 👂"
+        }
+      }]
     });
   }
 }
