@@ -339,34 +339,10 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Valid messages array is required' });
     }
 
-    // ── Filter out placeholder assistant messages only ─────────────────────────
-    const clearedMessages = messages.filter((m) => {
-      if (m.role === 'assistant' || m.role === 'model') {
-        const textVal = getMessageText(m).toLowerCase().trim();
-        // Only remove if it's clearly a placeholder with no real content
-        if (textVal.length > 0 && textVal.length < 50 && (
-          (textVal.includes('on it') && textVal.includes('searching') && textVal.length < 65) ||
-          textVal === 'on it!' ||
-          textVal === 'searching...' ||
-          textVal === 'let me look that up...' ||
-          textVal === 'searching...'
-        )) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    // Safety: if filtering removed everything, use original messages
-    const finalMessages = clearedMessages.length > 0 ? clearedMessages : messages;
-
-    const lastMsg        = finalMessages[finalMessages.length - 1];
-    const isVisionRequest =
-      hasImage ||
-      (Array.isArray(lastMsg?.content) && lastMsg.content.some((c) => c.type === 'image_url'));
-
-    const lastMsgText  = getMessageText(lastMsg);
-    const detectedURLs = extractURLs(lastMsgText);
+    const lastMsg         = messages[messages.length - 1];
+    const isVisionRequest = hasImage || (Array.isArray(lastMsg?.content) && lastMsg.content.some((c) => c.type === 'image_url'));
+    const lastMsgText     = getMessageText(lastMsg);
+    const detectedURLs    = extractURLs(lastMsgText);
 
     // ── URL fetching ──────────────────────────────────────────────────────────
     let urlContext = '';
@@ -413,7 +389,7 @@ export default async function handler(req, res) {
 
     // ── Process image uploads ─────────────────────────────────────────────────
     const processedMessages = await Promise.all(
-      finalMessages.map(async (m) => {
+      messages.map(async (m) => {
         if (!Array.isArray(m.content)) return m;
         const newContent = await Promise.all(
           m.content.map(async (c) => {
@@ -434,24 +410,17 @@ export default async function handler(req, res) {
       const role        = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
       const textContent = getMessageText(msg);
 
-      // Skip completely empty messages (no text AND no images)
-      const hasText = textContent && textContent.trim().length > 0;
+      // Keep messages with text OR images
+      const hasText   = textContent && textContent.trim().length > 0;
       const hasImages = Array.isArray(msg.content) && msg.content.some((c) => c.type === 'image_url');
       if (!hasText && !hasImages) continue;
 
-      if (
-        standardizedHistory.length > 0 &&
-        standardizedHistory[standardizedHistory.length - 1].role === role
-      ) {
+      if (standardizedHistory.length > 0 && standardizedHistory[standardizedHistory.length - 1].role === role) {
         const prevTurn = standardizedHistory[standardizedHistory.length - 1];
         if (Array.isArray(prevTurn.content) || Array.isArray(msg.content)) {
-          const currentParts = Array.isArray(msg.content)
-            ? msg.content
-            : [{ type: 'text', text: textContent }];
-          const prevParts = Array.isArray(prevTurn.content)
-            ? prevTurn.content
-            : [{ type: 'text', text: String(prevTurn.content) }];
-          prevTurn.content = [...prevParts, ...currentParts];
+          const currentParts = Array.isArray(msg.content) ? msg.content : [{ type: 'text', text: textContent }];
+          const prevParts    = Array.isArray(prevTurn.content) ? prevTurn.content : [{ type: 'text', text: String(prevTurn.content) }];
+          prevTurn.content   = [...prevParts, ...currentParts];
         } else {
           prevTurn.content = String(prevTurn.content) + '\n\n' + textContent;
         }
@@ -468,11 +437,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'No valid messages to process' });
     }
 
-    // ── Trim history with larger budgets ──────────────────────────────────────
+    // ── Trim history ──────────────────────────────────────────────────────────
     const initialHistory = standardizedHistory.slice(isVisionRequest ? -60 : -150);
-    let history = trimHistoryByTokens(initialHistory, isVisionRequest ? 64000 : 128000);
+    let history          = trimHistoryByTokens(initialHistory, isVisionRequest ? 64000 : 128000);
 
-    // ── Safety: always keep at least the last user message ─────────────────────
+    // Safety: always keep at least the last message
     if (history.length === 0 && standardizedHistory.length > 0) {
       history = [standardizedHistory[standardizedHistory.length - 1]];
     }
@@ -480,13 +449,12 @@ export default async function handler(req, res) {
     // ── Language detection ────────────────────────────────────────────────────
     const userLang            = detectLanguage(lastMsgText);
     const languageInstruction = buildLanguageInstruction(userLang);
-    console.log(`Detected language: ${userLang}`);
 
     const fullSystem = clientSystemPrompt
       ? `${BASE_SYSTEM_PROMPT}${languageInstruction}\n\n[Client Layer]:\n${clientSystemPrompt}${urlContext}${searchContext}`
       : `${BASE_SYSTEM_PROMPT}${languageInstruction}${urlContext}${searchContext}`;
 
-    console.log(`Processing: ${history.length} msgs, vision: ${isVisionRequest}, stream: ${wantStream}`);
+    console.log(`📨 Request: ${history.length} msgs | Vision: ${isVisionRequest} | Stream: ${wantStream} | Lang: ${userLang}`);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // STREAMING PATH
@@ -513,7 +481,12 @@ export default async function handler(req, res) {
                 stream:      true,
               }),
             });
-            if (!groqRes.ok) throw new Error(`Groq ${groqRes.status}`);
+
+            if (!groqRes.ok) {
+              const errorText = await groqRes.text();
+              console.error(`❌ Groq ${model} failed: ${groqRes.status} - ${errorText}`);
+              throw new Error(`Groq ${groqRes.status}`);
+            }
 
             recordProviderUse('groq', true);
             res.setHeader('Content-Type',      'text/event-stream');
@@ -544,11 +517,11 @@ export default async function handler(req, res) {
             }
             res.write('data: [DONE]\n\n');
             res.end();
-            console.log(`✅ Groq stream (${Date.now() - startTime}ms)`);
+            console.log(`✅ Groq stream ${model} (${Date.now() - startTime}ms)`);
             return;
           } catch (err) {
             recordProviderUse('groq', false);
-            console.error(`Groq ${model} failed:`, err.message);
+            console.error(`❌ Groq ${model} error:`, err.message);
           }
         }
       }
@@ -570,7 +543,12 @@ export default async function handler(req, res) {
                 }),
               }
             );
-            if (!geminiRes.ok) throw new Error(`Gemini ${geminiRes.status}`);
+
+            if (!geminiRes.ok) {
+              const errorText = await geminiRes.text();
+              console.error(`❌ Gemini failed: ${geminiRes.status} - ${errorText}`);
+              throw new Error(`Gemini ${geminiRes.status}`);
+            }
 
             recordProviderUse('gemini', true);
             res.setHeader('Content-Type',      'text/event-stream');
@@ -606,7 +584,7 @@ export default async function handler(req, res) {
           }
         } catch (err) {
           recordProviderUse('gemini', false);
-          console.error('Gemini stream failed:', err.message);
+          console.error('❌ Gemini stream error:', err.message);
         }
       }
 
@@ -633,7 +611,12 @@ export default async function handler(req, res) {
                 stream:      true,
               }),
             });
-            if (!orRes.ok) throw new Error(`OpenRouter ${orRes.status}`);
+
+            if (!orRes.ok) {
+              const errorText = await orRes.text();
+              console.error(`❌ OpenRouter ${model} failed: ${orRes.status} - ${errorText}`);
+              throw new Error(`OpenRouter ${orRes.status}`);
+            }
 
             recordProviderUse('openrouter', true);
             res.setHeader('Content-Type',      'text/event-stream');
@@ -664,22 +647,21 @@ export default async function handler(req, res) {
             }
             res.write('data: [DONE]\n\n');
             res.end();
-            console.log(`✅ OpenRouter stream (${Date.now() - startTime}ms)`);
+            console.log(`✅ OpenRouter stream ${model} (${Date.now() - startTime}ms)`);
             return;
           } catch (err) {
             recordProviderUse('openrouter', false);
-            console.error(`OpenRouter ${model} failed:`, err.message);
+            console.error(`❌ OpenRouter ${model} error:`, err.message);
           }
         }
       }
 
-      // All providers busy — stream a friendly message
+      // ── Streaming fallback (no providers available) ─────────────────────────
+      console.log('⚠️  All streaming providers busy/unavailable');
       res.setHeader('Content-Type',      'text/event-stream');
       res.setHeader('Cache-Control',     'no-cache');
       res.setHeader('X-Accel-Buffering', 'no');
-      res.write(
-        `data: ${JSON.stringify({ chunk: "Hey! 👋 I'm getting lots of messages right now. Wait 2-3 seconds and try again! I'll be ready! 💪✨" })}\n\n`
-      );
+      res.write(`data: ${JSON.stringify({ chunk: "Hey! 👋 How can I help you today? (Running in limited mode right now)" })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
       return;
@@ -711,19 +693,24 @@ export default async function handler(req, res) {
               max_tokens:  16384,
             }),
           });
-          if (!response.ok) throw new Error(`Groq ${response.status}`);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`❌ Groq ${model} failed: ${response.status} - ${errorText}`);
+            throw new Error(`Groq ${response.status}`);
+          }
 
           recordProviderUse('groq', true);
           const data    = await response.json();
           const content = data.choices?.[0]?.message?.content;
           if (content) {
             data.choices[0].message.content = cleanAIOutput(content);
-            console.log(`✅ Groq (${Date.now() - startTime}ms)`);
+            console.log(`✅ Groq ${model} (${Date.now() - startTime}ms)`);
             return res.status(200).json(data);
           }
         } catch (err) {
           recordProviderUse('groq', false);
-          console.error(`Groq ${model} error:`, err.message);
+          console.error(`❌ Groq ${model} error:`, err.message);
         }
       }
     }
@@ -745,7 +732,12 @@ export default async function handler(req, res) {
               }),
             }
           );
-          if (!response.ok) throw new Error(`Gemini ${response.status}`);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`❌ Gemini failed: ${response.status} - ${errorText}`);
+            throw new Error(`Gemini ${response.status}`);
+          }
 
           recordProviderUse('gemini', true);
           const data = await response.json();
@@ -759,7 +751,7 @@ export default async function handler(req, res) {
         }
       } catch (err) {
         recordProviderUse('gemini', false);
-        console.error('Gemini error:', err.message);
+        console.error('❌ Gemini error:', err.message);
       }
     }
 
@@ -788,41 +780,46 @@ export default async function handler(req, res) {
               max_tokens:  16384,
             }),
           });
-          if (!response.ok) throw new Error(`OpenRouter ${response.status}`);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`❌ OpenRouter ${model} failed: ${response.status} - ${errorText}`);
+            throw new Error(`OpenRouter ${response.status}`);
+          }
 
           recordProviderUse('openrouter', true);
           const data    = await response.json();
           const content = data.choices?.[0]?.message?.content;
           if (content) {
             data.choices[0].message.content = cleanAIOutput(content);
-            console.log(`✅ OpenRouter (${Date.now() - startTime}ms)`);
+            console.log(`✅ OpenRouter ${model} (${Date.now() - startTime}ms)`);
             return res.status(200).json(data);
           }
         } catch (err) {
           recordProviderUse('openrouter', false);
-          console.error(`OpenRouter ${model} error:`, err.message);
+          console.error(`❌ OpenRouter ${model} error:`, err.message);
         }
       }
     }
 
-    // All providers failed
-    console.log(`❌ All providers unavailable (${Date.now() - startTime}ms)`);
+    // ── Final fallback (no providers worked) ───────────────────────────────────
+    console.log(`⚠️  All providers failed (${Date.now() - startTime}ms)`);
     return res.status(200).json({
       choices: [{
         message: {
           role:    'assistant',
-          content: "Hey! 👋 All servers are busy. Wait 2-3 seconds and try again! I'll be ready! 💪✨",
+          content: "Hey there! 👋 I'm CC-AI, your friendly assistant! I'm currently experiencing some connectivity issues with my AI servers, but I'm still here to help! What would you like to talk about? 😊",
         },
       }],
     });
 
   } catch (error) {
-    console.error('Handler error:', error);
+    console.error('💥 Handler error:', error);
     return res.status(200).json({
       choices: [{
         message: {
           role:    'assistant',
-          content: 'Oops! Something went wrong. Please try again! 😊',
+          content: 'Hey! 👋 Something unexpected happened. Could you try sending your message again? Thanks for your patience! 😊',
         },
       }],
     });
