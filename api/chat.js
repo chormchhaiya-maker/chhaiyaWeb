@@ -142,6 +142,57 @@ const recordProviderUse = (provider, success = true) => {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Smart Stream Filter: safely removes <think> blocks even when they are split across stream chunks
+const createStreamFilter = () => {
+  let inThinkBlock = false;
+  let buffer = '';
+
+  return (chunk) => {
+    buffer += chunk;
+    let output = '';
+
+    while (buffer.length > 0) {
+      if (inThinkBlock) {
+        const endIdx = buffer.indexOf('</think>');
+        if (endIdx !== -1) {
+          inThinkBlock = false;
+          buffer = buffer.slice(endIdx + 8); 
+        } else {
+          if (buffer.length > 7) {
+            buffer = buffer.slice(-7);
+          }
+          break; 
+        }
+      } else {
+        const startIdx = buffer.indexOf('<think>');
+        if (startIdx !== -1) {
+          inThinkBlock = true;
+          output += buffer.slice(0, startIdx); 
+          buffer = buffer.slice(startIdx + 7); 
+        } else {
+          let holdBack = 0;
+          for (let i = 1; i <= 6; i++) {
+            if (buffer.endsWith('<think>'.slice(0, i))) {
+              holdBack = i;
+              break;
+            }
+          }
+          if (holdBack > 0) {
+            output += buffer.slice(0, buffer.length - holdBack);
+            buffer = buffer.slice(buffer.length - holdBack);
+            break; 
+          } else {
+            output += buffer;
+            buffer = '';
+          }
+        }
+      }
+    }
+    return output;
+  };
+};
+
 const cleanAIOutput = (text) => {
   if (!text) return '';
   return text
@@ -191,7 +242,7 @@ const extractURLs = (text) => {
 
 const fetchURLContent = async (url) => {
   try {
-    const jinaURL    = `https://r.jina.ai/${encodeURIComponent(url)}`;
+    const jinaURL    = `[https://r.jina.ai/$](https://r.jina.ai/$){encodeURIComponent(url)}`;
     const controller = new AbortController();
     const timeoutId  = setTimeout(() => controller.abort(), 6000);
     const res        = await fetch(jinaURL, {
@@ -221,7 +272,7 @@ const uploadToCloudflare = async (base64DataUrl) => {
     const formData = new FormData();
     formData.append('file', new Blob([byteArr], { type: mimeType }), `upload.${ext}`);
     const cfRes  = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}/images/v1`,
+      `[https://api.cloudflare.com/client/v4/accounts/$](https://api.cloudflare.com/client/v4/accounts/$){accountId}/images/v1`,
       { method: 'POST', headers: { Authorization: `Bearer ${apiToken}` }, body: formData }
     );
     const cfData = await cfRes.json();
@@ -333,7 +384,12 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    const { messages, systemPrompt: clientSystemPrompt, hasImage, stream: wantStream } = req.body || {};
+    // Safe Body Parsing
+    let reqBody = req.body;
+    if (typeof reqBody === 'string') {
+        try { reqBody = JSON.parse(reqBody); } catch(e) { reqBody = {}; }
+    }
+    const { messages, systemPrompt: clientSystemPrompt, hasImage, stream: wantStream } = reqBody || {};
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Valid messages array is required' });
@@ -370,7 +426,7 @@ export default async function handler(req, res) {
     let searchContext = '';
     if (isSearchRequest && detectedURLs.length === 0) {
       try {
-        const jinaSearchURL = `https://s.jina.ai/${encodeURIComponent(lastMsgText)}`;
+        const jinaSearchURL = `[https://s.jina.ai/$](https://s.jina.ai/$){encodeURIComponent(lastMsgText)}`;
         const controller    = new AbortController();
         const timeoutId     = setTimeout(() => controller.abort(), 5000);
         const searchRes     = await fetch(jinaSearchURL, {
@@ -467,7 +523,7 @@ export default async function handler(req, res) {
         for (const model of groqModels) {
           try {
             const groqMessages = formatOpenAIHistory(fullSystem, history);
-            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            const groqRes = await fetch('[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -496,6 +552,7 @@ export default async function handler(req, res) {
             const reader  = groqRes.body.getReader();
             const decoder = new TextDecoder();
             let buffer    = '';
+            const streamFilter = createStreamFilter();
 
             while (true) {
               const { done, value } = await reader.read();
@@ -510,7 +567,7 @@ export default async function handler(req, res) {
                 try {
                   const parsed = JSON.parse(jsonStr);
                   const chunk  = parsed.choices?.[0]?.delta?.content || '';
-                  const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                  const clean  = streamFilter(chunk);
                   if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
                 } catch (_) {}
               }
@@ -532,7 +589,7 @@ export default async function handler(req, res) {
           const geminiMessages = formatGeminiHistory(history);
           if (geminiMessages.length > 0) {
             const geminiRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+              `[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=$){process.env.GEMINI_API_KEY}`,
               {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -558,6 +615,7 @@ export default async function handler(req, res) {
             const reader  = geminiRes.body.getReader();
             const decoder = new TextDecoder();
             let buffer    = '';
+            const streamFilter = createStreamFilter();
 
             while (true) {
               const { done, value } = await reader.read();
@@ -572,7 +630,7 @@ export default async function handler(req, res) {
                 try {
                   const parsed = JSON.parse(jsonStr);
                   const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                  const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                  const clean  = streamFilter(chunk);
                   if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
                 } catch (_) {}
               }
@@ -597,7 +655,7 @@ export default async function handler(req, res) {
         for (const model of openRouterModels) {
           try {
             const orMessages = formatOpenAIHistory(fullSystem, history);
-            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            const orRes = await fetch('[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -626,6 +684,7 @@ export default async function handler(req, res) {
             const reader  = orRes.body.getReader();
             const decoder = new TextDecoder();
             let buffer    = '';
+            const streamFilter = createStreamFilter();
 
             while (true) {
               const { done, value } = await reader.read();
@@ -640,7 +699,7 @@ export default async function handler(req, res) {
                 try {
                   const parsed = JSON.parse(jsonStr);
                   const chunk  = parsed.choices?.[0]?.delta?.content || '';
-                  const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+                  const clean  = streamFilter(chunk);
                   if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
                 } catch (_) {}
               }
@@ -680,7 +739,7 @@ export default async function handler(req, res) {
             role:    m.role === 'assistant' ? 'assistant' : 'user',
             content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
           }));
-          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          const response = await fetch('[https://api.groq.com/openai/v1/chat/completions](https://api.groq.com/openai/v1/chat/completions)', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -721,7 +780,7 @@ export default async function handler(req, res) {
         const geminiMessages = formatGeminiHistory(history);
         if (geminiMessages.length > 0) {
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `[https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=$](https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=$){process.env.GEMINI_API_KEY}`,
             {
               method:  'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -767,7 +826,7 @@ export default async function handler(req, res) {
             role:    m.role === 'assistant' ? 'assistant' : 'user',
             content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
           }));
-          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          const response = await fetch('[https://openrouter.ai/api/v1/chat/completions](https://openrouter.ai/api/v1/chat/completions)', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
