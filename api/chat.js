@@ -1,5 +1,5 @@
-// api/chat.js — CC-AI by ChormChhaiya [STABLE PRODUCTION VERSION]
-// Fully fixed, multilingual (Khmer + English), with all providers + streaming + vision
+// api/chat.js — CC-AI by ChormChhaiya [MULTI-KEY ROTATION + KHMER SUPPORT]
+// Fully stable production version with automatic key rotation
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -70,6 +70,42 @@ IMPORTANT RULES:
 MAIN GOAL:
 Make CC-AI feel like a next‑generation premium AI — smart, emotional, alive, modern, futuristic, and fun to talk with.
 `.trim();
+
+// ── MULTI-KEY ROTATION HELPERS ──────────────────────────────────────────────
+const getKeyArray = (baseKey) => {
+  const keys = [process.env[baseKey]];
+  let index = 2;
+  while (true) {
+    const key = process.env[`${baseKey}_${index}`];
+    if (!key) break;
+    keys.push(key);
+    index++;
+  }
+  return keys.filter(Boolean);
+};
+
+const keyStore = {
+  groq: null,
+  gemini: null,
+  openrouter: null,
+};
+const keyIndex = { groq: 0, gemini: 0, openrouter: 0 };
+
+const getNextKey = (provider) => {
+  if (!keyStore[provider]) {
+    const baseMap = {
+      groq: 'GROQ_API_KEY',
+      gemini: 'GEMINI_API_KEY',
+      openrouter: 'OPENROUTER_API_KEY',
+    };
+    keyStore[provider] = getKeyArray(baseMap[provider]);
+  }
+  const keys = keyStore[provider];
+  if (!keys || keys.length === 0) return null;
+  const key = keys[keyIndex[provider] % keys.length];
+  keyIndex[provider] = (keyIndex[provider] + 1) % keys.length;
+  return key;
+};
 
 // ── Rate Limiting ─────────────────────────────────────────────────────────────
 let providerStats = {
@@ -380,17 +416,19 @@ export default async function handler(req, res) {
     // ═══════════════════════════════════════════════════════════════════════
     if (wantStream && !isVisionRequest) {
       // Try Groq streaming
-      if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
+      if (getNextKey('groq') && canUseProvider('groq')) {
         const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
         for (const model of groqModels) {
           try {
+            const apiKey = getNextKey('groq');
+            if (!apiKey) continue;
             recordProviderUse('groq', true);
             const groqMessages = formatOpenAIHistory(fullSystem, history);
             const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+                Authorization: `Bearer ${apiKey}`,
               },
               body: JSON.stringify({
                 model,
@@ -445,13 +483,15 @@ export default async function handler(req, res) {
       }
 
       // Try Gemini streaming
-      if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
+      if (getNextKey('gemini') && canUseProvider('gemini')) {
         try {
+          const apiKey = getNextKey('gemini');
+          if (!apiKey) throw new Error('No Gemini key');
           recordProviderUse('gemini', true);
           const geminiMessages = formatGeminiHistory(history);
           if (geminiMessages.length > 0) {
             const geminiRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
+              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${apiKey}`,
               {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -507,17 +547,19 @@ export default async function handler(req, res) {
       }
 
       // Try OpenRouter streaming
-      if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
+      if (getNextKey('openrouter') && canUseProvider('openrouter')) {
         const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
         for (const model of openRouterModels) {
           try {
+            const apiKey = getNextKey('openrouter');
+            if (!apiKey) continue;
             recordProviderUse('openrouter', true);
             const orMessages = formatOpenAIHistory(fullSystem, history);
             const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                Authorization: `Bearer ${apiKey}`,
               },
               body: JSON.stringify({
                 model,
@@ -589,10 +631,12 @@ export default async function handler(req, res) {
     // ═══════════════════════════════════════════════════════════════════════
 
     // Try Groq non‑streaming
-    if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
+    if (getNextKey('groq') && canUseProvider('groq')) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
+          const apiKey = getNextKey('groq');
+          if (!apiKey) continue;
           recordProviderUse('groq', true);
           const groqHistory = history.map((m) => ({
             role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -602,7 +646,7 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+              Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
               model,
@@ -632,13 +676,15 @@ export default async function handler(req, res) {
     }
 
     // Try Gemini non‑streaming
-    if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
+    if (getNextKey('gemini') && canUseProvider('gemini')) {
       try {
+        const apiKey = getNextKey('gemini');
+        if (!apiKey) throw new Error('No Gemini key');
         recordProviderUse('gemini', true);
         const geminiMessages = formatGeminiHistory(history);
         if (geminiMessages.length > 0) {
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -671,10 +717,12 @@ export default async function handler(req, res) {
     }
 
     // Try OpenRouter non‑streaming
-    if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
+    if (getNextKey('openrouter') && canUseProvider('openrouter')) {
       const openRouterModels = ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemma-2-9b-it:free'];
       for (const model of openRouterModels) {
         try {
+          const apiKey = getNextKey('openrouter');
+          if (!apiKey) continue;
           recordProviderUse('openrouter', true);
           const orHistory = history.map((m) => ({
             role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -684,7 +732,7 @@ export default async function handler(req, res) {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
               model,
