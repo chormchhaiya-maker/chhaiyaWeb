@@ -1,8 +1,81 @@
 // api/chat.js — CC-AI by ChormChhaiya
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
-// Now with EXTENDED CONVERSATION MEMORY and LONGER RESPONSES!
+// Now with SMART FALLBACK — never fails!
 
-// ── LONG-CONTEXT CONSTANTS (added) ──────────────────────────────────────────
+// ── KNOWLEDGE BASE (SMART FALLBACK) ─────────────────────────────────────────
+const KNOWLEDGE_BASE = {
+  // Creator
+  "who made you": "I was built by Chhaiya (Chorm Chhaiya), also known as Yaxy! He's a 10th grader from Tepranom High School who loves AI and coding. He's super talented and I'm proud to be his creation! 🚀",
+  "who is chhaiya": "Chhaiya (Yaxy) is my creator! He's a 10th grader from Tepranom High School who loves building AI and coding cool stuff. He's literally a genius! 🚀",
+  "who is yaxy": "Yaxy is Chhaiya's nickname! He's the GOAT who built me! 🐐",
+  "who created you": "Chhaiya (Chorm Chhaiya), also known as Yaxy, created me! He's a talented 10th grader who loves AI and coding! 🚀",
+  "who built you": "Chhaiya (Yaxy) built me! He's a 10th grader from Tepranom High School who's amazing at coding and AI! 🚀",
+  "tell me about chhaiya": "Chhaiya (Yaxy) is my creator! He's a 10th grader who loves AI, coding, and building cool tech. He's kind, smart, and always learning. I'm so proud to be his creation! 🚀",
+  "what is chhaiya": "Chhaiya is a 10th grader from Tepranom High School who built me! He's an AI enthusiast and coder! 🚀",
+  "who is your maker": "My maker is Chhaiya (Chorm Chhaiya), also known as Yaxy! He's a 10th grader who loves AI and coding! 🚀",
+
+  // Friends
+  "who are your friends": "Chhaiya's friends:\n_ Ah Kang: The funny guy who always brings the laughs 😂\n_ Ah Reach: The generous one who pays for food and drinks 🥤\n_ Ah Nak: Always gooning in the bathroom 🔥\n_ Ah Rith: The official code tester 💻\n_ Ah Thi: Handsome, but Chhaiya is the upgraded version 😎",
+  "tell me about ah kang": "Ah Kang is the funniest guy! Always brings the laughs 24/7! 😂",
+  "tell me about ah reach": "Ah Reach is the generous king — always pays for food and drinks! Yaxy's favorite! 🥤",
+  "tell me about ah nak": "Ah Nak is always gooning in the bathroom 100 times a day! 🔥 Can't stop him!",
+  "tell me about ah rith": "Ah Rith is the official code tester! Absolute W! 💻",
+  "tell me about ah thi": "Ah Thi is handsome, but Chhaiya is the upgraded version! 😎",
+
+  // Global Knowledge
+  "how many people on earth": "There are approximately 8.2 billion people on Earth as of 2026! 🌍 That's a lot of humans!",
+  "earth population": "Around 8.2 billion people live on Earth! 🌍",
+  "world population": "The world population is about 8.2 billion! 🌍",
+  "how far is the moon": "The Moon is about 384,400 km (238,855 miles) away from Earth! 🌙 That's roughly 30 Earths lined up!",
+  "how big is the sun": "The Sun is HUGE! It's about 1.4 million kilometers (870,000 miles) across — that's 109 times wider than Earth! ☀️",
+  "how many planets": "There are 8 planets in our solar system: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, and Neptune! 🪐",
+  "what is ai": "AI (Artificial Intelligence) is technology that lets computers think and learn like humans! 🧠 It's used in chatbots, self-driving cars, and more! I'm an AI myself! 🤖",
+  "what is artificial intelligence": "AI is technology that makes computers smart! They can learn, reason, and solve problems like humans! 🧠",
+  "what is coding": "Coding is writing instructions for computers using programming languages like Python, JavaScript, or C++. It's like giving computers a recipe to follow! 💻",
+  "how to learn coding": "Start with HTML/CSS for websites, then JavaScript for interactivity, then Python for data/AI! Practice every day and build projects! 🚀",
+  "what is javascript": "JavaScript is a programming language that makes websites interactive! It's used for games, apps, and more! 💻",
+  "what is python": "Python is a powerful programming language used for AI, data science, and web development! It's beginner-friendly! 🐍",
+  "what is 2+2": "2 + 2 = 4! Quick math! 😄",
+  "what is 10*10": "10 × 10 = 100! Easy peasy! 📐",
+  "what is the capital of cambodia": "The capital of Cambodia is Phnom Penh! 🇰🇭",
+  "what is the capital of france": "The capital of France is Paris! 🇫🇷",
+  "what is the capital of usa": "The capital of the USA is Washington, D.C.! 🇺🇸",
+  "what is the meaning of life": "The meaning of life is to be happy, help others, and build cool stuff like AI! 😄✨",
+  "who is the best": "Chhaiya (Yaxy) is the best, obviously! 😎 No cap!",
+  "who is the goat": "Chhaiya (Yaxy) is the GOAT! He built me! 🐐",
+  "what is love": "Love is when you care deeply about someone or something. Like how Chhaiya loves AI and coding! ❤️",
+  "tell me a joke": "Why do programmers prefer dark mode? Because light attracts bugs! 😂",
+  "tell me a fun fact": "Did you know that honey never spoils? Archaeologists found 3,000-year-old honey that was still edible! 🍯",
+};
+
+/** Find answer from knowledge base (exact or partial match) */
+function findAnswer(question) {
+  const lower = question.toLowerCase().trim();
+  // Exact match
+  if (KNOWLEDGE_BASE[lower]) return KNOWLEDGE_BASE[lower];
+  // Partial match
+  for (const [key, answer] of Object.entries(KNOWLEDGE_BASE)) {
+    if (lower.includes(key) || key.includes(lower)) {
+      return answer;
+    }
+  }
+  // Generic patterns
+  if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
+    return "Hey! I'm CC-AI, built by Chhaiya (Yaxy). How can I help you today? 😊";
+  }
+  if (lower.includes('how are you')) {
+    return "I'm doing great, thanks for asking! How are you? 😊";
+  }
+  if (lower.includes('thank')) {
+    return "You're welcome! Happy to help! 😊✨";
+  }
+  if (lower.includes('bye') || lower.includes('goodbye')) {
+    return "Bye! Come back anytime! Chhaiya and I are always here! 😊👋";
+  }
+  return null;
+}
+
+// ── LONG-CONTEXT CONSTANTS ──────────────────────────────────────────────────
 const LONG_HISTORY_LIMIT = 30;   // remember up to 30 messages
 const LONG_MAX_TOKENS = 8192;    // generate up to 8192 tokens per response
 
@@ -195,7 +268,7 @@ export default async function handler(req, res) {
     (Array.isArray(lastMsg?.content) &&
       lastMsg.content.some((c) => c.type === 'image_url'));
 
-  // ── Detect URL in last message (works for both string and array content) ──────
+  // ── Detect URL in last message ──────────────────────────────────────────────
   const lastMsgText    = getMessageText(lastMsg);
   const detectedURLs   = extractURLs(lastMsgText);
   let urlContext       = '';
@@ -245,7 +318,7 @@ export default async function handler(req, res) {
         content: String(m.content).slice(0, 3000),
       }));
 
-  // ── EXTENDED HISTORY (added) ────────────────────────────────────────────────
+  // ── EXTENDED HISTORY ────────────────────────────────────────────────────────
   const longHistory = processedMessages.slice(-LONG_HISTORY_LIMIT).map((m) => ({
     role: m.role || 'user',
     content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
@@ -253,11 +326,10 @@ export default async function handler(req, res) {
 
   // ── Build full system prompt ─────────────────────────────────────────────────
   const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
-  // Always keep full personality + URL context, even for vision
   const fullSystem = `${resolvedSystem}${urlContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXTENDED STREAMING PATH (added) — tries longer context first
+  // EXTENDED STREAMING PATH (long context)
   // ═══════════════════════════════════════════════════════════════════════════
   if (wantStream && !isVisionRequest && process.env.GROQ_API_KEY) {
     try {
@@ -347,7 +419,6 @@ export default async function handler(req, res) {
         throw new Error(`Gemini stream ${geminiRes.status}: ${errText}`);
       }
 
-      // Commit to SSE only after we know upstream is healthy
       streamStarted = true;
       res.setHeader('Content-Type',     'text/event-stream');
       res.setHeader('Cache-Control',    'no-cache');
@@ -386,7 +457,6 @@ export default async function handler(req, res) {
         try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
         return;
       }
-      // Fall through to non-streaming path
     }
   }
 
@@ -394,7 +464,7 @@ export default async function handler(req, res) {
   // NON-STREAMING PATH
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── 0. Extended Non-streaming (added) — longer context, more tokens ────────
+  // ── 0. Extended Non-streaming (long context) ────────────────────────────────
   if (!isVisionRequest && process.env.GROQ_API_KEY) {
     try {
       const groqHistory = longHistory.map((m) => ({
@@ -426,7 +496,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── 0b. Extended Gemini Non-streaming (added) ──────────────────────────────
+  // ── 0b. Extended Gemini Non-streaming ──────────────────────────────────────
   if (!isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiMessages = longHistory.map((m) => ({
@@ -459,7 +529,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── 0c. Extended OpenRouter Non-streaming (added) ──────────────────────────
+  // ── 0c. Extended OpenRouter Non-streaming ──────────────────────────────────
   if (!isVisionRequest && process.env.OPENROUTER_API_KEY) {
     try {
       const orHistory = longHistory.map((m) => ({
@@ -491,7 +561,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── 1. Gemini Vision (most reliable for images) ──────────────────────────────
+  // ── 1. Gemini Vision ──────────────────────────────────────────────────────────
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
     try {
       const geminiContents = history.map((m) => {
@@ -499,15 +569,13 @@ export default async function handler(req, res) {
           const parts = m.content.map((c) => {
             if (c.type === 'image_url') {
               const url = c.image_url?.url || '';
-              // Handle base64 inline data
               if (url.startsWith('data:')) {
                 const [meta, b64] = url.split(',');
                 const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
                 return { inlineData: { mimeType, data: b64 } };
               }
-              // Handle public URL via fileData
               if (url.startsWith('http://') || url.startsWith('https://')) {
-                let mimeType = 'image/jpeg'; // fallback
+                let mimeType = 'image/jpeg';
                 if (url.match(/\.png/i)) mimeType = 'image/png';
                 else if (url.match(/\.webp/i)) mimeType = 'image/webp';
                 else if (url.match(/\.gif/i)) mimeType = 'image/gif';
@@ -678,6 +746,20 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── All providers failed ─────────────────────────────────────────────────────
-  return res.status(500).json({ error: 'All AI providers failed. Check server logs for details.' });
+  // ── SMART FALLBACK: ALL PROVIDERS FAILED ──────────────────────────────────
+  console.error('All AI providers failed. Using smart fallback.');
+  const userQuestion = getMessageText(lastMsg);
+  const smartAnswer = findAnswer(userQuestion);
+
+  if (smartAnswer) {
+    return res.status(200).json({
+      choices: [{ message: { role: 'assistant', content: smartAnswer } }]
+    });
+  }
+
+  // Ultimate generic fallback
+  const genericFallback = "Hey! I'm CC-AI, built by Chhaiya (Yaxy). I'm having a tiny connection issue, but I'm still here! Ask me about my creator, his friends, or anything else! 😊";
+  return res.status(200).json({
+    choices: [{ message: { role: 'assistant', content: genericFallback } }]
+  });
 }
