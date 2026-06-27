@@ -1,5 +1,10 @@
 // api/chat.js — CC-AI by ChormChhaiya
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
+// Now with EXTENDED CONVERSATION MEMORY and LONGER RESPONSES!
+
+// ── LONG-CONTEXT CONSTANTS (added) ──────────────────────────────────────────
+const LONG_HISTORY_LIMIT = 30;   // remember up to 30 messages
+const LONG_MAX_TOKENS = 8192;    // generate up to 8192 tokens per response
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -240,10 +245,78 @@ export default async function handler(req, res) {
         content: String(m.content).slice(0, 3000),
       }));
 
+  // ── EXTENDED HISTORY (added) ────────────────────────────────────────────────
+  const longHistory = processedMessages.slice(-LONG_HISTORY_LIMIT).map((m) => ({
+    role: m.role || 'user',
+    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+  }));
+
   // ── Build full system prompt ─────────────────────────────────────────────────
   const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
   // Always keep full personality + URL context, even for vision
   const fullSystem = `${resolvedSystem}${urlContext}`;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXTENDED STREAMING PATH (added) — tries longer context first
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (wantStream && !isVisionRequest && process.env.GROQ_API_KEY) {
+    try {
+      const groqHistory = longHistory.map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+      }));
+
+      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+          temperature: 0.75,
+          max_tokens: LONG_MAX_TOKENS,
+          stream: true,
+        }),
+      });
+
+      if (groqRes.ok) {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('X-Accel-Buffering', 'no');
+
+        const reader = groqRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (!jsonStr || jsonStr === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const chunk = parsed.choices?.[0]?.delta?.content || '';
+              const clean = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
+              if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+            } catch (_) {}
+          }
+        }
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+    } catch (err) {
+      console.error('Extended Groq stream error:', err.message);
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STREAMING PATH — Gemini SSE (text only)
@@ -320,6 +393,103 @@ export default async function handler(req, res) {
   // ═══════════════════════════════════════════════════════════════════════════
   // NON-STREAMING PATH
   // ═══════════════════════════════════════════════════════════════════════════
+
+  // ── 0. Extended Non-streaming (added) — longer context, more tokens ────────
+  if (!isVisionRequest && process.env.GROQ_API_KEY) {
+    try {
+      const groqHistory = longHistory.map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+      }));
+
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+          temperature: 0.75,
+          max_tokens: LONG_MAX_TOKENS,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.choices?.[0]?.message?.content) {
+        data.choices[0].message.content = cleanAIOutput(data.choices[0].message.content);
+        return res.status(200).json(data);
+      }
+    } catch (err) {
+      console.error('Extended Groq error:', err.message);
+    }
+  }
+
+  // ── 0b. Extended Gemini Non-streaming (added) ──────────────────────────────
+  if (!isVisionRequest && process.env.GEMINI_API_KEY) {
+    try {
+      const geminiMessages = longHistory.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
+      }));
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: fullSystem }] },
+            contents: geminiMessages,
+            generationConfig: { temperature: 0.75, maxOutputTokens: LONG_MAX_TOKENS },
+          }),
+        }
+      );
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        return res.status(200).json({
+          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+        });
+      }
+    } catch (err) {
+      console.error('Extended Gemini error:', err.message);
+    }
+  }
+
+  // ── 0c. Extended OpenRouter Non-streaming (added) ──────────────────────────
+  if (!isVisionRequest && process.env.OPENROUTER_API_KEY) {
+    try {
+      const orHistory = longHistory.map((m) => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+      }));
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'meta-llama/llama-3.3-70b-instruct:free',
+          messages: [{ role: 'system', content: fullSystem }, ...orHistory],
+          temperature: 0.75,
+          max_tokens: LONG_MAX_TOKENS,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.choices?.[0]?.message?.content) {
+        data.choices[0].message.content = cleanAIOutput(data.choices[0].message.content);
+        return res.status(200).json(data);
+      }
+    } catch (err) {
+      console.error('Extended OpenRouter error:', err.message);
+    }
+  }
 
   // ── 1. Gemini Vision (most reliable for images) ──────────────────────────────
   if (isVisionRequest && process.env.GEMINI_API_KEY) {
