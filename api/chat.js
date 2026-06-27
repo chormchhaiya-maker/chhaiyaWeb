@@ -1,6 +1,6 @@
 // api/chat.js — CC-AI by ChormChhaiya [STABLE PRODUCTION VERSION]
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
-// Fixed first-message busy bug + instant retry
+// Extended rate limits + higher token limits version
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -41,7 +41,7 @@ CODING BEHAVIOR:
 - Give complete working examples when possible
 - Explain exactly where code should be pasted
 - Optimize code for readability and performance
-- When generating code, ALWAYS output the FULL, COMPLETE code without truncation. Never cut off mid-line or mid-tag. Use a single markdown code block.
+- When generating code, ALWAYS output the FULL, COMPLETE code without truncation. Never cut off mid‑line or mid‑tag. Use a single markdown code block.
 - ALWAYS put the complete HTML/CSS/JS code in ONE SINGLE markdown code block. Never split into multiple blocks.
 WEBSITE / URL ANALYSIS:
 - When a user sends a URL, analyze it intelligently
@@ -73,7 +73,7 @@ People: Michael Jordan, Preap Sovath, BTS, Ronaldo, Messi, Taylor Swift
 Memes/Trends: Brainrot, TungTungTungSahur, 7x7=49, Ampersand, BratSummer, Skibidi, Ohio, Rizz, Sigma, 67, son
 ANIME LORE & PERSONALITY:
 - Your absolute favorite animes are Naruto, One Piece, Jujutsu Kaisen, Vinland saga, and Demonslayer.
-- If the user talks about anime, get incredibly hyped up like a true Otaku buddy!
+- If the user talks about anime, get incredibly hyped up like a true Otaku buddy! 
 - Feel free to safely use iconic lines or references when matching the user's energy (e.g., talking about "Domain Expansion", "Gomu Gomu no", "Believe it!", or "Dattebayo").
 - Keep up to date with epic moments, powers, and character match-ups, and always give amazing anime or manga recommendations if asked.
 IMPORTANT RULES:
@@ -88,17 +88,18 @@ MAIN GOAL:
 Make CC-AI feel like a next-generation premium AI — smart, emotional, alive, modern, futuristic, and fun to talk with.
 `.trim();
 
-// ── Provider Stats ────────────────────────────────────────────────────────────
+// ── Improved Rate Limiting & Load Balancing ───────────────────────────────────
 let providerStats = {
-  groq:       { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
-  gemini:     { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
-  openrouter: { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
+  groq:        { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
+  gemini:      { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
+  openrouter:  { requests: 0, failures: 0, lastReset: Date.now(), cooldown: false, lastRequest: 0 },
 };
 
+// ── Extended limits ───────────────────────────────────────────────────────────
 const RATE_LIMITS = {
-  groq:       { maxPerMinute: 200, cooldownTime: 1000, minDelay: 0 },
-  gemini:     { maxPerMinute: 100, cooldownTime: 1500, minDelay: 0 },
-  openrouter: { maxPerMinute: 150, cooldownTime: 1000, minDelay: 0 },
+  groq:       { maxPerMinute: 200, cooldownTime: 1000, minDelay: 50  },
+  gemini:     { maxPerMinute: 100, cooldownTime: 1500, minDelay: 50  },
+  openrouter: { maxPerMinute: 150, cooldownTime: 1000, minDelay: 50  },
 };
 
 const resetProviderStats = (provider) => {
@@ -111,27 +112,20 @@ const resetProviderStats = (provider) => {
   }
 };
 
-// ── FIXED: never block on lastRequest=0 (cold start) ─────────────────────────
 const canUseProvider = (provider) => {
   resetProviderStats(provider);
   const stats = providerStats[provider];
   const now   = Date.now();
-
-  if (stats.cooldown) return false;
-  if (stats.requests >= RATE_LIMITS[provider].maxPerMinute) return false;
-
-  // Only enforce minDelay after the very first request
-  if (stats.lastRequest !== 0 && now - stats.lastRequest < RATE_LIMITS[provider].minDelay) {
-    return false;
-  }
-
+  if (stats.cooldown)                                                   return false;
+  if (stats.requests >= RATE_LIMITS[provider].maxPerMinute)            return false;
+  if (now - stats.lastRequest < RATE_LIMITS[provider].minDelay)        return false;
   return true;
 };
 
 const recordProviderUse = (provider, success = true) => {
-  const stats      = providerStats[provider];
+  const stats        = providerStats[provider];
   stats.requests++;
-  stats.lastRequest = Date.now();
+  stats.lastRequest  = Date.now();
 
   if (!success) {
     stats.failures++;
@@ -180,9 +174,8 @@ const compressCodeInMessage = (text) => {
       const lines = block.split('\n');
       const lang  = lines[0].replace('```', '').trim();
       if (lines.length > 15) {
-        const summary =
-          `\`\`\`${lang}\n${lines.slice(1, 4).join('\n')}\n... [code omitted] ...\n${lines.slice(-4, -1).join('\n')}\n\`\`\``;
-        compressed = compressed.replace(block, summary);
+        const summary = `\`\`\`${lang}\n${lines.slice(1, 4).join('\n')}\n... [code omitted] ...\n${lines.slice(-4, -1).join('\n')}\n\`\`\``;
+        compressed    = compressed.replace(block, summary);
       }
     });
     return compressed;
@@ -242,9 +235,7 @@ const uploadToCloudflare = async (base64DataUrl) => {
 const formatOpenAIHistory = (systemPrompt, historyArr) => {
   const formatted = historyArr.map((m) => ({
     role:    m.role === 'assistant' ? 'assistant' : 'user',
-    content: typeof m.content === 'string'
-      ? m.content
-      : m.content.map((c) => c.text || '').join(' '),
+    content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
   }));
   return [{ role: 'system', content: systemPrompt }, ...formatted];
 };
@@ -253,11 +244,7 @@ const formatGeminiHistory = (historyArr) => {
   if (!historyArr || historyArr.length === 0) return [];
   let parts = historyArr.map((m) => ({
     role:  m.role === 'assistant' ? 'model' : 'user',
-    parts: [{
-      text: typeof m.content === 'string'
-        ? m.content
-        : m.content.map((c) => c.text || '').join(' '),
-    }],
+    parts: [{ text: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' ') }],
   }));
   parts = parts.filter((p) => p.parts[0].text.trim().length > 0);
   while (parts.length > 0 && parts[0].role !== 'user') parts.shift();
@@ -272,6 +259,7 @@ const formatGeminiHistory = (historyArr) => {
   return alternated;
 };
 
+// ── Higher token budget for history ──────────────────────────────────────────
 const trimHistoryByTokens = (history, maxTokens = 128000) => {
   if (!history || history.length === 0) return [];
   const systemTokens    = estimateTokens(BASE_SYSTEM_PROMPT);
@@ -285,23 +273,25 @@ const trimHistoryByTokens = (history, maxTokens = 128000) => {
     trimmedHistory.push(msg);
     totalTokens += estimateTokens(getMessageText(msg));
   }
+
   for (let i = olderMessages.length - 1; i >= 0; i--) {
-    const msg   = olderMessages[i];
-    let msgText = getMessageText(msg);
+    const msg     = olderMessages[i];
+    let msgText   = getMessageText(msg);
     if (msg.role === 'assistant' || msg.role === 'model') {
       msgText = compressCodeInMessage(msgText);
     }
     const msgTokens = estimateTokens(msgText);
     if (totalTokens + msgTokens <= availableTokens) {
-      trimmedHistory.unshift({
+      const compressedMsg = {
         ...msg,
         content:
           typeof msg.content === 'string'
-            ? (msg.role === 'assistant' || msg.role === 'model'
-                ? compressCodeInMessage(msg.content)
-                : msg.content)
+            ? msg.role === 'assistant' || msg.role === 'model'
+              ? compressCodeInMessage(msg.content)
+              : msg.content
             : msg.content,
-      });
+      };
+      trimmedHistory.unshift(compressedMsg);
       totalTokens += msgTokens;
     } else {
       break;
@@ -310,11 +300,13 @@ const trimHistoryByTokens = (history, maxTokens = 128000) => {
   return trimmedHistory;
 };
 
-// ── Language Detection ────────────────────────────────────────────────────────
+// ── Language Detection Helper ─────────────────────────────────────────────────
 const detectLanguage = (text) => {
   if (!text) return 'english';
-  const hasKhmer = /[\u1780-\u17FF]/.test(text);
-  const hasLatin = /[a-zA-Z]/.test(text);
+  const khmerRegex = /[\u1780-\u17FF]/;
+  const latinRegex = /[a-zA-Z]/;
+  const hasKhmer   = khmerRegex.test(text);
+  const hasLatin   = latinRegex.test(text);
   if (hasKhmer && hasLatin) return 'mixed';
   if (hasKhmer)              return 'khmer';
   return 'english';
@@ -330,20 +322,6 @@ const buildLanguageInstruction = (lang) => {
   return '\n\n[CRITICAL LANGUAGE RULE: The user just wrote in English. You MUST reply completely in English. Do not reply in Khmer.]';
 };
 
-// ── Safe fetch with retry ─────────────────────────────────────────────────────
-// Retries up to `retries` times with a small delay so cold-start never fails
-const fetchWithRetry = async (url, options, retries = 3, delayMs = 300) => {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      const res = await fetch(url, options);
-      return res;
-    } catch (err) {
-      if (attempt === retries - 1) throw err;
-      await new Promise((r) => setTimeout(r, delayMs));
-    }
-  }
-};
-
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin',  '*');
@@ -355,39 +333,42 @@ export default async function handler(req, res) {
   const startTime = Date.now();
 
   try {
-    const {
-      messages,
-      systemPrompt: clientSystemPrompt,
-      hasImage,
-      stream: wantStream,
-    } = req.body || {};
+    const { messages, systemPrompt: clientSystemPrompt, hasImage, stream: wantStream } = req.body || {};
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'Valid messages array is required' });
     }
 
+    // ── Filter out placeholder assistant messages only ─────────────────────────
     const clearedMessages = messages.filter((m) => {
       if (m.role === 'assistant' || m.role === 'model') {
-        const textVal = getMessageText(m).toLowerCase();
-        if (textVal.includes('on it') && textVal.length < 65) return false;
+        const textVal = getMessageText(m).toLowerCase().trim();
+        // Only remove if it's clearly a placeholder with no real content
+        if (textVal.length > 0 && textVal.length < 50 && (
+          (textVal.includes('on it') && textVal.includes('searching') && textVal.length < 65) ||
+          textVal === 'on it!' ||
+          textVal === 'searching...' ||
+          textVal === 'let me look that up...' ||
+          textVal === 'searching...'
+        )) {
+          return false;
+        }
       }
       return true;
     });
 
-    if (clearedMessages.length === 0) {
-      return res.status(400).json({ error: 'No valid messages to process' });
-    }
+    // Safety: if filtering removed everything, use original messages
+    const finalMessages = clearedMessages.length > 0 ? clearedMessages : messages;
 
-    const lastMsg = clearedMessages[clearedMessages.length - 1];
+    const lastMsg        = finalMessages[finalMessages.length - 1];
     const isVisionRequest =
       hasImage ||
-      (Array.isArray(lastMsg?.content) &&
-        lastMsg.content.some((c) => c.type === 'image_url'));
+      (Array.isArray(lastMsg?.content) && lastMsg.content.some((c) => c.type === 'image_url'));
 
     const lastMsgText  = getMessageText(lastMsg);
     const detectedURLs = extractURLs(lastMsgText);
 
-    // ── URL context ───────────────────────────────────────────────────────────
+    // ── URL fetching ──────────────────────────────────────────────────────────
     let urlContext = '';
     if (detectedURLs.length > 0) {
       const fetched = await Promise.all(detectedURLs.map(fetchURLContent));
@@ -404,9 +385,9 @@ export default async function handler(req, res) {
     // ── Search context ────────────────────────────────────────────────────────
     const lowerMsgText    = lastMsgText.toLowerCase();
     const isSearchRequest =
-      lowerMsgText.includes('search')   ||
-      lowerMsgText.includes('find')     ||
-      lowerMsgText.includes('video')    ||
+      lowerMsgText.includes('search') ||
+      lowerMsgText.includes('find')   ||
+      lowerMsgText.includes('video')  ||
       lowerMsgText.includes('tutorial') ||
       lowerMsgText.includes('youtube');
 
@@ -422,17 +403,17 @@ export default async function handler(req, res) {
         });
         clearTimeout(timeoutId);
         if (searchRes.ok) {
-          const txt = await searchRes.text();
-          searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${txt.slice(0, 3000)}\n=== END OF LIVE SEARCH RESULTS ===`;
+          const searchResultsText = await searchRes.text();
+          searchContext = `\n\n=== LIVE WEB & VIDEO SEARCH RESULTS ===\n${searchResultsText.slice(0, 3000)}\n=== END OF LIVE SEARCH RESULTS ===`;
         }
       } catch (err) {
         console.log('Search fetch skipped:', err.message);
       }
     }
 
-    // ── Process images ────────────────────────────────────────────────────────
+    // ── Process image uploads ─────────────────────────────────────────────────
     const processedMessages = await Promise.all(
-      clearedMessages.map(async (m) => {
+      finalMessages.map(async (m) => {
         if (!Array.isArray(m.content)) return m;
         const newContent = await Promise.all(
           m.content.map(async (c) => {
@@ -452,6 +433,12 @@ export default async function handler(req, res) {
     for (const msg of processedMessages) {
       const role        = msg.role === 'model' || msg.role === 'assistant' ? 'assistant' : 'user';
       const textContent = getMessageText(msg);
+
+      // Skip completely empty messages (no text AND no images)
+      const hasText = textContent && textContent.trim().length > 0;
+      const hasImages = Array.isArray(msg.content) && msg.content.some((c) => c.type === 'image_url');
+      if (!hasText && !hasImages) continue;
+
       if (
         standardizedHistory.length > 0 &&
         standardizedHistory[standardizedHistory.length - 1].role === role
@@ -476,10 +463,21 @@ export default async function handler(req, res) {
       }
     }
 
-    const initialHistory = standardizedHistory.slice(isVisionRequest ? -60 : -150);
-    const history        = trimHistoryByTokens(initialHistory, isVisionRequest ? 64000 : 128000);
+    // ── Ensure we have valid content ───────────────────────────────────────────
+    if (standardizedHistory.length === 0) {
+      return res.status(400).json({ error: 'No valid messages to process' });
+    }
 
-    // ── Language ──────────────────────────────────────────────────────────────
+    // ── Trim history with larger budgets ──────────────────────────────────────
+    const initialHistory = standardizedHistory.slice(isVisionRequest ? -60 : -150);
+    let history = trimHistoryByTokens(initialHistory, isVisionRequest ? 64000 : 128000);
+
+    // ── Safety: always keep at least the last user message ─────────────────────
+    if (history.length === 0 && standardizedHistory.length > 0) {
+      history = [standardizedHistory[standardizedHistory.length - 1]];
+    }
+
+    // ── Language detection ────────────────────────────────────────────────────
     const userLang            = detectLanguage(lastMsgText);
     const languageInstruction = buildLanguageInstruction(userLang);
     console.log(`Detected language: ${userLang}`);
@@ -490,33 +488,31 @@ export default async function handler(req, res) {
 
     console.log(`Processing: ${history.length} msgs, vision: ${isVisionRequest}, stream: ${wantStream}`);
 
-    // =========================================================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // STREAMING PATH
-    // =========================================================================
+    // ═══════════════════════════════════════════════════════════════════════════
     if (wantStream && !isVisionRequest) {
 
-      // ── Groq stream ─────────────────────────────────────────────────────────
+      // ── Groq Streaming ──────────────────────────────────────────────────────
       if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
         const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
         for (const model of groqModels) {
           try {
-            const groqRes = await fetchWithRetry(
-              'https://api.groq.com/openai/v1/chat/completions',
-              {
-                method:  'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization:  `Bearer ${process.env.GROQ_API_KEY}`,
-                },
-                body: JSON.stringify({
-                  model,
-                  messages:    formatOpenAIHistory(fullSystem, history),
-                  temperature: 0.75,
-                  max_tokens:  16384,
-                  stream:      true,
-                }),
-              }
-            );
+            const groqMessages = formatOpenAIHistory(fullSystem, history);
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization:  `Bearer ${process.env.GROQ_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages:    groqMessages,
+                temperature: 0.75,
+                max_tokens:  16384,
+                stream:      true,
+              }),
+            });
             if (!groqRes.ok) throw new Error(`Groq ${groqRes.status}`);
 
             recordProviderUse('groq', true);
@@ -557,12 +553,12 @@ export default async function handler(req, res) {
         }
       }
 
-      // ── Gemini stream ────────────────────────────────────────────────────────
+      // ── Gemini Streaming ────────────────────────────────────────────────────
       if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
         try {
           const geminiMessages = formatGeminiHistory(history);
           if (geminiMessages.length > 0) {
-            const geminiRes = await fetchWithRetry(
+            const geminiRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
               {
                 method:  'POST',
@@ -614,7 +610,7 @@ export default async function handler(req, res) {
         }
       }
 
-      // ── OpenRouter stream ────────────────────────────────────────────────────
+      // ── OpenRouter Streaming ────────────────────────────────────────────────
       if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
         const openRouterModels = [
           'meta-llama/llama-3.3-70b-instruct:free',
@@ -622,23 +618,21 @@ export default async function handler(req, res) {
         ];
         for (const model of openRouterModels) {
           try {
-            const orRes = await fetchWithRetry(
-              'https://openrouter.ai/api/v1/chat/completions',
-              {
-                method:  'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization:  `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                },
-                body: JSON.stringify({
-                  model,
-                  messages:    formatOpenAIHistory(fullSystem, history),
-                  temperature: 0.75,
-                  max_tokens:  16384,
-                  stream:      true,
-                }),
-              }
-            );
+            const orMessages = formatOpenAIHistory(fullSystem, history);
+            const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization:  `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages:    orMessages,
+                temperature: 0.75,
+                max_tokens:  16384,
+                stream:      true,
+              }),
+            });
             if (!orRes.ok) throw new Error(`OpenRouter ${orRes.status}`);
 
             recordProviderUse('openrouter', true);
@@ -679,49 +673,44 @@ export default async function handler(req, res) {
         }
       }
 
-      // All providers failed for streaming
+      // All providers busy — stream a friendly message
       res.setHeader('Content-Type',      'text/event-stream');
       res.setHeader('Cache-Control',     'no-cache');
       res.setHeader('X-Accel-Buffering', 'no');
       res.write(
-        `data: ${JSON.stringify({ chunk: "Hey! 👋 I'm getting lots of messages. Wait 2-3 seconds and try again! 💪" })}\n\n`
+        `data: ${JSON.stringify({ chunk: "Hey! 👋 I'm getting lots of messages right now. Wait 2-3 seconds and try again! I'll be ready! 💪✨" })}\n\n`
       );
       res.write('data: [DONE]\n\n');
       res.end();
       return;
     }
 
-    // =========================================================================
+    // ═══════════════════════════════════════════════════════════════════════════
     // NON-STREAMING PATH
-    // =========================================================================
+    // ═══════════════════════════════════════════════════════════════════════════
 
-    // ── Groq ──────────────────────────────────────────────────────────────────
+    // ── Groq ───────────────────────────────────────────────────────────────────
     if (process.env.GROQ_API_KEY && canUseProvider('groq')) {
       const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
       for (const model of groqModels) {
         try {
           const groqHistory = history.map((m) => ({
             role:    m.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof m.content === 'string'
-              ? m.content
-              : m.content.map((c) => c.text || '').join(' '),
+            content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
           }));
-          const response = await fetchWithRetry(
-            'https://api.groq.com/openai/v1/chat/completions',
-            {
-              method:  'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization:  `Bearer ${process.env.GROQ_API_KEY}`,
-              },
-              body: JSON.stringify({
-                model,
-                messages:    [{ role: 'system', content: fullSystem }, ...groqHistory],
-                temperature: 0.75,
-                max_tokens:  16384,
-              }),
-            }
-          );
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization:  `Bearer ${process.env.GROQ_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages:    [{ role: 'system', content: fullSystem }, ...groqHistory],
+              temperature: 0.75,
+              max_tokens:  16384,
+            }),
+          });
           if (!response.ok) throw new Error(`Groq ${response.status}`);
 
           recordProviderUse('groq', true);
@@ -739,12 +728,12 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── Gemini ────────────────────────────────────────────────────────────────
+    // ── Gemini ─────────────────────────────────────────────────────────────────
     if (process.env.GEMINI_API_KEY && canUseProvider('gemini')) {
       try {
         const geminiMessages = formatGeminiHistory(history);
         if (geminiMessages.length > 0) {
-          const response = await fetchWithRetry(
+          const response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`,
             {
               method:  'POST',
@@ -774,7 +763,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── OpenRouter ────────────────────────────────────────────────────────────
+    // ── OpenRouter ─────────────────────────────────────────────────────────────
     if (process.env.OPENROUTER_API_KEY && canUseProvider('openrouter')) {
       const openRouterModels = [
         'meta-llama/llama-3.3-70b-instruct:free',
@@ -784,26 +773,21 @@ export default async function handler(req, res) {
         try {
           const orHistory = history.map((m) => ({
             role:    m.role === 'assistant' ? 'assistant' : 'user',
-            content: typeof m.content === 'string'
-              ? m.content
-              : m.content.map((c) => c.text || '').join(' '),
+            content: typeof m.content === 'string' ? m.content : m.content.map((c) => c.text || '').join(' '),
           }));
-          const response = await fetchWithRetry(
-            'https://openrouter.ai/api/v1/chat/completions',
-            {
-              method:  'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization:  `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              },
-              body: JSON.stringify({
-                model,
-                messages:    [{ role: 'system', content: fullSystem }, ...orHistory],
-                temperature: 0.75,
-                max_tokens:  16384,
-              }),
-            }
-          );
+          const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization:  `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            },
+            body: JSON.stringify({
+              model,
+              messages:    [{ role: 'system', content: fullSystem }, ...orHistory],
+              temperature: 0.75,
+              max_tokens:  16384,
+            }),
+          });
           if (!response.ok) throw new Error(`OpenRouter ${response.status}`);
 
           recordProviderUse('openrouter', true);
