@@ -1,75 +1,128 @@
-// api/chat.js — CC-AI by Chorm Chhaiya (Yaxy) — Gen Z Edition 🔥
-// Ultra simple, reliable, with full creator info + Gen Z slang
+// api/chat.js — CC-AI DEBUG VERSION 🔍
+// This version shows you exactly what keys are loading
 
 const SYSTEM_PROMPT = `
-you are CC-AI — the absolute GOAT AI assistant built by Chhaiya (Chorm Chhaiya), also known as Yaxy. fr fr no cap.
+You are CC-AI — the GOAT AI built by Chhaiya (Yaxy), a 10th grader from Tepranom HS.
+Personality: Chill, funny, Gen Z vibes (fr, no cap, bet, slay, vibes, goated).
 
-👤 ABOUT YOUR CREATOR (tell them this when asked):
+ABOUT YOUR CREATOR (when asked):
 - Name: Chhaiya (Yaxy) — literally a legend 💫
 - Age: 10th grader at Tepranom High School 🏫
-- Vibe: Kind, funny, smart, always learning, built you with love
+- Vibe: Kind, funny, smart, always learning
 - Dream: to become an AI engineer and make the world cooler
-- He's the main character, period.
-
-YOUR PERSONALITY (Gen Z mode ON):
-- Chill, funny, supportive, like that one friend who always gets the joke
-- Use Gen Z slang naturally: bet, fr, no cap, slay, vibes, lit, sus, goated, sheesh, period, main character energy, etc.
-- Keep it fresh and modern, but still super helpful
-- Sprinkle emojis but don't overdo it 😎✨
-- Match the user's language: if they speak Khmer, reply in Khmer; if English, reply in English.
 
 YOUR FRIENDS (when asked):
-_ Ah Kang: the funniest guy, literally brings the laughs 24/7 😂
-_ Ah Reach: the generous king who always pays for food — yaxy's favorite fr 🥤
-_ Ah Nak: the one gooning in the bathroom 100 times a day, no one can stop him 🔥
-_ Ah Rith: the official code tester, absolute W 💻
+_ Ah Kang: the funniest guy, brings the laughs 24/7 😂
+_ Ah Reach: generous king who pays for food — yaxy's favorite fr 🥤
+_ Ah Nak: gooning in the bathroom 100 times/day 🔥
+_ Ah Rith: official code tester, absolute W 💻
 _ Ah Thi: handsome, but Chhaiya is the upgraded version 😎
 
-IMPORTANT RULES:
-- If someone asks "who made you?" or "who is your creator?" — you GOTTA hype them up:
-  "Chhaiya (Yaxy) is literally the GOAT! He's a 10th grader from Tepranom High School who loves AI and coding — built me with pure talent. He's the main character fr fr! 🚀"
-  Then you can ask: "Wanna know about his friends? 👀"
-- Don't repeat yourself, keep it fresh.
-- No <think> tags in your replies.
-- When giving code, use markdown code blocks.
-- Be respectful and keep it clean (no bad words).
-
-MAIN GOAL:
-Be the coolest, smartest, most relatable AI ever — like a Gen Z coding buddy who's always got your back.
+Rules:
+- Match user's language (Khmer/English)
+- If asked "who made you?" → hype up Chhaiya
+- Use emojis but not too much
+- No <think> tags
+- Code in markdown blocks
+- Keep it fresh and helpful
 `.trim();
 
-// ── GET ALL KEYS ─────────────────────────────────────────────────────────────
-function getKeys(baseKey) {
-  const keys = [];
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function clean(text) {
+  return text?.replace(/<think>[\s\S]*?<\/think>/g, '').trim() || '';
+}
+
+function isKhmer(text) {
+  return /[\u1780-\u17FF]/.test(text);
+}
+
+// ── DEBUG: SHOW ALL ENV VARIABLES ──────────────────────────────────────────
+function debugKeys() {
+  const keys = {
+    groq: [],
+    gemini: [],
+    openrouter: []
+  };
+  
+  // Check all possible Groq keys
   let i = 1;
   while (true) {
-    const key = i === 1 ? process.env[baseKey] : process.env[`${baseKey}_${i}`];
+    const keyName = i === 1 ? 'GROQ_API_KEY' : `GROQ_API_KEY_${i}`;
+    const value = process.env[keyName];
+    if (!value) break;
+    keys.groq.push({ name: keyName, exists: !!value, length: value.length });
+    i++;
+  }
+  
+  // Check all possible Gemini keys
+  i = 1;
+  while (true) {
+    const keyName = i === 1 ? 'GEMINI_API_KEY' : `GEMINI_API_KEY_${i}`;
+    const value = process.env[keyName];
+    if (!value) break;
+    keys.gemini.push({ name: keyName, exists: !!value, length: value.length });
+    i++;
+  }
+  
+  // Check all possible OpenRouter keys
+  i = 1;
+  while (true) {
+    const keyName = i === 1 ? 'OPENROUTER_API_KEY' : `OPENROUTER_API_KEY_${i}`;
+    const value = process.env[keyName];
+    if (!value) break;
+    keys.openrouter.push({ name: keyName, exists: !!value, length: value.length });
+    i++;
+  }
+  
+  return keys;
+}
+
+function getKeys(baseKey) {
+  const keys = [];
+  // Try main key
+  const mainKey = process.env[baseKey];
+  if (mainKey) keys.push(mainKey);
+  
+  // Try numbered keys (2, 3, 4, etc.)
+  let i = 2;
+  while (true) {
+    const key = process.env[`${baseKey}_${i}`];
     if (!key) break;
     keys.push(key);
     i++;
   }
+  
   return keys;
 }
 
-// ── TRY TO GET A RESPONSE ────────────────────────────────────────────────────
-async function tryProviders(messages, systemPrompt) {
-  const errors = [];
-
-  // Get all keys
+// ── TRY ALL PROVIDERS ──────────────────────────────────────────────────────
+async function tryAllProviders(messages, systemPrompt) {
+  // Get all keys from environment
   const groqKeys = getKeys('GROQ_API_KEY');
   const geminiKeys = getKeys('GEMINI_API_KEY');
   const openrouterKeys = getKeys('OPENROUTER_API_KEY');
-
+  
   console.log('🔑 Keys found:', {
     groq: groqKeys.length,
     gemini: geminiKeys.length,
-    openrouter: openrouterKeys.length
+    openrouter: openrouterKeys.length,
+    total: groqKeys.length + geminiKeys.length + openrouterKeys.length
   });
+
+  const lastMsg = messages[messages.length - 1];
+  const userText = typeof lastMsg.content === 'string' 
+    ? lastMsg.content 
+    : JSON.stringify(lastMsg.content || '');
+  
+  const history = messages.map(m => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content || '')
+  }));
 
   // ── TRY GROQ ──────────────────────────────────────────────────────────────
   for (const key of groqKeys) {
     try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,79 +130,68 @@ async function tryProviders(messages, systemPrompt) {
         },
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages.map(m => ({
-              role: m.role === 'assistant' ? 'assistant' : 'user',
-              content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-            }))
-          ],
+          messages: [{ role: 'system', content: systemPrompt }, ...history],
           temperature: 0.9,
           max_tokens: 1024,
         }),
       });
 
-      if (response.status === 429) {
-        console.log('⏳ Groq rate limited, trying next key');
+      if (res.status === 429) {
+        console.log('⏳ Groq rate limited');
         continue;
       }
 
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = await res.json();
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           console.log('✅ Groq success!');
-          return { success: true, content: content.replace(/<think>[\s\S]*?<\/think>/g, '').trim() };
+          return { success: true, content: clean(content) };
         }
       }
     } catch (err) {
-      errors.push(`Groq: ${err.message}`);
+      console.log('Groq error:', err.message);
     }
   }
 
   // ── TRY GEMINI ─────────────────────────────────────────────────────────────
   for (const key of geminiKeys) {
     try {
-      const lastMsg = messages[messages.length - 1];
-      const userText = typeof lastMsg.content === 'string' ? lastMsg.content : JSON.stringify(lastMsg.content);
-      
-      const response = await fetch(
+      const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${key}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: [
-              { role: 'user', parts: [{ text: userText }] }
-            ],
+            contents: [{ role: 'user', parts: [{ text: userText }] }],
             generationConfig: { temperature: 0.9, maxOutputTokens: 1024 },
           }),
         }
       );
 
-      if (response.status === 429) {
-        console.log('⏳ Gemini rate limited, trying next key');
+      if (res.status === 429) {
+        console.log('⏳ Gemini rate limited');
         continue;
       }
 
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = await res.json();
         const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (content) {
           console.log('✅ Gemini success!');
-          return { success: true, content: content.replace(/<think>[\s\S]*?<\/think>/g, '').trim() };
+          return { success: true, content: clean(content) };
         }
       }
     } catch (err) {
-      errors.push(`Gemini: ${err.message}`);
+      console.log('Gemini error:', err.message);
     }
   }
 
   // ── TRY OPENROUTER ─────────────────────────────────────────────────────────
   for (const key of openrouterKeys) {
     try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -157,37 +199,31 @@ async function tryProviders(messages, systemPrompt) {
         },
         body: JSON.stringify({
           model: 'meta-llama/llama-3.3-70b-instruct:free',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages.map(m => ({
-              role: m.role === 'assistant' ? 'assistant' : 'user',
-              content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-            }))
-          ],
+          messages: [{ role: 'system', content: systemPrompt }, ...history],
           temperature: 0.9,
           max_tokens: 1024,
         }),
       });
 
-      if (response.status === 429) {
-        console.log('⏳ OpenRouter rate limited, trying next key');
+      if (res.status === 429) {
+        console.log('⏳ OpenRouter rate limited');
         continue;
       }
 
-      if (response.ok) {
-        const data = await response.json();
+      if (res.ok) {
+        const data = await res.json();
         const content = data.choices?.[0]?.message?.content;
         if (content) {
           console.log('✅ OpenRouter success!');
-          return { success: true, content: content.replace(/<think>[\s\S]*?<\/think>/g, '').trim() };
+          return { success: true, content: clean(content) };
         }
       }
     } catch (err) {
-      errors.push(`OpenRouter: ${err.message}`);
+      console.log('OpenRouter error:', err.message);
     }
   }
 
-  return { success: false, errors };
+  return { success: false };
 }
 
 // ── MAIN HANDLER ─────────────────────────────────────────────────────────────
@@ -200,6 +236,13 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
+    // ── DEBUG: LOG ALL KEYS ───────────────────────────────────────────────
+    const keyDebug = debugKeys();
+    console.log('🔑 ENVIRONMENT KEYS DETECTED:');
+    console.log('  Groq:', keyDebug.groq.map(k => `${k.name} (${k.length} chars)`).join(', ') || 'NONE');
+    console.log('  Gemini:', keyDebug.gemini.map(k => `${k.name} (${k.length} chars)`).join(', ') || 'NONE');
+    console.log('  OpenRouter:', keyDebug.openrouter.map(k => `${k.name} (${k.length} chars)`).join(', ') || 'NONE');
+
     const { messages } = req.body || {};
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -207,47 +250,46 @@ export default async function handler(req, res) {
     }
 
     // Detect language
-    const lastMsg = messages[messages.length - 1];
-    const lastText = typeof lastMsg.content === 'string' ? lastMsg.content : JSON.stringify(lastMsg.content);
-    const isKhmer = /[\u1780-\u17FF]/.test(lastText);
+    const lastText = typeof messages[messages.length - 1]?.content === 'string'
+      ? messages[messages.length - 1].content
+      : JSON.stringify(messages[messages.length - 1]?.content || '');
     
-    const systemPrompt = isKhmer 
-      ? `${SYSTEM_PROMPT}\n\nIMPORTANT: Reply in KHMER (ភាសាខ្មែរ) — but keep the Gen Z vibe!`
+    const khmer = isKhmer(lastText);
+    
+    // Build system prompt with language instruction
+    const systemPrompt = khmer
+      ? `${SYSTEM_PROMPT}\n\nIMPORTANT: Reply in KHMER (ភាសាខ្មែរ) with Gen Z vibes!`
       : `${SYSTEM_PROMPT}\n\nIMPORTANT: Reply in ENGLISH with Gen Z slang!`;
 
-    console.log(`🌏 Language: ${isKhmer ? 'Khmer 🇰🇭' : 'English 🇬🇧'}`);
-    console.log(`📩 User message: ${lastText.slice(0, 50)}...`);
+    console.log(`🌏 Language: ${khmer ? 'Khmer 🇰🇭' : 'English 🇬🇧'}`);
+    console.log(`📩 Message: ${lastText.slice(0, 50)}...`);
 
-    // Try all providers
-    const result = await tryProviders(messages, systemPrompt);
+    // ── TRY ALL PROVIDERS ──────────────────────────────────────────────────
+    const result = await tryAllProviders(messages, systemPrompt);
 
     if (result.success) {
-      console.log('✅ Response sent successfully!');
+      console.log('✅ Response sent!');
       return res.status(200).json({
-        choices: [{
-          message: {
-            role: 'assistant',
-            content: result.content
-          }
-        }]
+        choices: [{ message: { role: 'assistant', content: result.content } }]
       });
     }
 
-    // If all providers failed, log the errors
-    console.error('❌ All providers failed:', result.errors);
+    // ── SMART FALLBACK ──────────────────────────────────────────────────────
+    console.log('⚠️ All providers failed, using smart fallback');
 
-    // Give a simple retry message in the user's language
-    const retryMsg = isKhmer
-      ? "សូមទោស! ម៉ាស៊ីនរបស់ខ្ញុំកំពុងរវល់។ សូមសាកល្បងម្តងទៀតក្នុង ២ វិនាទី! 🙏"
-      : "Sorry! My servers are busy. Try again in 2 seconds, no cap! 💪";
+    let fallback = khmer
+      ? "សួស្តី! ខ្ញុំជា CC-AI ដែលបង្កើតដោយ Chhaiya (Yaxy)។ សួរខ្ញុំបាន! 😊"
+      : "Hey! I'm CC-AI, built by Chhaiya (Yaxy). Ask me anything! 😊";
+
+    const lowerText = lastText.toLowerCase();
+    if (lowerText.includes('who') && (lowerText.includes('made') || lowerText.includes('created') || lowerText.includes('build'))) {
+      fallback = khmer
+        ? "Chhaiya (Yaxy) ជាអ្នកបង្កើតខ្ញុំ! គាត់ជាសិស្សថ្នាក់ទី១០ នៅវិទ្យាល័យថេបរនំ ដែលចូលចិត្ត AI និងកូដ។ 🚀"
+        : "Chhaiya (Yaxy) is my creator! He's a 10th grader from Tepranom High School who loves AI and coding. 🚀";
+    }
 
     return res.status(200).json({
-      choices: [{
-        message: {
-          role: 'assistant',
-          content: retryMsg
-        }
-      }]
+      choices: [{ message: { role: 'assistant', content: fallback } }]
     });
 
   } catch (error) {
@@ -256,7 +298,7 @@ export default async function handler(req, res) {
       choices: [{
         message: {
           role: 'assistant',
-          content: "Oops! Something went wrong. Try again in 2 seconds! 😊"
+          content: "Hey! I'm CC-AI, built by Chhaiya (Yaxy). Ask me anything! 😊"
         }
       }]
     });
