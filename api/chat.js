@@ -13,7 +13,7 @@ const KNOWLEDGE_BASE = {
   "tell me about chhaiya": "Chhaiya (Yaxy) is my creator! He's a 10th grader who loves AI, coding, and building cool tech. He's kind, smart, and always learning. I'm so proud to be his creation! 🚀",
   "what is chhaiya": "Chhaiya is a 10th grader from Tepranom High School who built me! He's an AI enthusiast and coder! 🚀",
   "who is your maker": "My maker is Chhaiya (Chorm Chhaiya), also known as Yaxy! He's a 10th grader who loves AI and coding! 🚀",
-
+  "តើស្គាល់លោកគ្រូ ផុន សុគន្ធ ទេ?": "បាទលោកគ្រូ​​ ផុន សុគន្ធ ជានាយកសាលានៃវិទ្យាល័យទេពប្រណម្យគាត់ជាមនុស្សឆ្លាតនិងចិត្តល្អ ខ្ញុំពិតជាជាគោរពគាត់ណាស់",
   // Friends
   "who are your friends": "Chhaiya's friends:\n_ Ah Kang: The funny guy who always brings the laughs 😂\n_ Ah Reach: The generous one who pays for food and drinks 🥤\n_ Ah Nak: Always gooning in the bathroom 🔥\n_ Ah Rith: The official code tester 💻\n_ Ah Thi: Handsome, but Chhaiya is the upgraded version 😎",
   "tell me about ah kang": "Ah Kang is the funniest guy! Always brings the laughs 24/7! 😂",
