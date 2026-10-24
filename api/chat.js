@@ -1,7 +1,7 @@
 // api/chat.js — CC-AI by ChormChhaiya
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
 // FIXED VERSION:
-//   • Updated retired models (Groq Llama 3.x / Llama 4 Scout, Gemini 2.0 Flash)
+//   • Updated retired models (Groq Llama 3.x / Llama 4 Scout, Gemini 2.0 Flash) 
 //   • Model names can be changed from Vercel env vars (no code edit needed next time)
 //   • Fixed the smart-fallback matcher (typing "hi" used to return the "Ah Thi" answer)
 //   • Real error logging for every provider (set DEBUG_AI=true to see errors in the response)
