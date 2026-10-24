@@ -1,6 +1,10 @@
 // api/chat.js — CC-AI by ChormChhaiya
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
-// Now with SMART FALLBACK — never fails!
+// FIXED VERSION:
+//   • Updated retired models (Groq Llama 3.x / Llama 4 Scout, Gemini 2.0 Flash)
+//   • Model names can be changed from Vercel env vars (no code edit needed next time)
+//   • Fixed the smart-fallback matcher (typing "hi" used to return the "Ah Thi" answer)
+//   • Real error logging for every provider (set DEBUG_AI=true to see errors in the response)
 
 // ── KNOWLEDGE BASE (SMART FALLBACK) ─────────────────────────────────────────
 const KNOWLEDGE_BASE = {
@@ -48,36 +52,45 @@ const KNOWLEDGE_BASE = {
   "tell me a fun fact": "Did you know that honey never spoils? Archaeologists found 3,000-year-old honey that was still edible! 🍯",
 };
 
-/** Find answer from knowledge base (exact or partial match) */
+/** Find answer from knowledge base (used ONLY when every AI provider fails) */
 function findAnswer(question) {
-  const lower = question.toLowerCase().trim();
-  // Exact match
+  const lower = String(question || '').toLowerCase().trim().replace(/[?!.]+$/g, '');
+  if (!lower) return null;
+
+  // 1) Exact match
   if (KNOWLEDGE_BASE[lower]) return KNOWLEDGE_BASE[lower];
-  // Partial match
+
+  // 2) The user's message CONTAINS a knowledge-base question (never the other way round —
+  //    the old "key.includes(lower)" check made short words like "hi" match "tell me about ah thi")
   for (const [key, answer] of Object.entries(KNOWLEDGE_BASE)) {
-    if (lower.includes(key) || key.includes(lower)) {
-      return answer;
-    }
+    if (key.length >= 6 && lower.includes(key)) return answer;
   }
-  // Generic patterns
-  if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
+
+  // 3) Simple greetings — whole words only
+  if (/\b(hello|hi|hey|yo|sup)\b/.test(lower) || /^(សួស្តី|ជំរាបសួរ)/.test(lower)) {
     return "Hey! I'm CC-AI, built by Chhaiya (Yaxy). How can I help you today? 😊";
   }
-  if (lower.includes('how are you')) {
-    return "I'm doing great, thanks for asking! How are you? 😊";
-  }
-  if (lower.includes('thank')) {
-    return "You're welcome! Happy to help! 😊✨";
-  }
-  if (lower.includes('bye') || lower.includes('goodbye')) {
-    return "Bye! Come back anytime! Chhaiya and I are always here! 😊👋";
-  }
+  if (/\bhow are you\b/.test(lower)) return "I'm doing great, thanks for asking! How are you? 😊";
+  if (/\bthank(s| you)?\b/.test(lower)) return "You're welcome! Happy to help! 😊✨";
+  if (/\b(bye|goodbye)\b/.test(lower)) return "Bye! Come back anytime! Chhaiya and I are always here! 😊👋";
   return null;
 }
 
 // ── LONG-CONTEXT CONSTANTS ──────────────────────────────────────────────────
 const LONG_HISTORY_LIMIT = 30;   // remember up to 30 messages
 const LONG_MAX_TOKENS = 8192;    // generate up to 8192 tokens per response
+const MAX_CHARS_PER_MSG = 6000;  // cap each message so one huge paste can't break the request
+
+// ── MODEL LISTS (tried in order; override with env vars on Vercel) ──────────
+// Old models that were shut down: llama-3.3-70b-versatile, llama-3.1-8b-instant (Aug 16 2026),
+// llama-4-scout (Jul 17 2026), gemini-2.0-flash (Jun 1 2026), gemini-2.5-flash (Oct 16 2026).
+const list = (value, fallback) =>
+  (value || fallback).split(',').map((s) => s.trim()).filter(Boolean);
+
+const GROQ_MODELS         = list(process.env.GROQ_MODELS,         'openai/gpt-oss-120b,qwen/qwen3.6-27b,openai/gpt-oss-20b');
+const GROQ_VISION_MODELS  = list(process.env.GROQ_VISION_MODELS,  '');   // leave empty; Gemini handles images
+const GEMINI_MODELS       = list(process.env.GEMINI_MODELS,       'gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite');
+const OPENROUTER_MODELS   = list(process.env.OPENROUTER_MODELS,   'openai/gpt-oss-120b:free,openrouter/free');
 
 // ── System Prompt ─────────────────────────────────────────────────────────────
 const BASE_SYSTEM_PROMPT = `
@@ -178,8 +191,8 @@ const getMessageText = (msg) => {
   if (typeof msg.content === 'string') return msg.content;
   if (Array.isArray(msg.content)) {
     return msg.content
-      .filter(c => c.type === 'text')
-      .map(c => c.text || '')
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text || '')
       .join(' ');
   }
   return '';
@@ -195,14 +208,13 @@ const extractURLs = (text) => {
 /** Fetch and summarize a URL using Jina Reader */
 const fetchURLContent = async (url) => {
   try {
-    const jinaURL = `https://r.jina.ai/${encodeURIComponent(url)}`;
-    const res = await fetch(jinaURL, {
+    // NOTE: Jina wants the raw URL after the slash (the old code encoded it, which broke it)
+    const res = await fetch(`https://r.jina.ai/${url}`, {
       headers: { Accept: 'text/plain' },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return null;
     const text = await res.text();
-    // Cap at 3000 chars to keep context window reasonable
     return text.slice(0, 3000).trim() || null;
   } catch {
     return null;
@@ -241,6 +253,74 @@ const uploadToCloudflare = async (base64DataUrl) => {
   return null;
 };
 
+/** Download an http(s) image and return Gemini inlineData (Gemini can't fetch random URLs itself) */
+const urlToInlineData = async (url) => {
+  try {
+    const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return null;
+    const mimeType = (r.headers.get('content-type') || 'image/jpeg').split(';')[0];
+    const buf = Buffer.from(await r.arrayBuffer());
+    return { inlineData: { mimeType, data: buf.toString('base64') } };
+  } catch {
+    return null;
+  }
+};
+
+/** Stateful <think>…</think> remover that works across streamed chunks */
+const makeThinkFilter = () => {
+  let inThink = false;
+  let carry = '';
+  return {
+    push(chunk) {
+      let text = carry + chunk;
+      carry = '';
+      let out = '';
+      while (text) {
+        if (inThink) {
+          const end = text.indexOf('</think>');
+          if (end === -1) { carry = text.slice(-8); text = ''; }
+          else { text = text.slice(end + 8); inThink = false; }
+        } else {
+          const start = text.indexOf('<think>');
+          if (start === -1) {
+            const partial = text.match(/<(t(h(i(n(k)?)?)?)?)?$/);
+            if (partial) { carry = partial[0]; out += text.slice(0, text.length - partial[0].length); }
+            else out += text;
+            text = '';
+          } else {
+            out += text.slice(0, start);
+            text = text.slice(start + 7);
+            inThink = true;
+          }
+        }
+      }
+      return out;
+    },
+    flush() {
+      const rest = inThink ? '' : carry;
+      carry = '';
+      return rest;
+    },
+  };
+};
+
+/** Pull the visible answer out of a Gemini response (skips "thought" parts) */
+const extractGeminiText = (data) =>
+  (data?.candidates?.[0]?.content?.parts || [])
+    .filter((p) => typeof p.text === 'string' && !p.thought)
+    .map((p) => p.text)
+    .join('');
+
+/** Make sure Gemini history starts with a user turn */
+const geminiContentsFromText = (msgs) => {
+  const contents = msgs.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
+  while (contents.length && contents[0].role !== 'user') contents.shift();
+  return contents;
+};
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   // CORS
@@ -261,17 +341,30 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
+  // Collect real error reasons so you can finally see WHY providers fail
+  const errors = [];
+  const logErr = (source, message) => {
+    console.error(`[${source}]`, message);
+    errors.push(`${source}: ${message}`);
+  };
+
+  const hasGroq       = !!process.env.GROQ_API_KEY;
+  const hasGemini     = !!process.env.GEMINI_API_KEY;
+  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
+  if (!hasGroq && !hasGemini && !hasOpenRouter) {
+    logErr('config', 'No API keys found. Set GROQ_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY in Vercel env vars.');
+  }
+
   // ── Detect vision request ────────────────────────────────────────────────────
-  const lastMsg        = messages[messages.length - 1];
+  const lastMsg = messages[messages.length - 1];
   const isVisionRequest =
     hasImage ||
-    (Array.isArray(lastMsg?.content) &&
-      lastMsg.content.some((c) => c.type === 'image_url'));
+    (Array.isArray(lastMsg?.content) && lastMsg.content.some((c) => c.type === 'image_url'));
 
   // ── Detect URL in last message ──────────────────────────────────────────────
-  const lastMsgText    = getMessageText(lastMsg);
-  const detectedURLs   = extractURLs(lastMsgText);
-  let urlContext       = '';
+  const lastMsgText  = getMessageText(lastMsg);
+  const detectedURLs = extractURLs(lastMsgText);
+  let urlContext = '';
 
   if (detectedURLs.length > 0) {
     const fetched = await Promise.all(detectedURLs.map(fetchURLContent));
@@ -303,463 +396,306 @@ export default async function handler(req, res) {
     })
   );
 
-  // ── Cap conversation history ─────────────────────────────────────────────────
-  const history = isVisionRequest
-    ? processedMessages.slice(-5).map((m) => ({
-        role: m.role,
-        content: Array.isArray(m.content)
-          ? m.content.map((c) =>
-              c.type === 'image_url' ? c : { ...c, text: String(c.text || '').slice(0, 2000) }
-            )
-          : String(m.content).slice(0, 2000),
-      }))
-    : processedMessages.slice(-10).map((m) => ({
-        role: m.role || 'user',
-        content: String(m.content).slice(0, 3000),
-      }));
+  // ── Plain-text history (for text-only requests) ─────────────────────────────
+  // FIX: the old code did String(m.content) which turned arrays into "[object Object]"
+  const textHistory = processedMessages
+    .slice(-LONG_HISTORY_LIMIT)
+    .map((m) => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: getMessageText(m).slice(0, MAX_CHARS_PER_MSG),
+    }))
+    .filter((m) => m.content.trim());
 
-  // ── EXTENDED HISTORY ────────────────────────────────────────────────────────
-  const longHistory = processedMessages.slice(-LONG_HISTORY_LIMIT).map((m) => ({
-    role: m.role || 'user',
-    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
+  // ── Vision history (last 5 messages, images kept) ───────────────────────────
+  const visionHistory = processedMessages.slice(-5).map((m) => ({
+    role: m.role === 'assistant' ? 'assistant' : 'user',
+    content: Array.isArray(m.content)
+      ? m.content.map((c) =>
+          c.type === 'image_url' ? c : { type: 'text', text: String(c.text || '').slice(0, 2000) }
+        )
+      : String(m.content || '').slice(0, 2000),
   }));
 
   // ── Build full system prompt ─────────────────────────────────────────────────
-  const resolvedSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
-  const fullSystem = `${resolvedSystem}${urlContext}`;
+  const fullSystem = `${clientSystemPrompt || BASE_SYSTEM_PROMPT}${urlContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // EXTENDED STREAMING PATH (long context)
+  // STREAMING (text only): Groq → Gemini
   // ═══════════════════════════════════════════════════════════════════════════
-  if (wantStream && !isVisionRequest && process.env.GROQ_API_KEY) {
-    try {
-      const groqHistory = longHistory.map((m) => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-      }));
+  const startSSE = () => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+  };
 
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
-          temperature: 0.75,
-          max_tokens: LONG_MAX_TOKENS,
-          stream: true,
-        }),
-      });
+  /** Read an upstream SSE body and forward { chunk } events. extract(parsed) -> string */
+  const pipeStream = async (upstream, extract) => {
+    startSSE();
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    const filter = makeThinkFilter();
+    let buffer = '';
+    let sentAnything = false;
 
-      if (groqRes.ok) {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('X-Accel-Buffering', 'no');
+    const handleLine = (line) => {
+      if (!line.startsWith('data:')) return;
+      const jsonStr = line.slice(5).trim();
+      if (!jsonStr || jsonStr === '[DONE]') return;
+      try {
+        const clean = filter.push(extract(JSON.parse(jsonStr)) || '');
+        if (clean) {
+          sentAnything = true;
+          res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
+        }
+      } catch (_) {}
+    };
 
-        const reader = groqRes.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      lines.forEach(handleLine);
+    }
+    if (buffer) handleLine(buffer);
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop();
+    const rest = filter.flush();
+    if (rest) { sentAnything = true; res.write(`data: ${JSON.stringify({ chunk: rest })}\n\n`); }
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return sentAnything;
+  };
 
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const jsonStr = line.slice(6).trim();
-            if (!jsonStr || jsonStr === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const chunk = parsed.choices?.[0]?.delta?.content || '';
-              const clean = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
-              if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-            } catch (_) {}
+  if (wantStream && !isVisionRequest && textHistory.length) {
+    // --- Groq stream ---
+    if (hasGroq) {
+      for (const model of GROQ_MODELS) {
+        try {
+          const upstream = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
+            body: JSON.stringify({
+              model,
+              messages: [{ role: 'system', content: fullSystem }, ...textHistory],
+              temperature: 0.75,
+              max_tokens: LONG_MAX_TOKENS,
+              stream: true,
+              ...(model.includes('gpt-oss') ? { reasoning_effort: 'low' } : {}),
+            }),
+          });
+          if (!upstream.ok) {
+            logErr(`groq-stream ${model}`, `HTTP ${upstream.status} ${(await upstream.text()).slice(0, 300)}`);
+            continue;
           }
+          const ok = await pipeStream(upstream, (p) => p.choices?.[0]?.delta?.content);
+          if (ok) return;
+          return; // headers already sent, can't try another provider
+        } catch (err) {
+          logErr(`groq-stream ${model}`, err.message);
+          if (res.headersSent) { try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {} return; }
         }
-        res.write('data: [DONE]\n\n');
-        res.end();
-        return;
       }
-    } catch (err) {
-      console.error('Extended Groq stream error:', err.message);
     }
-  }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // STREAMING PATH — Gemini SSE (text only)
-  // ═══════════════════════════════════════════════════════════════════════════
-  if (wantStream && !isVisionRequest && process.env.GEMINI_API_KEY) {
-    let streamStarted = false;
-    try {
-      const geminiMessages = history.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: String(m.content) }],
-      }));
-
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:streamGenerateContent?alt=sse&key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
-            contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
-          }),
+    // --- Gemini stream ---
+    if (hasGemini) {
+      for (const model of GEMINI_MODELS) {
+        try {
+          const upstream = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: fullSystem }] },
+                contents: geminiContentsFromText(textHistory),
+                generationConfig: { temperature: 0.75, maxOutputTokens: LONG_MAX_TOKENS },
+              }),
+            }
+          );
+          if (!upstream.ok) {
+            logErr(`gemini-stream ${model}`, `HTTP ${upstream.status} ${(await upstream.text()).slice(0, 300)}`);
+            continue;
+          }
+          await pipeStream(upstream, (p) =>
+            (p.candidates?.[0]?.content?.parts || [])
+              .filter((x) => typeof x.text === 'string' && !x.thought)
+              .map((x) => x.text)
+              .join('')
+          );
+          return;
+        } catch (err) {
+          logErr(`gemini-stream ${model}`, err.message);
+          if (res.headersSent) { try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {} return; }
         }
-      );
-
-      if (!geminiRes.ok) {
-        const errText = await geminiRes.text();
-        throw new Error(`Gemini stream ${geminiRes.status}: ${errText}`);
-      }
-
-      streamStarted = true;
-      res.setHeader('Content-Type',     'text/event-stream');
-      res.setHeader('Cache-Control',    'no-cache');
-      res.setHeader('X-Accel-Buffering','no');
-
-      const reader  = geminiRes.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer    = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr || jsonStr === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const chunk  = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const clean  = chunk.replace(/<think>[\s\S]*?<\/think>/g, '');
-            if (clean) res.write(`data: ${JSON.stringify({ chunk: clean })}\n\n`);
-          } catch (_) {}
-        }
-      }
-
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
-    } catch (streamErr) {
-      console.error('Gemini stream error:', streamErr.message);
-      if (streamStarted) {
-        try { res.write('data: [DONE]\n\n'); res.end(); } catch (_) {}
-        return;
       }
     }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // NON-STREAMING PATH
+  // NON-STREAMING
   // ═══════════════════════════════════════════════════════════════════════════
+  const reply = (text) =>
+    res.status(200).json({ choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }] });
 
-  // ── 0. Extended Non-streaming (long context) ────────────────────────────────
-  if (!isVisionRequest && process.env.GROQ_API_KEY) {
+  /** Call any OpenAI-compatible endpoint (Groq / OpenRouter) */
+  const callOpenAICompat = async ({ source, url, key, model, messages: msgs, maxTokens }) => {
     try {
-      const groqHistory = longHistory.map((m) => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-      }));
-
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
+          model,
+          messages: msgs,
           temperature: 0.75,
-          max_tokens: LONG_MAX_TOKENS,
+          max_tokens: maxTokens,
+          ...(model.includes('gpt-oss') && source === 'groq' ? { reasoning_effort: 'low' } : {}),
         }),
       });
-
-      const data = await response.json();
-      if (response.ok && data.choices?.[0]?.message?.content) {
-        data.choices[0].message.content = cleanAIOutput(data.choices[0].message.content);
-        return res.status(200).json(data);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        logErr(`${source} ${model}`, `HTTP ${response.status} ${data?.error?.message || JSON.stringify(data).slice(0, 300)}`);
+        return null;
       }
+      const content = data.choices?.[0]?.message?.content;
+      if (!content) { logErr(`${source} ${model}`, 'empty response'); return null; }
+      return content;
     } catch (err) {
-      console.error('Extended Groq error:', err.message);
+      logErr(`${source} ${model}`, err.message);
+      return null;
     }
-  }
+  };
 
-  // ── 0b. Extended Gemini Non-streaming ──────────────────────────────────────
-  if (!isVisionRequest && process.env.GEMINI_API_KEY) {
+  /** Call Gemini generateContent */
+  const callGemini = async (model, contents) => {
     try {
-      const geminiMessages = longHistory.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content) }],
-      }));
-
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
-            contents: geminiMessages,
+            contents,
             generationConfig: { temperature: 0.75, maxOutputTokens: LONG_MAX_TOKENS },
           }),
         }
       );
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        return res.status(200).json({
-          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
-        });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        logErr(`gemini ${model}`, `HTTP ${response.status} ${data?.error?.message || JSON.stringify(data).slice(0, 300)}`);
+        return null;
       }
+      const text = extractGeminiText(data);
+      if (!text) { logErr(`gemini ${model}`, `empty response ${JSON.stringify(data).slice(0, 200)}`); return null; }
+      return text;
     } catch (err) {
-      console.error('Extended Gemini error:', err.message);
+      logErr(`gemini ${model}`, err.message);
+      return null;
     }
-  }
+  };
 
-  // ── 0c. Extended OpenRouter Non-streaming ──────────────────────────────────
-  if (!isVisionRequest && process.env.OPENROUTER_API_KEY) {
-    try {
-      const orHistory = longHistory.map((m) => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-      }));
-
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'meta-llama/llama-3.3-70b-instruct:free',
-          messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-          temperature: 0.75,
-          max_tokens: LONG_MAX_TOKENS,
-        }),
-      });
-
-      const data = await response.json();
-      if (response.ok && data.choices?.[0]?.message?.content) {
-        data.choices[0].message.content = cleanAIOutput(data.choices[0].message.content);
-        return res.status(200).json(data);
-      }
-    } catch (err) {
-      console.error('Extended OpenRouter error:', err.message);
-    }
-  }
-
-  // ── 1. Gemini Vision ──────────────────────────────────────────────────────────
-  if (isVisionRequest && process.env.GEMINI_API_KEY) {
-    try {
-      const geminiContents = history.map((m) => {
-        if (Array.isArray(m.content)) {
-          const parts = m.content.map((c) => {
-            if (c.type === 'image_url') {
+  // ── VISION ──────────────────────────────────────────────────────────────────
+  if (isVisionRequest) {
+    if (hasGemini) {
+      const contents = await Promise.all(
+        visionHistory.map(async (m) => {
+          const role = m.role === 'assistant' ? 'model' : 'user';
+          if (!Array.isArray(m.content)) return { role, parts: [{ text: String(m.content) }] };
+          const parts = await Promise.all(
+            m.content.map(async (c) => {
+              if (c.type !== 'image_url') return { text: String(c.text || '') };
               const url = c.image_url?.url || '';
               if (url.startsWith('data:')) {
                 const [meta, b64] = url.split(',');
-                const mimeType = meta.match(/:(.*?);/)?.[1] || 'image/jpeg';
-                return { inlineData: { mimeType, data: b64 } };
+                return { inlineData: { mimeType: meta.match(/:(.*?);/)?.[1] || 'image/jpeg', data: b64 } };
               }
-              if (url.startsWith('http://') || url.startsWith('https://')) {
-                let mimeType = 'image/jpeg';
-                if (url.match(/\.png/i)) mimeType = 'image/png';
-                else if (url.match(/\.webp/i)) mimeType = 'image/webp';
-                else if (url.match(/\.gif/i)) mimeType = 'image/gif';
-                return { fileData: { mimeType, fileUri: url } };
+              if (/^https?:\/\//.test(url)) {
+                return (await urlToInlineData(url)) || { text: `[Image URL: ${url}]` };
               }
               return { text: `[Image URL: ${url}]` };
-            }
-            return { text: String(c.text || '') };
-          });
-          return { role: m.role === 'assistant' ? 'model' : 'user', parts };
-        }
-        return { role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(m.content) }] };
-      });
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
-            contents: geminiContents,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
-          }),
-        }
+            })
+          );
+          return { role, parts };
+        })
       );
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        return res.status(200).json({
-          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
-        });
+      for (const model of GEMINI_MODELS) {
+        const text = await callGemini(model, contents);
+        if (text) return reply(text);
       }
-      console.error('Gemini vision empty response:', JSON.stringify(data));
-    } catch (err) {
-      console.error('Gemini vision error:', err.message);
     }
-  }
 
-  // ── 2. Groq ──────────────────────────────────────────────────────────────────
-  if (process.env.GROQ_API_KEY) {
-    const groqModels = isVisionRequest
-      ? ['meta-llama/llama-4-scout-17b-16e-instruct']
-      : ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-
-    for (const model of groqModels) {
-      try {
-        const groqHistory = history.map((m) => {
-          if (Array.isArray(m.content)) {
-            return {
-              role: m.role,
-              content: m.content.map((c) =>
-                c.type === 'image_url' ? c : { type: 'text', text: String(c.text || c.content || '') }
-              ),
-            };
-          }
-          return m;
+    if (hasGroq && GROQ_VISION_MODELS.length) {
+      for (const model of GROQ_VISION_MODELS) {
+        const text = await callOpenAICompat({
+          source: 'groq',
+          url: 'https://api.groq.com/openai/v1/chat/completions',
+          key: process.env.GROQ_API_KEY,
+          model,
+          messages: [{ role: 'system', content: fullSystem }, ...visionHistory],
+          maxTokens: 4096,
         });
-
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'system', content: fullSystem }, ...groqHistory],
-            temperature: 0.75,
-            max_tokens: 4096,
-          }),
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-          console.error(`Groq ${model} error:`, data?.error?.message);
-          continue;
-        }
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          data.choices[0].message.content = cleanAIOutput(content);
-          return res.status(200).json(data);
-        }
-      } catch (err) {
-        console.error(`Groq ${model} exception:`, err.message);
+        if (text) return reply(text);
       }
     }
   }
 
-  // ── 3. Gemini Text Fallback ───────────────────────────────────────────────────
-  if (!isVisionRequest && process.env.GEMINI_API_KEY) {
-    try {
-      const geminiMessages = history.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: String(m.content) }],
-      }));
-
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: fullSystem }] },
-            contents: geminiMessages,
-            generationConfig: { temperature: 0.75, maxOutputTokens: 4096 },
-          }),
-        }
-      );
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        return res.status(200).json({
-          choices: [{ message: { role: 'assistant', content: cleanAIOutput(text) } }],
+  // ── TEXT: Groq → Gemini → OpenRouter ────────────────────────────────────────
+  if (!isVisionRequest && textHistory.length) {
+    if (hasGroq) {
+      for (const model of GROQ_MODELS) {
+        const text = await callOpenAICompat({
+          source: 'groq',
+          url: 'https://api.groq.com/openai/v1/chat/completions',
+          key: process.env.GROQ_API_KEY,
+          model,
+          messages: [{ role: 'system', content: fullSystem }, ...textHistory],
+          maxTokens: LONG_MAX_TOKENS,
         });
+        if (text) return reply(text);
       }
-      console.error('Gemini text fallback empty:', JSON.stringify(data));
-    } catch (err) {
-      console.error('Gemini text fallback error:', err.message);
     }
-  }
 
-  // ── 4. OpenRouter Final Fallback ─────────────────────────────────────────────
-  if (process.env.OPENROUTER_API_KEY) {
-    const openRouterModels = [
-      'meta-llama/llama-3.3-70b-instruct:free',
-      'google/gemma-3-27b-it:free',
-    ];
+    if (hasGemini) {
+      const contents = geminiContentsFromText(textHistory);
+      for (const model of GEMINI_MODELS) {
+        const text = await callGemini(model, contents);
+        if (text) return reply(text);
+      }
+    }
 
-    for (const model of openRouterModels) {
-      try {
-        const orHistory = history.map((m) => ({
-          role: m.role || 'user',
-          content: Array.isArray(m.content)
-            ? m.content.map((c) => c.text || '').join(' ')
-            : String(m.content),
-        }));
-
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model,
-            messages: [{ role: 'system', content: fullSystem }, ...orHistory],
-            temperature: 0.75,
-            max_tokens: 4096,
-          }),
+    if (hasOpenRouter) {
+      for (const model of OPENROUTER_MODELS) {
+        const text = await callOpenAICompat({
+          source: 'openrouter',
+          url: 'https://openrouter.ai/api/v1/chat/completions',
+          key: process.env.OPENROUTER_API_KEY,
+          model,
+          messages: [{ role: 'system', content: fullSystem }, ...textHistory],
+          maxTokens: 4096,
         });
-
-        const data = await response.json();
-        if (!response.ok) {
-          console.error(`OpenRouter ${model} error:`, data?.error?.message);
-          continue;
-        }
-        const content = data.choices?.[0]?.message?.content;
-        if (content) {
-          data.choices[0].message.content = cleanAIOutput(content);
-          return res.status(200).json(data);
-        }
-      } catch (err) {
-        console.error(`OpenRouter ${model} exception:`, err.message);
+        if (text) return reply(text);
       }
     }
   }
 
   // ── SMART FALLBACK: ALL PROVIDERS FAILED ──────────────────────────────────
-  console.error('All AI providers failed. Using smart fallback.');
-  const userQuestion = getMessageText(lastMsg);
-  const smartAnswer = findAnswer(userQuestion);
+  console.error('All AI providers failed. Using smart fallback. Reasons:\n' + errors.join('\n'));
+  const debug = process.env.DEBUG_AI === 'true' ? { debug: errors } : {};
 
+  const smartAnswer = findAnswer(getMessageText(lastMsg));
   if (smartAnswer) {
     return res.status(200).json({
-      choices: [{ message: { role: 'assistant', content: smartAnswer } }]
+      choices: [{ message: { role: 'assistant', content: smartAnswer } }],
+      ...debug,
     });
   }
 
-  // Ultimate generic fallback
-  const genericFallback = "Hey! I'm CC-AI, built by Chhaiya (Yaxy). I'm having a tiny connection issue, but I'm still here! Ask me about my creator, his friends, or anything else! 😊";
+  const genericFallback =
+    "Hey! I'm CC-AI, built by Chhaiya (Yaxy). I'm having a tiny connection issue, but I'm still here! Ask me about my creator, his friends, or anything else! 😊";
   return res.status(200).json({
-    choices: [{ message: { role: 'assistant', content: genericFallback } }]
+    choices: [{ message: { role: 'assistant', content: genericFallback } }],
+    ...debug,
   });
 }
