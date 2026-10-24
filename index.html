@@ -66,8 +66,8 @@ html{height:-webkit-fill-available;-webkit-text-size-adjust:100%}
 :root{
   color-scheme:dark;
   --bg:#0b1020;
-  --panel:rgba(14,20,36,0.90);
-  --panel-side:rgba(11,16,30,0.94);
+  --panel:#0f1526;
+  --panel-side:#0b1020;
   --surface:#131b30;
   --surface2:#1a243c;
   --surface3:#243150;
@@ -97,8 +97,8 @@ html{height:-webkit-fill-available;-webkit-text-size-adjust:100%}
 body.light{
   color-scheme:light;
   --bg:#f3f6fc;
-  --panel:rgba(255,255,255,0.93);
-  --panel-side:rgba(247,249,254,0.95);
+  --panel:#ffffff;
+  --panel-side:#f7f9fe;
   --surface:#ffffff;
   --surface2:#f1f4fa;
   --surface3:#e5eaf4;
@@ -159,7 +159,8 @@ button,label,[onclick]{cursor:pointer;-webkit-user-select:none;user-select:none;
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 textarea:focus-visible,input:focus-visible,select:focus-visible{outline-offset:0}
 
-/* Angkor Wat background (stays — brightness follows the theme) */
+/* Angkor Wat photo: hidden by default, shown when the user chooses it in Settings */
+#angkor-bg{display:none;}
 #angkor-bg > div{filter:var(--photo-filter)!important;}
 
 /* Background themes chosen in Settings (kept for compatibility) */
@@ -181,7 +182,7 @@ textarea:focus-visible,input:focus-visible,select:focus-visible{outline-offset:0
 .btn-primary:active{transform:scale(0.985);}
 
 /* ── App card (chat panel) ── */
-.app{display:flex;flex-direction:column;height:100vh;height:100dvh;position:relative;z-index:2;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);min-width:0;transition:margin 0.28s ease;}
+.app{display:flex;flex-direction:column;height:100vh;height:100dvh;position:relative;z-index:2;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);background:var(--panel);min-width:0;transition:margin 0.28s ease;}
 
 /* ── Header ── */
 .header{display:flex;align-items:center;gap:10px;padding:0 20px 0 14px;height:68px;border-bottom:1px solid var(--border);flex-shrink:0;}
@@ -301,7 +302,7 @@ input:focus-visible+.toggle-slider{outline:2px solid var(--accent);outline-offse
 img.ai-image{max-width:100%;border-radius:14px;display:block;box-shadow:0 0 0 1px var(--border);cursor:pointer;}
 
 /* ── Sidebar ── */
-.sidebar{position:fixed;top:0;left:0;bottom:0;width:min(300px,86vw);background:var(--panel-side);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;transform:translateX(-100%);transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.26s;padding-top:env(safe-area-inset-top);}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:min(300px,86vw);background:var(--panel-side);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;transform:translateX(-100%);transition:transform 0.26s cubic-bezier(0.2,0.8,0.2,1),box-shadow 0.26s;padding-top:env(safe-area-inset-top);}
 .sidebar.open{transform:none;box-shadow:0 0 48px rgba(15,23,42,0.35);}
 .sidebar-header{padding:18px 16px 12px 20px;display:flex;align-items:center;justify-content:space-between;}
 .sidebar-logo{display:flex;align-items:center;gap:12px;}
@@ -401,18 +402,17 @@ pre,code{font-family:var(--mono);}
 .install-btn{background:var(--accent);color:var(--on-accent);border:none;border-radius:999px;padding:9px 20px;font-size:14px;font-weight:600;}
 .install-btn:hover{filter:brightness(1.08);}
 
-/* ═══ Desktop: sidebar + chat form one rounded card (like the reference) ═══ */
+/* ═══ Desktop: sidebar on the left, chat fills the rest of the screen ═══ */
 @media(min-width:900px){
-  body::before{content:'';position:fixed;top:var(--gap);left:var(--gap);right:var(--gap);bottom:var(--gap);border-radius:22px;box-shadow:var(--card-shadow);z-index:1;pointer-events:none;}
-  .sidebar{top:var(--gap);left:var(--gap);bottom:var(--gap);width:var(--sidebar-w);transform:none!important;box-shadow:none!important;border:1px solid var(--border);border-right:none;border-radius:22px 0 0 22px;padding-top:0;}
+  .sidebar{width:var(--sidebar-w);transform:none!important;box-shadow:none!important;padding-top:0;}
   .sidebar-overlay{display:none!important;}
   .sidebar-toggle{display:none!important;}
-  .app,.app.sidebar-open{margin:var(--gap) var(--gap) var(--gap) calc(var(--gap) + var(--sidebar-w));height:calc(100vh - (var(--gap) * 2));height:calc(100dvh - (var(--gap) * 2));border:1px solid var(--border);border-radius:0 22px 22px 0;padding:0;overflow:hidden;}
-  .app.preview-open{margin-right:calc(45% + var(--gap));}
+  .app,.app.sidebar-open{margin:0 0 0 var(--sidebar-w);height:100vh;height:100dvh;padding:0;border:none;border-radius:0;}
+  .app.preview-open{margin-right:45%;}
   .header{padding-left:26px;}
   .chat-head{padding-left:0;}
 }
-@media(min-width:900px) and (max-width:1100px){:root{--sidebar-w:260px;--gap:12px;}.messages{padding-left:24px;padding-right:24px;}}
+@media(min-width:900px) and (max-width:1100px){:root{--sidebar-w:260px;}.messages{padding-left:24px;padding-right:24px;}}
 
 /* ── Small screens ── */
 @media(max-width:600px){
@@ -434,6 +434,35 @@ pre,code{font-family:var(--mono);}
 }
 .profile-name,.profile-status{display:block;}
 .menu-anchor .icon-btn{width:40px;height:40px;}
+
+/* ═══ A background is chosen in Settings (Angkor Wat etc.): chat shows it instead of white ═══ */
+body.bg-photo,body.light.bg-photo{
+  color-scheme:dark;
+  --panel:rgba(8,13,26,0.30);
+  --panel-side:rgba(8,13,26,0.55);
+  --surface:rgba(15,22,42,0.72);
+  --surface2:rgba(30,41,70,0.62);
+  --surface3:rgba(48,62,100,0.72);
+  --border:rgba(255,255,255,0.16);
+  --border2:rgba(255,255,255,0.10);
+  --text:#f4f7ff;
+  --text2:#d3dbef;
+  --text3:#aeb9d4;
+  --accent:#5b8dff;
+  --accent2:#86abff;
+  --on-accent:#ffffff;
+  --accent-soft:rgba(91,141,255,0.24);
+  --user-bubble:#2f6bff;
+  --user-text:#ffffff;
+  --ai-bubble:rgba(15,22,42,0.72);
+  --code-bg:rgba(8,13,26,0.78);
+  --photo-filter:blur(2px) brightness(0.74) saturate(1.05);
+}
+body.bg-photo .app,body.bg-photo .sidebar{backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);}
+body.bg-photo .settings-box,body.bg-photo .feedback-box,body.bg-photo .more-menu,body.bg-photo .tool-menu,body.bg-photo .install-banner{background:rgba(13,20,38,0.96);}
+body.bg-photo .welcome-icon{box-shadow:0 0 0 1px var(--border),0 0 0 7px rgba(255,255,255,0.12);}
+body.bg-photo .send-btn,body.bg-photo .btn-primary{box-shadow:none;}
+body.bg-photo .streak-badge{background:rgba(255,255,255,0.14);color:#ffd9a0;border-color:rgba(255,255,255,0.2);}
 
 </style>
 </head>
@@ -792,6 +821,7 @@ pre,code{font-family:var(--mono);}
     <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px;">
       <span>Background</span>
       <div style="display:flex;flex-wrap:wrap;gap:6px;width:100%;">
+        <button onclick="changeBackground('none')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">Default</button>
         <button onclick="changeBackground('angkor')" style="background:#2a1f0f;border:1px solid #5a4a30;color:#c8a878;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">Angkor</button>
         <button onclick="changeBackground('ocean')" style="background:#001a33;border:1px solid #003366;color:#74b9ff;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">Ocean</button>
         <button onclick="changeBackground('forest')" style="background:#001a00;border:1px solid #003300;color:#6bcb77;border-radius:8px;padding:4px 10px;font-size:0.75rem;cursor:pointer;">Forest</button>
@@ -2112,9 +2142,18 @@ const bgThemes = {
 };
 
 function changeBackground(theme) {
-  const t = bgThemes[theme] || bgThemes.default;
-  document.body.style.background = t.bodyBg;
   const angkor = document.getElementById('angkor-bg');
+  const t = bgThemes[theme];
+  if (!t || theme === 'default' || theme === 'none') {
+    // plain background (the default look)
+    document.body.style.background = '';
+    document.body.classList.remove('bg-photo');
+    if (angkor) angkor.style.display = 'none';
+    localStorage.setItem('bg_theme', 'none');
+    return;
+  }
+  document.body.style.background = t.bodyBg;
+  document.body.classList.add('bg-photo');
   if (angkor) angkor.style.display = t.showAngkor ? 'block' : 'none';
   localStorage.setItem('bg_theme', theme);
 }
