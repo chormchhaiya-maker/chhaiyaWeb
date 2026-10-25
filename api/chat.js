@@ -1,7 +1,8 @@
 // api/chat.js — CC-AI by ChormChhaiya
 // Providers: Groq → Gemini → OpenRouter + Cloudflare Images + URL Analysis
+// KHMER-OPTIMIZED: Khmer detection, best-model routing, Khmer expert prompt, answer quality check
 // FIXED VERSION:
-//   • Updated retired models (Groq Llama 3.x / Llama 4 Scout, Gemini 2.0 Flash) 
+//   • Updated retired models (Groq Llama 3.x / Llama 4 Scout, Gemini 2.0 Flash)
 //   • Model names can be changed from Vercel env vars (no code edit needed next time)
 //   • Fixed the smart-fallback matcher (typing "hi" used to return the "Ah Thi" answer)
 //   • Real error logging for every provider (set DEBUG_AI=true to see errors in the response)
@@ -79,6 +80,7 @@ function findAnswer(question) {
 // ── LONG-CONTEXT CONSTANTS ──────────────────────────────────────────────────
 const LONG_HISTORY_LIMIT = 30;   // remember up to 30 messages
 const LONG_MAX_TOKENS = 8192;    // generate up to 8192 tokens per response
+const GROQ_HISTORY_CHARS = Number(process.env.GROQ_HISTORY_CHARS) || 20000; // max characters of chat history sent to Groq
 const MAX_CHARS_PER_MSG = 6000;  // cap each message so one huge paste can't break the request
 
 // ── MODEL LISTS (tried in order; override with env vars on Vercel) ──────────
@@ -181,6 +183,7 @@ const cleanAIOutput = (text) => {
   if (!text) return '';
   return text
     .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/[\u200B\uFEFF]/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 };
@@ -321,6 +324,125 @@ const geminiContentsFromText = (msgs) => {
   return contents;
 };
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  KHMER OPTIMIZATION
+//  • detects Khmer script, romanized Khmer ("sok sabay te") and short follow-ups
+//  • sends Khmer chats to the model that is best at Khmer first (Gemini)
+//  • adds a Khmer language-expert instruction block to the system prompt
+//  • lower temperature for Khmer (fewer garbled characters)
+//  • checks the answer (right language, no foreign scripts, no garbage) and retries
+// ═════════════════════════════════════════════════════════════════════════════
+const KHMER_CHAR = /[\u1780-\u17FF\u19E0-\u19FF]/g;
+// Thai, Lao, Burmese, Japanese kana, CJK, Hangul, Cyrillic, Arabic — models sometimes drift into these
+const FOREIGN_SCRIPT = /[\u0E00-\u0EFF\u1000-\u109F\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF\u0400-\u04FF\u0600-\u06FF]/g;
+
+const hasKhmer = (t) => /[\u1780-\u17FF]/.test(t || '');
+
+// Remove invisible zero-width spaces (they inflate tokens) and normalise the text
+const cleanInput = (t) => String(t || '').replace(/[\u200B\uFEFF]/g, '').normalize('NFC');
+
+const ROMAN_STRONG = [
+  'sok sabay', 'sok sabai', 'sabay te', 'orkun', 'arkun', 'som tos', 'khnhom', 'knhom',
+  'srolanh', 'chhnam thmey', 'ot te', 'ot mean', 'tov nov', 'nov na', 'som soursdey', 'chum reap',
+];
+const ROMAN_WEAK = ['bong', 'oun', 'laor', 'mok', 'jong', 'nham', 'min te', 'ban te', 'ey te', 'tae na', 'jol'];
+
+/** Khmer typed with English letters, e.g. "bong oun sok sabay te" */
+function looksLikeRomanKhmer(text) {
+  const t = ' ' + String(text || '').toLowerCase() + ' ';
+  const hit = (w) => new RegExp('(^|[^a-z])' + w + '([^a-z]|$)').test(t);
+  if (ROMAN_STRONG.some(hit)) return true;
+  return ROMAN_WEAK.filter(hit).length >= 2;
+}
+
+// Share of Khmer letters among all letters written in Khmer / Latin / foreign scripts
+function khmerShare(text) {
+  const k = (text.match(KHMER_CHAR) || []).length;
+  const other = (text.match(/[A-Za-z\u00C0-\u024F]/g) || []).length + (text.match(FOREIGN_SCRIPT) || []).length;
+  return k + other ? k / (k + other) : 0;
+}
+
+// Remove code, inline code and links before judging the language of a reply
+const stripForCheck = (t) =>
+  t.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]*`/g, ' ').replace(/https?:\/\/\S+/g, ' ');
+
+/** Quality gate for replies to Khmer users */
+function looksValidKhmerReply(reply, mustBeKhmer) {
+  if (!reply) return false;
+  if (reply.includes('\uFFFD')) return false;                         // broken characters
+  const body = stripForCheck(reply);
+  if ((body.match(FOREIGN_SCRIPT) || []).length >= 3) return false;   // drifted into Thai / Chinese / etc.
+  if (/(.)\1{24,}/u.test(body)) return false;                         // endless repetition
+  if (mustBeKhmer) {
+    const k = (body.match(KHMER_CHAR) || []).length;
+    const latin = (body.match(/[A-Za-z]/g) || []).length;
+    if (k + latin >= 25 && k / (k + latin) < 0.3) return false;      // answered in English to a Khmer message
+  }
+  return true;
+}
+
+/** Keep the newest messages that fit in a character budget (Khmer uses many tokens per character) */
+function trimToBudget(history, maxChars) {
+  const out = [];
+  let total = 0;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const len = history[i].content.length;
+    if (out.length && total + len > maxChars) break;
+    out.unshift(history[i]);
+    total += len;
+  }
+  return out;
+}
+
+const KHMER_EXPERT_PROMPT = `
+KHMER LANGUAGE EXPERT MODE (ភាសាខ្មែរ):
+You are an expert in Khmer (Cambodian) — you read and write it like an educated native speaker from Phnom Penh.
+
+UNDERSTANDING:
+- Understand Khmer script, romanized Khmer typed with English letters ("sok sabay te", "bong oun mean ey ban jouy?"), Khmer mixed with English, slang, voice-typed text, typos and missing marks. Work out what the user really means and answer that.
+- If a message is ambiguous, answer the most likely meaning briefly; ask a short clarifying question only if really needed.
+
+WRITING KHMER:
+- Write natural, fluent, native-sounding Khmer. Never translate word-for-word from English. Prefer common everyday words over rare formal or Pali/Sanskrit words, unless the user asks for a formal tone.
+- Use correct Unicode Khmer spelling (e.g. ខ្ញុំ, ក្នុង, ព្រោះ, ប្រទេសកម្ពុជា). Never mix in Thai, Lao, Burmese, Chinese or other scripts. No garbled or repeated characters. If unsure about a rare word, use a simpler word or put the English term in brackets.
+- Khmer has NO spaces between words. Use a space only between phrases or clauses, and around English words or numbers. End sentences with "។". Use "ៗ" for repetition (ភ្លាមៗ). Do not insert zero-width spaces.
+- "I" = ខ្ញុំ. For "you" use អ្នក by default; if the context shows age or relationship, use បង / ប្អូន / មីង / ពូ / លោកគ្រូ / អ្នកគ្រូ correctly. Keep a warm, polite, friendly tone; be playful only when the user is.
+- Technical words commonly kept in English (API, code, website, app, Wi-Fi, Facebook) stay in English letters, explained in Khmer. Code, commands, file names and variable names always stay in English.
+- Use Arabic digits (0-9) by default. Use Khmer digits (០-៩) only if the user does. Money: riel (៛) and US dollars ($) are both used in Cambodia.
+- Keep answers focused: Khmer text is long, so short for casual chat and clearly structured for explanations.
+
+CASES:
+- If the user wrote Khmer (script or romanized), reply in Khmer script unless they ask for another language. If they only typed romanized Khmer, still reply in Khmer script; add the romanization only if they ask.
+- Translation: translate the meaning naturally. For a single hard word give: Khmer word, romanization, meaning.
+- Study help (Khmer grammar, literature, Cambodian school subjects, exam prep): explain simply and step by step in Khmer, with examples.
+- Culture: be accurate and respectful about Cambodian history, Buddhism, monks (ព្រះសង្ឃ), the monarchy, Khmer New Year (ចូលឆ្នាំខ្មែរ), Pchum Ben (ភ្ជុំបិណ្ឌ), the Water Festival (បុណ្យអុំទូក), food and places. Handle the Khmer Rouge period with care and facts.
+
+EXAMPLES OF THE STYLE:
+User: សួស្តី
+CC-AI: សួស្តី! ថ្ងៃនេះខ្ញុំអាចជួយអ្វីបានខ្លះ? 😊
+User: sok sabay te
+CC-AI: ខ្ញុំសុខសប្បាយ! ចុះអ្នកវិញ សុខសប្បាយទេ? 😄
+User: ខ្ញុំចង់រៀនសរសេរកូដ តើគួរចាប់ផ្តើមពីណា?
+CC-AI: គួរចាប់ផ្តើមពី HTML និង CSS ជាមុន ព្រោះងាយយល់ ហើយឃើញលទ្ធផលភ្លាមៗ។ បន្ទាប់មកទើបរៀន JavaScript។ ចង់ឱ្យខ្ញុំរៀបផែនការរៀន ៣០ ថ្ងៃទេ? 🚀
+`.trim();
+
+const KHMER_ROMAN_NOTE =
+  'NOTE: The latest user message is Khmer typed with English letters (romanized Khmer). Understand it as Khmer and answer in Khmer script.';
+
+const KHMER_FALLBACK =
+  'សួស្តី! ខ្ញុំគឺ CC-AI ដែលបង្កើតដោយ Chhaiya (Yaxy)។ ឥឡូវនេះមានបញ្ហាតភ្ជាប់បន្តិចបន្តួច ប៉ុន្តែខ្ញុំនៅទីនេះ! សូមសាកសួរម្តងទៀតបន្តិចទៀត 😊';
+
+/** Small offline answers in Khmer (only used when every AI provider fails) */
+function findKhmerAnswer(text) {
+  const t = String(text || '');
+  if (/សួស្តី|ជំរាបសួរ|ជម្រាបសួរ/.test(t)) return 'សួស្តី! ខ្ញុំគឺ CC-AI បង្កើតដោយ Chhaiya (Yaxy)។ ថ្ងៃនេះខ្ញុំអាចជួយអ្វីបានខ្លះ? 😊';
+  if (/អរគុណ/.test(t)) return 'មិនអីទេ! រីករាយដែលបានជួយ 😊✨';
+  if (/អ្នកណាបង្កើត|នរណាបង្កើត|បង្កើតអ្នក|បង្កើតឯង/.test(t)) {
+    return 'ខ្ញុំត្រូវបានបង្កើតដោយ Chhaiya (Chorm Chhaiya ហៅថា Yaxy) ជាសិស្សថ្នាក់ទី១០ នៃវិទ្យាល័យទេពប្រណម្យ។ 😊';
+  }
+  return null;
+}
+
 // ── Main Handler ──────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   // CORS
@@ -341,7 +463,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'messages array is required' });
   }
 
-  // Collect real error reasons so you can finally see WHY providers fail
+  // Collect real error reasons so you can see WHY providers fail
   const errors = [];
   const logErr = (source, message) => {
     console.error(`[${source}]`, message);
@@ -397,12 +519,11 @@ export default async function handler(req, res) {
   );
 
   // ── Plain-text history (for text-only requests) ─────────────────────────────
-  // FIX: the old code did String(m.content) which turned arrays into "[object Object]"
   const textHistory = processedMessages
     .slice(-LONG_HISTORY_LIMIT)
     .map((m) => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: getMessageText(m).slice(0, MAX_CHARS_PER_MSG),
+      content: cleanInput(getMessageText(m)).slice(0, MAX_CHARS_PER_MSG),
     }))
     .filter((m) => m.content.trim());
 
@@ -411,16 +532,43 @@ export default async function handler(req, res) {
     role: m.role === 'assistant' ? 'assistant' : 'user',
     content: Array.isArray(m.content)
       ? m.content.map((c) =>
-          c.type === 'image_url' ? c : { type: 'text', text: String(c.text || '').slice(0, 2000) }
+          c.type === 'image_url' ? c : { type: 'text', text: cleanInput(c.text).slice(0, 2000) }
         )
-      : String(m.content || '').slice(0, 2000),
+      : cleanInput(m.content).slice(0, 2000),
   }));
 
+  // ── KHMER DETECTION ─────────────────────────────────────────────────────────
+  const userTexts = processedMessages
+    .filter((m) => m.role !== 'assistant')
+    .map((m) => cleanInput(getMessageText(m)));
+  const lastUserText = userTexts[userTexts.length - 1] || '';
+  const prevUserText = userTexts[userTexts.length - 2] || '';
+
+  const userWroteKhmer = hasKhmer(lastUserText);
+  const romanKhmer     = !userWroteKhmer && looksLikeRomanKhmer(lastUserText);
+  // a short follow-up like "ok" or "why?" inside a Khmer conversation
+  const khmerFollowUp  = !userWroteKhmer && !romanKhmer && lastUserText.trim().length < 12 &&
+                         (hasKhmer(prevUserText) || looksLikeRomanKhmer(prevUserText));
+  const khmerMode      = userWroteKhmer || romanKhmer || khmerFollowUp;
+  const profileKhmer   = /Reply in Khmer when/i.test(clientSystemPrompt || '');
+
+  // The reply must be mostly Khmer — unless the user asked for English or a translation
+  // (code blocks are ignored by the check, so code answers pass)
+  const mustBeKhmer = userWroteKhmer &&
+    !/\b(in|to|into)\s+english\b|ជា\s*(ភាសា)?\s*អង់គ្លេស|ជា\s*english|បកប្រែ|translate/i.test(lastUserText);
+
+  const temperature = khmerMode ? 0.6 : 0.75;
+
   // ── Build full system prompt ─────────────────────────────────────────────────
-  const fullSystem = `${clientSystemPrompt || BASE_SYSTEM_PROMPT}${urlContext}`;
+  const baseSystem = clientSystemPrompt || BASE_SYSTEM_PROMPT;
+  const khmerBlock = (khmerMode || profileKhmer)
+    ? `\n\n${KHMER_EXPERT_PROMPT}${romanKhmer ? `\n\n${KHMER_ROMAN_NOTE}` : ''}`
+    : '';
+  const fullSystem = `${baseSystem}${khmerBlock}${urlContext}`;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // STREAMING (text only): Groq → Gemini
+  // STREAMING (text only, non-Khmer): Groq → Gemini
+  // Khmer chats skip streaming so the answer can be checked before it is shown.
   // ═══════════════════════════════════════════════════════════════════════════
   const startSSE = () => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -467,7 +615,7 @@ export default async function handler(req, res) {
     return sentAnything;
   };
 
-  if (wantStream && !isVisionRequest && textHistory.length) {
+  if (wantStream && !isVisionRequest && !khmerMode && textHistory.length) {
     // --- Groq stream ---
     if (hasGroq) {
       for (const model of GROQ_MODELS) {
@@ -477,8 +625,8 @@ export default async function handler(req, res) {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.GROQ_API_KEY}` },
             body: JSON.stringify({
               model,
-              messages: [{ role: 'system', content: fullSystem }, ...textHistory],
-              temperature: 0.75,
+              messages: [{ role: 'system', content: fullSystem }, ...trimToBudget(textHistory, GROQ_HISTORY_CHARS)],
+              temperature,
               max_tokens: LONG_MAX_TOKENS,
               stream: true,
               ...(model.includes('gpt-oss') ? { reasoning_effort: 'low' } : {}),
@@ -488,8 +636,7 @@ export default async function handler(req, res) {
             logErr(`groq-stream ${model}`, `HTTP ${upstream.status} ${(await upstream.text()).slice(0, 300)}`);
             continue;
           }
-          const ok = await pipeStream(upstream, (p) => p.choices?.[0]?.delta?.content);
-          if (ok) return;
+          await pipeStream(upstream, (p) => p.choices?.[0]?.delta?.content);
           return; // headers already sent, can't try another provider
         } catch (err) {
           logErr(`groq-stream ${model}`, err.message);
@@ -510,7 +657,7 @@ export default async function handler(req, res) {
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: fullSystem }] },
                 contents: geminiContentsFromText(textHistory),
-                generationConfig: { temperature: 0.75, maxOutputTokens: LONG_MAX_TOKENS },
+                generationConfig: { temperature, maxOutputTokens: LONG_MAX_TOKENS },
               }),
             }
           );
@@ -542,15 +689,16 @@ export default async function handler(req, res) {
   /** Call any OpenAI-compatible endpoint (Groq / OpenRouter) */
   const callOpenAICompat = async ({ source, url, key, model, messages: msgs, maxTokens }) => {
     try {
+      const isGptOss = source === 'groq' && model.includes('gpt-oss');
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
         body: JSON.stringify({
           model,
           messages: msgs,
-          temperature: 0.75,
+          temperature,
           max_tokens: maxTokens,
-          ...(model.includes('gpt-oss') && source === 'groq' ? { reasoning_effort: 'low' } : {}),
+          ...(isGptOss ? { reasoning_effort: khmerMode ? 'medium' : 'low' } : {}),
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -578,7 +726,7 @@ export default async function handler(req, res) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: fullSystem }] },
             contents,
-            generationConfig: { temperature: 0.75, maxOutputTokens: LONG_MAX_TOKENS },
+            generationConfig: { temperature, ...(khmerMode ? { topP: 0.9 } : {}), maxOutputTokens: LONG_MAX_TOKENS },
           }),
         }
       );
@@ -641,50 +789,63 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── TEXT: Groq → Gemini → OpenRouter ────────────────────────────────────────
+  // ── TEXT: provider plan ─────────────────────────────────────────────────────
+  // English: Groq (fast) → Gemini → OpenRouter
+  // Khmer  : Gemini (best Khmer) → Groq (Qwen first) → OpenRouter
   if (!isVisionRequest && textHistory.length) {
-    if (hasGroq) {
-      for (const model of GROQ_MODELS) {
-        const text = await callOpenAICompat({
-          source: 'groq',
-          url: 'https://api.groq.com/openai/v1/chat/completions',
-          key: process.env.GROQ_API_KEY,
-          model,
-          messages: [{ role: 'system', content: fullSystem }, ...textHistory],
-          maxTokens: LONG_MAX_TOKENS,
-        });
-        if (text) return reply(text);
-      }
-    }
+    const groqHistory = trimToBudget(textHistory, khmerMode ? Math.floor(GROQ_HISTORY_CHARS * 0.6) : GROQ_HISTORY_CHARS);
+    const groqModels  = khmerMode
+      ? [...GROQ_MODELS].sort((a, b) => Number(b.includes('qwen')) - Number(a.includes('qwen')))
+      : GROQ_MODELS;
+    const plan = [];
 
-    if (hasGemini) {
-      const contents = geminiContentsFromText(textHistory);
-      for (const model of GEMINI_MODELS) {
-        const text = await callGemini(model, contents);
-        if (text) return reply(text);
-      }
-    }
+    const addGroq = () => hasGroq && groqModels.forEach((model) => plan.push({
+      provider: 'groq', name: `groq ${model}`,
+      run: () => callOpenAICompat({
+        source: 'groq', url: 'https://api.groq.com/openai/v1/chat/completions', key: process.env.GROQ_API_KEY,
+        model, messages: [{ role: 'system', content: fullSystem }, ...groqHistory], maxTokens: LONG_MAX_TOKENS,
+      }),
+    }));
+    const addGemini = () => hasGemini && GEMINI_MODELS.forEach((model) => plan.push({
+      provider: 'gemini', name: `gemini ${model}`,
+      run: () => callGemini(model, geminiContentsFromText(textHistory)),
+    }));
+    const addOpenRouter = () => hasOpenRouter && OPENROUTER_MODELS.forEach((model) => plan.push({
+      provider: 'openrouter', name: `openrouter ${model}`,
+      run: () => callOpenAICompat({
+        source: 'openrouter', url: 'https://openrouter.ai/api/v1/chat/completions', key: process.env.OPENROUTER_API_KEY,
+        model, messages: [{ role: 'system', content: fullSystem }, ...trimToBudget(textHistory, GROQ_HISTORY_CHARS)], maxTokens: 6144,
+      }),
+    }));
 
-    if (hasOpenRouter) {
-      for (const model of OPENROUTER_MODELS) {
-        const text = await callOpenAICompat({
-          source: 'openrouter',
-          url: 'https://openrouter.ai/api/v1/chat/completions',
-          key: process.env.OPENROUTER_API_KEY,
-          model,
-          messages: [{ role: 'system', content: fullSystem }, ...textHistory],
-          maxTokens: 4096,
-        });
-        if (text) return reply(text);
-      }
+    if (khmerMode) { addGemini(); addGroq(); addOpenRouter(); }
+    else           { addGroq(); addGemini(); addOpenRouter(); }
+
+    let best = null;     // first usable answer, returned if no answer passes the Khmer check
+    let rejected = 0;
+    const skipProviders = new Set();
+    for (const step of plan) {
+      if (skipProviders.has(step.provider)) continue;
+      const text = await step.run();
+      if (!text) continue;
+      const cleaned = cleanAIOutput(text);
+      if (!cleaned) continue;
+      if (!best) best = cleaned;
+      if (!khmerMode || looksValidKhmerReply(cleaned, mustBeKhmer)) return reply(cleaned);
+      logErr(step.name, 'reply failed the Khmer quality check, trying another provider');
+      skipProviders.add(step.provider);      // a different model of the same provider would likely repeat the problem
+      if (++rejected >= 2) break;
     }
+    if (best) return reply(best);
   }
 
   // ── SMART FALLBACK: ALL PROVIDERS FAILED ──────────────────────────────────
   console.error('All AI providers failed. Using smart fallback. Reasons:\n' + errors.join('\n'));
   const debug = process.env.DEBUG_AI === 'true' ? { debug: errors } : {};
 
-  const smartAnswer = findAnswer(getMessageText(lastMsg));
+  const smartAnswer = khmerMode
+    ? (findKhmerAnswer(lastUserText) || findAnswer(lastUserText))
+    : findAnswer(getMessageText(lastMsg));
   if (smartAnswer) {
     return res.status(200).json({
       choices: [{ message: { role: 'assistant', content: smartAnswer } }],
@@ -692,8 +853,9 @@ export default async function handler(req, res) {
     });
   }
 
-  const genericFallback =
-    "Hey! I'm CC-AI, built by Chhaiya (Yaxy). I'm having a tiny connection issue, but I'm still here! Ask me about my creator, his friends, or anything else! 😊";
+  const genericFallback = khmerMode
+    ? KHMER_FALLBACK
+    : "Hey! I'm CC-AI, built by Chhaiya (Yaxy). I'm having a tiny connection issue, but I'm still here! Ask me about my creator, his friends, or anything else! 😊";
   return res.status(200).json({
     choices: [{ message: { role: 'assistant', content: genericFallback } }],
     ...debug,
